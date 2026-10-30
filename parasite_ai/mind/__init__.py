@@ -1,0 +1,93 @@
+"""ParasiteAI Mind Subsystem - Local Brain Management, Cognitive Pipeline & Browser Offloader."""
+
+from parasite_ai.mind.brain_manager import (
+    BrainMode,
+    BrainState,
+    BrainStatus,
+    BrowserOffloadBackend,
+    DownloadProgress,
+    InferenceBackend,
+    LlamaCppBackend,
+    LocalBrainManager,
+    MockBackend,
+    ModelMetadata,
+    OpenAIEndpointBackend,
+    validate_gguf_header,
+)
+from parasite_ai.mind.dual_mind import (
+    ActionDispatcher,
+    ActionResult,
+    DualMindPipeline,
+    PersonaEngine,
+    PersonaOutput,
+)
+from parasite_ai.mind.memory import (
+    ActionPlan,
+    ActionType,
+    DiffResult,
+    EpisodicMemory,
+    INTERACTIVE_ACTION_TYPES,
+    StepRecord,
+    compute_dhash,
+    compute_pixel_diff,
+    hamming_distance,
+)
+from parasite_ai.mind.offloader import (
+    BrowserNotFoundError,
+    BrowserOffloader,
+    ChromeOffloader,
+    IBrowserWindowBackend,
+    IClipboardBackend,
+    MockBrowserWindowBackend,
+    MockClipboardBackend,
+    OffloadHarvestError,
+    OffloaderState,
+    SentinelClipboardVerifier,
+    Win32BrowserWindowBackend,
+    Win32ClipboardBackend,
+)
+
+__all__ = [
+    # Brain Manager
+    "BrainMode",
+    "BrainState",
+    "BrainStatus",
+    "BrowserOffloadBackend",
+    "DownloadProgress",
+    "InferenceBackend",
+    "LlamaCppBackend",
+    "LocalBrainManager",
+    "MockBackend",
+    "ModelMetadata",
+    "OpenAIEndpointBackend",
+    "validate_gguf_header",
+    # Memory
+    "ActionPlan",
+    "ActionType",
+    "DiffResult",
+    "EpisodicMemory",
+    "INTERACTIVE_ACTION_TYPES",
+    "StepRecord",
+    "compute_dhash",
+    "compute_pixel_diff",
+    "hamming_distance",
+    # Dual Mind
+    "ActionDispatcher",
+    "ActionResult",
+    "DualMindPipeline",
+    "PersonaEngine",
+    "PersonaOutput",
+    # Browser Offloader
+    "BrowserNotFoundError",
+    "BrowserOffloader",
+    "ChromeOffloader",
+    "IBrowserWindowBackend",
+    "IClipboardBackend",
+    "MockBrowserWindowBackend",
+    "MockClipboardBackend",
+    "OffloadHarvestError",
+    "OffloaderState",
+    "SentinelClipboardVerifier",
+    "Win32BrowserWindowBackend",
+    "Win32ClipboardBackend",
+]

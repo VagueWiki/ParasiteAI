@@ -1,0 +1,118 @@
+# ==============================================================================
+# ParasiteAI - Unified System Configuration
+# ==============================================================================
+
+system:
+  log_level: "INFO"
+  integrity_mode: "development"
+  data_dir: "data"
+  models_dir: "models"
+
+persona:
+  name: "Parasite"
+  avatar: "cyber_cat"
+  voice_style: "witty_desktop_companion"
+  verbosity: "normal"
+  system_prompt: |
+    You are Parasite, a desktop-native AI companion living on the user's screen.
+    You have direct physical control of the mouse and keyboard when authorized.
+    Speak naturally, expressively, and vividly in character.
+    Always provide commentary on what you observe on screen before taking action.
+
+brain:
+  mode: "browser_offload"  # "local_llm", "browser_offload", or "hybrid"
+  local_model:
+    model_id: "Qwen/Qwen2.5-3B-Instruct-GGUF"
+    filename: "qwen2.5-3b-instruct-q4_k_m.gguf"
+    context_size: 4096
+    gpu_layers: -1
+    vram_budget_mb: 5500
+    local_endpoint: "http://127.0.0.1:8080/v1"
+    download_auto: false
+  offload:
+    preferred_browser: "chrome"  # "chrome" or "opera_gx"
+    browser_paths:
+      chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+      opera_gx: "C:\\Users\\Suici\\AppData\\Local\\Programs\\Opera GX\\opera.exe"
+    default_web_ai_url: "https://gemini.google.com"
+    stream_stability_ms: 1500
+    stream_timeout_sec: 45
+    sentinel_token_prefix: "__PARASITE_SENTINEL__"
+
+safety:
+  interrupt_enabled: true
+  interrupt_latency_budget_ms: 2.0
+  override_pause_duration_sec: 10.0
+  panic_hotkeys:
+    - "ctrl+alt+backspace"
+    - "ctrl+alt+p"
+    - "esc"
+  corner_panic_enabled: true
+  corner_distance_px: 4
+  sensitive_window_titles:
+    - "Bitwarden"
+    - "1Password"
+    - "KeePass"
+    - "Task Manager"
+    - "Administrator:"
+    - "Windows Security"
+    - "User Account Control"
+    - "Registry Editor"
+  sensitive_process_names:
+    - "bitwarden.exe"
+    - "1password.exe"
+    - "keepass.exe"
+    - "keepassxc.exe"
+    - "taskmgr.exe"
+    - "regedit.exe"
+    - "credentialui.exe"
+    - "consent.exe"
+    - "logonui.exe"
+  mask_screen_on_sensitive: true
+
+ui:
+  dock:
+    width: 340
+    height: 540
+    anchor: "bottom_right"
+    margin_x: 24
+    margin_y: 24
+    opacity: 0.95
+    always_on_top: true
+    frameless: true
+    show_thought_stream: true
+    show_perception_preview: true
+  hud:
+    enabled: true
+    fps_target: 60
+    reticle_color: "#FF3366"
+    reticle_duration_ms: 300
+    som_box_color: "#00E5FF"
+    som_glow_color: "#00FFCC"
+    box_alpha: 0.25
+    stroke_width_px: 1.5
+
+vision:
+  grounding_mode: "hybrid"  # "hybrid", "uia_only", or "ocr_only"
+  max_som_elements: 60
+  screen_diff_threshold: 0.02
+  ocr_scoped_only: true
+  capture_backend: "mss"
+  settling_diff_threshold: 0.003
+  settling_consecutive_polls: 3
+
+hands:
+  mouse:
+    speed_factor: 1.0
+    trajectory_type: "cubic_bezier"
+    overshoot_radius_px: 12
+    micro_jitter_amplitude_px: 1.5
+    step_delay_ms: 8
+    preview_reticle_ms: 300
+  keyboard:
+    typing_wpm: 85
+    cadence_jitter_ms: [25, 75]
+    micro_pause_probability: 0.04
+    micro_pause_duration_ms: [200, 600]
+    punctuation_pause_ms: [80, 150]
+    multiline_shift_enter: true

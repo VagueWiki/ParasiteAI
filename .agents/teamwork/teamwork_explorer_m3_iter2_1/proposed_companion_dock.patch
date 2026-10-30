@@ -1,0 +1,6 @@
+--- a/parasite_ai/ui/companion_dock.py
++++ b/parasite_ai/ui/companion_dock.py
+@@ -596,2 +596,3 @@
+     @pyqtSlot(object)
++    @pyqtSlot(object, list)
+     def update_perception_preview(self, frame_data: Any, elements: Optional[List[Any]] = None) -> None:
