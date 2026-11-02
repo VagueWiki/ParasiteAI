@@ -448,6 +448,10 @@ class BrowserOffloadBackend(InferenceBackend):
         pass
 
 
+# Export alias for web offload backend references
+WebOffloadBackend = BrowserOffloadBackend
+
+
 # ---------------------------------------------------------------------------
 # VRAM Headroom & Guard
 # ---------------------------------------------------------------------------
@@ -538,8 +542,13 @@ class LocalBrainManager:
                 self.current_model = target.filename
                 self.state = BrainState.MODEL_READY_ON_DISK
                 self._instantiate_local_engine(target.file_path or target.filename)
+            elif self.mode == BrainMode.LOCAL_LLM:
+                # Decouple local execution: do NOT silently fallback to browser offload
+                logger.info("Local LLM mode selected, but no valid local GGUF model found on disk.")
+                self.state = BrainState.NO_MODEL_PRESENT
+                self.active_backend = None
             else:
-                # Zero-VRAM Fallback: If no local model exists, fallback to browser offload
+                # Zero-VRAM Fallback: If no local model exists in hybrid mode, fallback to browser offload
                 logger.info("No valid local GGUF model found. Booting in Zero-VRAM Browser Offload mode.")
                 self.mode = BrainMode.BROWSER_OFFLOAD
                 self.state = BrainState.READY_BROWSER_OFFLOAD
@@ -1009,6 +1018,11 @@ class LocalBrainManager:
         """Unified inference dispatch across active backend."""
         with self._lock:
             if not self.active_backend or not self.active_backend.is_available():
+                if self.mode == BrainMode.LOCAL_LLM:
+                    raise RuntimeError(
+                        "Local model backend is not loaded or unavailable. "
+                        "Web offload fallback is disabled in local mode."
+                    )
                 # Attempt lazy fallback
                 if self.mode == BrainMode.MOCK:
                     self.active_backend = MockBackend()
@@ -1062,12 +1076,21 @@ class LocalBrainManager:
             f"Recent Memory: {memory_context}\n\n"
             "What are your observations and immediate thoughts? Express your thoughts in character."
         )
-        return self.generate(
-            prompt=prompt,
-            system_prompt=self.config.persona.system_prompt,
-            temperature=0.8,
-            max_tokens=256,
-        )
+        logger.debug("[LLM PASS 1 PROMPT]\n%s", prompt)
+        try:
+            res = self.generate(
+                prompt=prompt,
+                system_prompt=self.config.persona.system_prompt,
+                temperature=0.8,
+                max_tokens=256,
+            )
+            logger.info("[LLM PASS 1 THOUGHT GENERATED]\n%s", res)
+            return res
+        except Exception as exc:
+            logger.warning("Thought generation failed: %s", exc)
+            if self.mode == BrainMode.LOCAL_LLM:
+                return f"*observing desktop for goal: {user_goal}*"
+            raise
 
     def generate_action(
         self,
@@ -1085,11 +1108,13 @@ class LocalBrainManager:
             "You MUST output valid JSON only. Choose one action from:\n"
             "['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'CLICK_AND_TYPE', 'TYPE', 'HOTKEY', 'SCROLL', 'WAIT', 'OFFLOAD_WEB_AI', 'DONE'].\n"
             "Rules:\n"
-            "- Output 'DONE' if the goal is a greeting/observation already answered by the Persona, or if prior steps in Memory History already completed the goal (e.g. the requested app is now open on screen).\n"
+            "- Output 'DONE' ONLY when the full user objective is confirmed completed on screen. NEVER output 'DONE' if the target application (e.g. Notepad) has not yet been opened and confirmed visible.\n"
             "- To open/launch a Windows app not visible on screen (e.g. Notepad, Calculator, Paint, Explorer, CMD): "
             "Step 1: if the Run dialog ('Open:' Edit box) is not in Set-of-Mark Elements, output {\"action\": \"HOTKEY\", \"keys\": [\"win\", \"r\"], \"reasoning\": \"Open Windows Run dialog\"}. "
-            "Step 2: once the Run dialog 'Open:' Edit box is visible, output {\"action\": \"CLICK_AND_TYPE\", \"target_id\": <id>, \"text\": \"notepad\", \"submit\": true, \"reasoning\": \"Launch app\"}.\n"
-            "- Whenever typing into a text box or document, ALWAYS prefer 'CLICK_AND_TYPE' with the 'target_id' of the Edit/Document element so keyboard focus is placed into that target first.\n"
+            "Step 2: once the Run dialog 'Open:' Edit box is visible, output {\"action\": \"CLICK_AND_TYPE\", \"target_id\": <id>, \"text\": \"<app>\", \"submit\": true, \"reasoning\": \"Launch app\"}.\n"
+            "- When the Run dialog or Start Search box is visible, you MUST type the target executable into that dialog and submit. DO NOT click background windows or unrelated text areas.\n"
+            "- Check the 'app' field of interactive elements. DO NOT click or type into terminal/console/editor windows (e.g. WindowsTerminal.exe, cmd.exe, code.exe) unless the goal explicitly calls for terminal interaction.\n"
+            "- Whenever typing into a text box or document, ALWAYS prefer 'CLICK_AND_TYPE' with the 'target_id' of the Edit/Document element belonging to the intended target application.\n"
             "- NEVER output 'OFFLOAD_WEB_AI' unless the user goal explicitly asks to consult Gemini / web AI.\n"
             "Format: {\"action\": str, \"target_id\": int|null, \"coordinates\": [x, y]|null, \"text\": str|null, \"submit\": bool, \"keys\": [str]|null, \"reasoning\": str}"
         )
@@ -1101,6 +1126,7 @@ class LocalBrainManager:
             f"Memory History: {memory_context}\n\n"
             "Respond strictly with the single JSON action command."
         )
+        logger.debug("[LLM PASS 2 PROMPT]\n%s", prompt)
 
         raw_response = self.generate(
             prompt=prompt,
@@ -1109,12 +1135,26 @@ class LocalBrainManager:
             max_tokens=256,
             json_mode=True,
         )
+        logger.info("[LLM PASS 2 RAW RESPONSE]\n%s", raw_response)
 
         # Resilient JSON extraction
         extracted_action = self._extract_action_json(raw_response)
         if extracted_action:
+            logger.info(
+                "[LLM PASS 2 ACTION PARSED] Action: %s | Target: %s | Coords: %s | Keys: %s | Text: %r | Reasoning: %s",
+                extracted_action.get("action"),
+                extracted_action.get("target_id"),
+                extracted_action.get("coordinates"),
+                extracted_action.get("keys"),
+                extracted_action.get("text"),
+                extracted_action.get("reasoning"),
+            )
             return extracted_action
 
+        logger.warning(
+            "[LLM PASS 2 PARSE MISFIRE] Could not extract action JSON from response: %r. Yielding WAIT.",
+            raw_response,
+        )
         # Safe fallback action
         return {
             "action": "WAIT",

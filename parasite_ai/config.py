@@ -56,10 +56,16 @@ class SystemConfig(BaseModel):
         default=Path("models"),
         description="Directory for local GGUF weights."
     )
+    log_file: Optional[Path] = Field(
+        default=Path("logs/parasite_debug.log"),
+        description="Path to debug log file."
+    )
 
-    @field_validator("data_dir", "models_dir", mode="before")
+    @field_validator("data_dir", "models_dir", "log_file", mode="before")
     @classmethod
-    def parse_path(cls, v: Any) -> Path:
+    def parse_path(cls, v: Any) -> Optional[Path]:
+        if v is None:
+            return None
         return Path(v) if not isinstance(v, Path) else v
 
 
@@ -175,8 +181,8 @@ class BrainConfig(BaseModel):
     model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
 
     mode: Literal["local_llm", "browser_offload", "hybrid", "mock"] = Field(
-        default="browser_offload",
-        description="Cognitive execution mode (browser_offload provides instant zero-VRAM startup)."
+        default="local_llm",  # Invariant: Zero silent cloud exfiltration
+        description="Primary brain execution mode"
     )
     local_model: LocalModelConfig = Field(
         default_factory=LocalModelConfig,

@@ -1,91 +1,90 @@
 # Original User Request
 
-## Parameters
+## Initial Request — 2026-11-01T02:22:00Z
 
-[skip-interview]
-How this run was launched; not part of the task.
+Summarize all preplanning changes and update the Phase 4 master plan document for ParasiteAI to prepare for implementation, incorporating the agreed architectural additions.
 
-## Approved Task Prompt — 2026-10-29T20:53:30Z
-
-Evaluate the ParasiteAI codebase and milestone implementations (M1–M5), check current system health against real desktop and hardware constraints, and deliver an evaluation report alongside a prioritized execution plan for next steps.
-
-Working directory: g:\__Docs\ParasiteAI
+Working directory: C:\ParasiteAI
 Integrity mode: development
 
 Reference material:
-- PROJECT.md
-- C:\Users\Suici\.gemini\antigravity\brain\9febbb50-4316-49f8-85fe-f612a778b2d3\implementation_plan.md
-- C:\Users\Suici\.gemini\antigravity\brain\9febbb50-4316-49f8-85fe-f612a778b2d3\state_evaluation_plan.md
+- Existing Master Plan: c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md
+- Project Handoff: C:\ParasiteAI\HANDOFF.md
 
 ## Requirements
 
-### R1. State Evaluation & Milestone 5 Gate
-Audit the ParasiteAI codebase across all implemented milestones (M1–M5), verifying test suite health (`uv run pytest`), conducting the full Milestone 5 review and audit gate (reviewers, challengers, auditor), and identifying discrepancies between unit/simulated test results and real desktop execution requirements (companion dock, click-through HUD, Bezier glide, physical abort, Chrome/Gemini offload selectors).
+### R1. Preplanning Summary & Master Plan Finalization
+Update `c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md` directly to summarize all architectural changes and decisions reached since the initial document, producing an updated, comprehensive implementation plan for Phase 4. Incorporate the 7 agreed architectural additions:
+1. 4-Tier Escalation Cadence: 2 local attempts -> deep Gemini consultation -> 2 guided local attempts with Gemini blueprint -> continuous Gemini handholding / visual co-pilot -> user override.
+2. Grounded Capability Contract: Gemini receives an explicit manifest of physical actuators (Bézier mouse, atomic Ctrl+V paste, Set-of-Mark perception, ROI diffing) and constraints (no headless scraping, touch preemption).
+3. Dual-Channel Output: Internal machine-interpretable LivingPlan JSON vs. visible Companion Dock character monologue (no raw JSON shown to user).
+4. Tool-Aware Reasoning & Antigravity Meta-Tooling: Evaluating whether goals are best achieved via GUI manipulation, local developer tools (Antigravity CLI / scripts), or Gemini consultation.
+5. Textual Scene Serialization: No video streaming; scenes are serialized into structured Set-of-Mark + active window briefs.
+6. Strict Anti-Hardcoding Invariant: Zero hardcoded app maps, hints, or canned workflows.
+7. Schema mapping: Complete inventory of Pydantic models (UIElement, BoundingBox, PlanStep, LivingPlan, ActionPlan, StepRecord, AppConfig) and Win32 structs mapped to runtime hooks.
 
-### R2. Non-Intrusive Live Verification & Safety Guardrail
-Perform safe, non-interactive live desktop verification, including verifying local model availability in `models/` and loading within the 8 GB VRAM budget (RTX 4060), and launching the companion dock in dry-run mode without mouse or keyboard takeover. The team must ask for explicit user consent before initiating any live test that takes over the user's mouse or keyboard.
-
-### R3. Repository Cleanup
-Remove leftover temporary files (`test_none.yaml`, `test_none2.yaml`, repository root `__pycache__`) and fix typographical errors in `PROJECT.md` ("BAczier").
-
-### R4. Prioritized Action Plan
-Deliver a clear, prioritized execution plan detailing the sequential tasks for remaining work, including live desktop smoke tests, live action verification, offload validation, and follow-up milestones.
+### R2. Maintain Core Invariants
+Ensure the updated plan explicitly preserves all core system invariants: sub-2ms hardware touch preemption, Ctrl+Alt+K instant hard kill, brain.mode: "local_llm" default (zero silent cloud exfiltration), and the strict anti-hardcoding rule across all sub-phases.
 
 ## Acceptance Criteria
 
-### Milestone 5 Gate & Audit
-- [ ] `uv run pytest` executes with all tests passing.
-- [ ] Milestone 5 review, challenger, and auditor swarm completes evaluation and records gate status in `PROJECT.md`.
-- [ ] Discrepancy analysis completed identifying gaps between simulated test suites and live desktop hardware/OS behavior.
-
-### Safe Live Verification & Model Inspection
-- [ ] Model asset inspection completed confirming whether local model files exist and whether they load within the 8 GB VRAM budget.
-- [ ] Companion dock launched and verified in dry-run mode without taking over mouse or keyboard.
-- [ ] No live mouse or keyboard takeover executed without prior explicit user consent.
-
-### Cleanup
-- [ ] `test_none.yaml` and `test_none2.yaml` removed from the repository.
-- [ ] Repository root `__pycache__` directory removed.
-- [ ] "BAczier" typo corrected in `PROJECT.md`.
-
-### Prioritized Plan
-- [ ] Concrete, prioritized action plan delivered outlining the exact sequence of live verification steps and completion roadmap.
+### Master Plan & Architectural Completeness
+- [ ] `c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md` is updated with a summary of changes and a finalized Phase 4 architecture and implementation roadmap.
+- [ ] The updated document fully details all 7 key architectural additions:
+  - 4-Tier Escalation Cadence with explicit strike counters, trigger conditions, and transition logic.
+  - Grounded Capability Contract specifying actuator limits and perception constraints for consultations.
+  - Dual-Channel Output routing internal JSON to LivingPlan and character monologues to Companion Dock.
+  - Tool-Aware Reasoning heuristics evaluating GUI vs. CLI / Antigravity meta-tooling vs. advisor consultation.
+  - Textual Scene Serialization using Set-of-Mark representations without video streaming.
+  - Strict Anti-Hardcoding Invariant forbidding app-specific lookup tables and canned workflows.
+  - Complete Schema Mapping inventory of Pydantic models and Win32 structs mapped to runtime hooks.
+- [ ] Core system invariants (sub-2ms touch preemption, Ctrl+Alt+K kill, brain.mode: "local_llm" default, zero silent cloud exfiltration) are explicitly maintained in all sub-phase specifications.
 
 
-## Follow-up — 2026-10-29T21:42:18Z
+## Follow-up — 2026-11-01T07:36:36Z
 
-User decisions on your open items:
-1. Start Milestone 5 iteration 2 remediation: fix Challenger 2's 4 resilience defects, then do the pre-live hardening (multi-monitor edge clamping and grounded Chrome selectors in BrowserOffloader). No live mouse or keyboard control yet.
-2. Download the local model qwen2.5-3b-instruct-q4_k_m.gguf (about 2.17 GB) to models/, so the persona can speak locally. Verify it loads within the VRAM budget.
-3. Live interactive tests (Notepad task, Gemini offload) are NOT authorized yet. Ask the user again after remediation passes its gate.
+Implement Phase 4 (Strategic Gemini Consultation Protocol & Dynamic Contingency Branching) in full across Sub-Phases 4A through 4F for ParasiteAI as a production implementation, following the certified master plan.
 
-## Follow-up — 2026-10-29T22:47:25Z
-
-Complete Milestone 5 Iteration 2 Gate Verification, Local GGUF Runtime Readiness Check, and Final Project Sign-Off for ParasiteAI.
-
-Working directory: g:\__Docs\ParasiteAI
+Working directory: C:\ParasiteAI
 Integrity mode: development
 
-Context from the previous Teamwork run (which was pinned to an earlier model that hit quota right at Phase 3 of Milestone 5 Iteration 2):
-1. All code implementation for Milestones M1–M5, Milestone 5 Iteration 2 remediation (all 4 Challenger 2 resilience defects in `parasite_ai/runtime.py`, `parasite_ai/mind/dual_mind.py`, `parasite_ai/ui/bridge.py`), and the 3 pre-live desktop hardenings (`parasite_ai/hands/mouse.py`, `kinematics.py`, `parasite_ai/mind/offloader.py`, `parasite_ai/ui/win32_styles.py`) are 100% DONE on disk.
-2. The local model `models/qwen2.5-3b-instruct-q4_k_m.gguf` (2,104,932,768 bytes) is downloaded and verified on disk.
-3. The full pytest suite (`uv run pytest`) has 660 passing tests (including `tests/test_challenger_m5_iter2_2.py`).
-4. Where the previous run stopped (see `.agents/teamwork/orchestrator_2/progress.md` and `PROJECT.md`):
-   - Phase 3 (the 5-agent M5 Iteration 2 Gate Swarm: 2 Reviewers, 2 Challengers, 1 Forensic Auditor) was interrupted mid-run by model quota exhaustion before writing its final `handoff.md` verdicts and before updating `PROJECT.md` line 59 (which still reads `M5 | ... | BLOCKED: Iteration 1 Gate Fail`) and `GATE_STATUS.md`.
+Reference document: c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md
 
 ## Requirements
 
-### R1. Complete Milestone 5 Iteration 2 Gate Swarm & Update Project Status
-Run/complete the Milestone 5 Iteration 2 Gate evaluation (2 Reviewers, 2 Challengers, 1 Forensic Auditor) verifying the 4 resilience fixes, the 3 pre-live desktop hardenings, and the 660+ pytest suite. Record the formal gate verdicts in `GATE_STATUS.md` and update `PROJECT.md` to mark Milestone M5 as `DONE`.
+### R1. Sub-Phases 4A through 4F Implementation
+Implement all Phase 4 sub-phases as specified in the certified master plan:
+- Sub-Phase 4A: Dual-Channel Output & Grounded Capability Contract
+- Sub-Phase 4B: 4-Tier Escalation State Machine
+- Sub-Phase 4C: Tool-Aware Reasoning & CLI Execution Sandbox
+- Sub-Phase 4D: Textual Scene Serialization
+- Sub-Phase 4E: UniversalAppResolver Hardening
+- Sub-Phase 4F: End-to-End Certified System Integration & Full Regression Gate
 
-### R2. Verify Local GGUF Inference & Dry-Run Readiness (Zero Mouse/Keyboard Takeover)
-Verify how `LocalBrainManager` (`parasite_ai/mind/brain_manager.py`) and `config.yaml` handle `models/qwen2.5-3b-instruct-q4_k_m.gguf` (checking whether `llama-cpp-python` or a local GGUF server/fallback is ready and documented), and verify `uv run python main.py --dry-run` runs cleanly without taking over the user's physical mouse or keyboard.
+### R2. Strict Maintenance of Core Invariants
+Strictly preserve all four system invariants throughout all implementations:
+1. Sub-2ms low-level Win32 hardware touch preemption (LLMHF_INJECTED, LLKHF_INJECTED bitmasks).
+2. Instant hard kill (Ctrl+Alt+K, taskkill /F /T /PID in <5ms).
+3. brain.mode: "local_llm" default (zero silent cloud exfiltration).
+4. Strict anti-hardcoding rule (no app-specific lookup tables, dynamic 3-tier UniversalAppResolver only).
 
-### R3. Safety Guardrail
-Do NOT execute any live test that moves the user's physical mouse or types on the physical keyboard without explicit prior user consent. All automated verification must use simulated hooks, offscreen/headless Qt, or `--dry-run` mode.
+## Verification Resources
+- Master Plan Section 12 Victory Verification Matrix (VERIF-1 through VERIF-11) at `c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md`
+- Pytest test suites (existing 877 passing tests plus new Phase 4 test suites)
 
 ## Acceptance Criteria
-- [ ] `uv run pytest` passes 100% of tests (660+ passed, 0 failures).
-- [ ] All 5 Milestone 5 Iteration 2 gate evaluators (2 Reviewers, 2 Challengers, 1 Forensic Auditor) complete their evaluation and record `APPROVE` / `CLEAN` verdicts.
-- [ ] `PROJECT.md` is updated so Milestone M5 status is `DONE` (and all 5 milestones M1–M5 are `DONE`), and `GATE_STATUS.md` is written at the repository root summarizing all M1–M5 gate results.
-- [ ] Safe dry-run (`uv run python main.py --dry-run`) and local model configuration readiness are verified with zero unconsented physical mouse/keyboard takeover.
+
+### Invariant Verification
+- [ ] Synthetic input aborts within <2ms upon physical hardware mouse or keyboard event (LLMHF_INJECTED / LLKHF_INJECTED bitmasks cleared).
+- [ ] Emergency hotkey Ctrl+Alt+K terminates process tree in <5ms via native taskkill.
+- [ ] brain.mode defaults to "local_llm" across all configuration models with zero silent cloud exfiltration.
+- [ ] No application-specific lookup tables or static coordinate mappings exist (git grep -i "app_map" parasite_ai/ yields 0 matches).
+
+### Sub-Phase Deliverables & Verification
+- [ ] Sub-Phase 4A: Grounded capability manifest and textual scene brief (<3 KB Set-of-Mark table) implemented and embedded in consultation prompt (VERIF-2, VERIF-5).
+- [ ] Sub-Phase 4B: 4-tier escalation state machine implemented in DualMindPipeline, advancing T1->T2 on 2 local strikes, T3->T4 on 2 guided strikes, and transitioning to USER_OVERRIDE on 3 co-pilot strikes, 2 consultation failures, 3 escalation cycles, or hardware interrupt; passive actions and CLI returncode 0 do not incur strikes (VERIF-1).
+- [ ] Sub-Phase 4C: Dual-channel output router implemented, extracting LivingPlan JSON (Channel A) supporting both steps and recommended_strategy keys, and sanitizing persona monologues (Channel B) with zero raw JSON, code blocks, backticks, or error tokens leaked to UIBridge.notify_speech() (VERIF-3).
+- [ ] Sub-Phase 4D: Tool-aware affordance evaluator and CLI execution sandbox implemented with command whitelisting, scraping tool prohibition, 30s timeout, and 10ms cancellation token preemption terminating subprocess tree in <20ms (VERIF-4, VERIF-10).
+- [ ] Sub-Phase 4E: UniversalAppResolver transitions from Tier 2 to Tier 3 (Win+R) on Start Search failure without looping, and PrecisionAppMatcher eliminates substring collisions (VERIF-11).
+- [ ] Sub-Phase 4F: All 10 Win32 ctypes struct sizes match 64-bit Windows ABI (VERIF-9).
+- [ ] Full regression gate: 100% passing tests via pytest across all existing 877 baseline tests plus all new Phase 4 test suites.

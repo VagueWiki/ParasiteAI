@@ -19,6 +19,7 @@ from parasite_ai.mind.brain_manager import (
     LocalBrainManager,
     MockBackend,
     BrowserOffloadBackend,
+    WebOffloadBackend,
     OpenAIEndpointBackend,
     validate_gguf_header,
     check_vram_headroom,
@@ -559,4 +560,62 @@ def test_openai_endpoint_backend(monkeypatch):
     assert reply == "Endpoint inference result"
 
     backend.unload()
+
+
+def test_web_offload_backend_alias():
+    """Verify WebOffloadBackend alias exports correctly."""
+    assert WebOffloadBackend is BrowserOffloadBackend
+
+
+def test_local_mode_decoupling_without_model(tmp_path: Path):
+    """Verify LocalBrainManager preserves LOCAL_LLM mode and sets NO_MODEL_PRESENT when no model exists."""
+    models_dir = tmp_path / "models_decoupled"
+    models_dir.mkdir()
+
+    cfg = get_default_config()
+    cfg.system.models_dir = models_dir
+    cfg.brain.mode = "local_llm"
+
+    manager = LocalBrainManager(cfg)
+    assert manager.mode == BrainMode.LOCAL_LLM
+    assert manager.state == BrainState.NO_MODEL_PRESENT
+    assert manager.active_backend is None
+
+
+def test_local_mode_generate_raises_runtime_error_when_unavailable(tmp_path: Path):
+    """Verify generate() in LOCAL_LLM mode raises RuntimeError instead of falling back to browser offload."""
+    models_dir = tmp_path / "models_err"
+    models_dir.mkdir()
+
+    cfg = get_default_config()
+    cfg.system.models_dir = models_dir
+    cfg.brain.mode = "local_llm"
+
+    manager = LocalBrainManager(cfg)
+    assert manager.mode == BrainMode.LOCAL_LLM
+    assert manager.active_backend is None
+
+    with pytest.raises(RuntimeError, match="Local model backend is not loaded or unavailable"):
+        manager.generate("Test prompt that should fail locally")
+
+
+def test_local_mode_generate_thought_fallback(tmp_path: Path):
+    """Verify generate_thought() catches local failure and returns character monologue fallback."""
+    models_dir = tmp_path / "models_fallback"
+    models_dir.mkdir()
+
+    cfg = get_default_config()
+    cfg.system.models_dir = models_dir
+    cfg.brain.mode = "local_llm"
+
+    manager = LocalBrainManager(cfg)
+    assert manager.mode == BrainMode.LOCAL_LLM
+
+    thought = manager.generate_thought(
+        scene_summary="Desktop foreground",
+        memory_context="Previous action",
+        user_goal="Open Calculator",
+    )
+    assert thought == "*observing desktop for goal: Open Calculator*"
+
 

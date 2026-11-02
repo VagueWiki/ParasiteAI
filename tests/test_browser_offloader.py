@@ -184,15 +184,15 @@ def test_browser_offloader_full_flow() -> None:
     assert result == expected_ai_output
     assert offloader.state == OffloaderState.COMPLETED
     mock_mouse.click.assert_called()
-    mock_kbd.type_text.assert_called()
+    mock_kbd.hotkey.assert_any_call("ctrl", "v", cancellation_token=None)
+    mock_kbd.hotkey.assert_any_call("enter", cancellation_token=None)
 
 
 def test_multiline_prompt_shift_enter() -> None:
-    clip = MockClipboardBackend()
+    clip = MockClipboardBackend(initial_text="User Clip Backup")
     win = MockBrowserWindowBackend(existing_hwnd=1111)
 
     mock_kbd = MagicMock()
-    mock_kbd.type_text.return_value = True
     mock_kbd.hotkey.return_value = True
 
     offloader = BrowserOffloader(
@@ -205,7 +205,9 @@ def test_multiline_prompt_shift_enter() -> None:
     prompt = "Line 1\nLine 2\nLine 3"
     offloader.query_web_ai(prompt)
 
-    mock_kbd.type_text.assert_any_call(prompt, submit=True, cancellation_token=None)
+    mock_kbd.hotkey.assert_any_call("ctrl", "v", cancellation_token=None)
+    mock_kbd.hotkey.assert_any_call("enter", cancellation_token=None)
+    assert clip.get_text() == "User Clip Backup"
 
 
 def test_offloader_cancellation_during_typing() -> None:
@@ -213,8 +215,8 @@ def test_offloader_cancellation_during_typing() -> None:
     win = MockBrowserWindowBackend(existing_hwnd=2222)
 
     mock_kbd = MagicMock()
-    # Simulate user touch interrupt during typing
-    mock_kbd.type_text.return_value = False
+    # Simulate user touch interrupt during paste hotkey
+    mock_kbd.hotkey.return_value = False
 
     offloader = BrowserOffloader(
         clipboard_backend=clip,
@@ -222,10 +224,11 @@ def test_offloader_cancellation_during_typing() -> None:
         keyboard_driver=mock_kbd,
     )
 
-    with pytest.raises(OffloadHarvestError, match="Typing was aborted"):
+    with pytest.raises(OffloadHarvestError, match="aborted or interrupted"):
         offloader.query_web_ai("Hello")
 
     assert offloader.state == OffloaderState.FAILED
+    assert clip.get_text() == "Important clip"
 
 
 def test_brain_manager_fallback_delegation() -> None:
@@ -244,6 +247,7 @@ def test_brain_manager_fallback_delegation() -> None:
 
 
 def test_zero_vram_startup_mode(tmp_path: Any) -> None:
+    """Verify local LLM mode without model on disk decouples without silent web offload mutation."""
     empty_models = tmp_path / "models"
     empty_models.mkdir()
 
@@ -253,11 +257,54 @@ def test_zero_vram_startup_mode(tmp_path: Any) -> None:
 
     brain_manager = LocalBrainManager(config=cfg)
 
-    # Must automatically fallback to zero-VRAM browser offload!
+    # In decoupled mode: must NOT automatically mutate mode to browser_offload!
     status = brain_manager.get_status()
-    assert brain_manager.mode == BrainMode.BROWSER_OFFLOAD
-    assert brain_manager.state == BrainState.READY_BROWSER_OFFLOAD
-    assert status.mode == BrainMode.BROWSER_OFFLOAD
+    assert brain_manager.mode == BrainMode.LOCAL_LLM
+    assert brain_manager.state == BrainState.NO_MODEL_PRESENT
+    assert status.mode == BrainMode.LOCAL_LLM
+    assert status.state == BrainState.NO_MODEL_PRESENT
+    assert brain_manager.active_backend is None
+
+
+def test_sentinel_harvest_periodic_retrigger() -> None:
+    """Verify SentinelClipboardVerifier periodically retriggers copy action while polling."""
+    clip = MockClipboardBackend(initial_text="User Clip")
+    verifier = SentinelClipboardVerifier(clipboard=clip, poll_interval_s=0.01, default_timeout_s=1.0)
+
+    call_count = 0
+
+    def delayed_copy() -> bool:
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 3:
+            clip.set_text("Answer after 3 triggers")
+        return True
+
+    harvested = verifier.execute_harvest(trigger_copy_action=delayed_copy, retrigger_interval_s=0.03)
+    assert harvested == "Answer after 3 triggers"
+    assert call_count >= 3
+    assert clip.get_text() == "User Clip"
+
+
+def test_prompt_clipboard_injection_restores_user_clipboard() -> None:
+    """Verify high-speed paste restores user clipboard safely."""
+    clip = MockClipboardBackend(initial_text="KeepThisSecret")
+    win = MockBrowserWindowBackend(existing_hwnd=9999)
+    mock_kbd = MagicMock()
+    mock_kbd.hotkey.return_value = True
+
+    offloader = BrowserOffloader(
+        clipboard_backend=clip,
+        window_backend=win,
+        keyboard_driver=mock_kbd,
+    )
+    offloader.verifier.execute_harvest = MagicMock(return_value="Output")
+
+    resp = offloader.query_web_ai("Prompt with high speed paste")
+    assert resp == "Output"
+    mock_kbd.hotkey.assert_any_call("ctrl", "v", cancellation_token=None)
+    mock_kbd.hotkey.assert_any_call("enter", cancellation_token=None)
+    assert clip.get_text() == "KeepThisSecret"
 
 
 def test_browser_offloader_grounded_selectors() -> None:

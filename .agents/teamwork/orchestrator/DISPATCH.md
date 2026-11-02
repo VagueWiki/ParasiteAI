@@ -85,3 +85,43 @@ Remove leftover temporary files (`test_none.yaml`, `test_none2.yaml`, repository
 
 ### R4. Prioritized Action Plan
 Deliver a clear, prioritized execution plan detailing the sequential tasks for remaining work, including live desktop smoke tests, live action verification, offload validation, and follow-up milestones.
+
+## 2026-11-01T02:22:27Z
+
+Summarize all preplanning changes and update the Phase 4 master plan document for ParasiteAI to prepare for implementation, incorporating the agreed architectural additions.
+
+Working directory: C:\ParasiteAI
+Integrity mode: development
+
+Reference material:
+- Existing Master Plan: c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md
+- Project Handoff: C:\ParasiteAI\HANDOFF.md
+
+## Requirements
+
+### R1. Preplanning Summary & Master Plan Finalization
+Update `c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md` directly to summarize all architectural changes and decisions reached since the initial document, producing an updated, comprehensive implementation plan for Phase 4. Incorporate the 7 agreed architectural additions:
+1. 4-Tier Escalation Cadence: 2 local attempts -> deep Gemini consultation -> 2 guided local attempts with Gemini blueprint -> continuous Gemini handholding / visual co-pilot -> user override.
+2. Grounded Capability Contract: Gemini receives an explicit manifest of physical actuators (Bézier mouse, atomic Ctrl+V paste, Set-of-Mark perception, ROI diffing) and constraints (no headless scraping, touch preemption).
+3. Dual-Channel Output: Internal machine-interpretable LivingPlan JSON vs. visible Companion Dock character monologue (no raw JSON shown to user).
+4. Tool-Aware Reasoning & Antigravity Meta-Tooling: Evaluating whether goals are best achieved via GUI manipulation, local developer tools (Antigravity CLI / scripts), or Gemini consultation.
+5. Textual Scene Serialization: No video streaming; scenes are serialized into structured Set-of-Mark + active window briefs.
+6. Strict Anti-Hardcoding Invariant: Zero hardcoded app maps, hints, or canned workflows.
+7. Schema mapping: Complete inventory of Pydantic models (UIElement, BoundingBox, PlanStep, LivingPlan, ActionPlan, StepRecord, AppConfig) and Win32 structs mapped to runtime hooks.
+
+### R2. Maintain Core Invariants
+Ensure the updated plan explicitly preserves all core system invariants: sub-2ms hardware touch preemption, Ctrl+Alt+K instant hard kill, brain.mode: "local_llm" default (zero silent cloud exfiltration), and the strict anti-hardcoding rule across all sub-phases.
+
+## Acceptance Criteria
+
+### Master Plan & Architectural Completeness
+- [ ] `c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md` is updated with a summary of changes and a finalized Phase 4 architecture and implementation roadmap.
+- [ ] The updated document fully details all 7 key architectural additions:
+  - 4-Tier Escalation Cadence with explicit strike counters, trigger conditions, and transition logic.
+  - Grounded Capability Contract specifying actuator limits and perception constraints for consultations.
+  - Dual-Channel Output routing internal JSON to LivingPlan and character monologues to Companion Dock.
+  - Tool-Aware Reasoning heuristics evaluating GUI vs. CLI / Antigravity meta-tooling vs. advisor consultation.
+  - Textual Scene Serialization using Set-of-Mark representations without video streaming.
+  - Strict Anti-Hardcoding Invariant forbidding app-specific lookup tables and canned workflows.
+  - Complete Schema Mapping inventory of Pydantic models and Win32 structs mapped to runtime hooks.
+- [ ] Core system invariants (sub-2ms touch preemption, Ctrl+Alt+K kill, brain.mode: "local_llm" default, zero silent cloud exfiltration) are explicitly maintained in all sub-phase specifications.

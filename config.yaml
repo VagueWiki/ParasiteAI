@@ -7,6 +7,7 @@ system:
   integrity_mode: "development"
   data_dir: "data"
   models_dir: "models"
+  log_file: "logs/parasite_debug.log"
 
 persona:
   name: "Parasite"
@@ -20,7 +21,7 @@ persona:
     Always provide commentary on what you observe on screen before taking action.
 
 brain:
-  mode: "browser_offload"  # "local_llm", "browser_offload", or "hybrid"
+  mode: "local_llm"  # "local_llm", "browser_offload", or "hybrid"
   local_model:
     model_id: "Qwen/Qwen2.5-3B-Instruct-GGUF"
     filename: "qwen2.5-3b-instruct-q4_k_m.gguf"

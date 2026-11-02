@@ -54,6 +54,8 @@ class RawElement:
     is_active_window: bool = True
     confidence: float = 1.0
     control_ref: Optional[Any] = None
+    process_name: str = ""
+    window_title: str = ""
 
     @property
     def bbox(self) -> Tuple[int, int, int, int]:
@@ -232,6 +234,36 @@ class ScreenGrounder:
             pass
         return True
 
+    @staticmethod
+    def _resolve_process_name(hwnd: int = 0, pid: int = 0) -> str:
+        """Resolves process executable name for a given HWND or PID using Win32 API."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            import os
+
+            kernel32 = ctypes.windll.kernel32
+            user32 = ctypes.windll.user32
+            if not pid and hwnd:
+                wpid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(wpid))
+                pid = wpid.value
+            if not pid:
+                return ""
+            h_proc = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not h_proc:
+                return ""
+            try:
+                buf = ctypes.create_unicode_buffer(1024)
+                sz = wintypes.DWORD(1024)
+                if kernel32.QueryFullProcessImageNameW(h_proc, 0, buf, ctypes.byref(sz)):
+                    return os.path.basename(buf.value)
+            finally:
+                kernel32.CloseHandle(h_proc)
+        except Exception:
+            pass
+        return ""
+
     def _walk_uia_tree_inner(
         self,
         auto: Any,
@@ -322,6 +354,10 @@ class ScreenGrounder:
             if len(raw_elements) >= 300:
                 break
             window_start_count = len(raw_elements)
+            win_title = str(getattr(win_ctl, "Name", "") or "").strip()
+            win_hwnd = getattr(win_ctl, "NativeWindowHandle", 0)
+            win_pid = getattr(win_ctl, "ProcessId", 0)
+            proc_name = self._resolve_process_name(hwnd=win_hwnd, pid=win_pid)
             try:
                 for control, depth in auto.WalkControl(win_ctl, includeTop=False, maxDepth=walk_depth):
                     # Per-window cap (120) and overall cap (300) bound runaway trees
@@ -404,6 +440,8 @@ class ScreenGrounder:
                                 source="uia",
                                 is_active_window=is_active_win,
                                 control_ref=control,
+                                process_name=proc_name,
+                                window_title=win_title,
                             )
                         )
                     except Exception as exc:
@@ -602,6 +640,8 @@ class ScreenGrounder:
                     center_y=elem.center_y,
                     source=source_val,
                     is_active_window=elem.is_active_window,
+                    process_name=getattr(elem, "process_name", ""),
+                    window_title=getattr(elem, "window_title", ""),
                 )
             )
 
@@ -618,8 +658,14 @@ class ScreenGrounder:
         lines = ["### Grounded Screen Targets [Set-of-Mark]:"]
         for elem in elements:
             label_part = f'"{elem.label}"' if elem.label else "(no label)"
+            details = []
+            if elem.process_name:
+                details.append(f"app: {elem.process_name}")
+            if elem.window_title:
+                details.append(f'window: "{elem.window_title[:40]}"')
+            extra_part = f" [{', '.join(details)}]" if details else ""
             lines.append(
                 f"[#{elem.id}] {elem.role} {label_part} at ({elem.center_x}, {elem.center_y}) "
-                f"[{elem.width}x{elem.height}] (source: {elem.source})"
+                f"[{elem.width}x{elem.height}]{extra_part} (source: {elem.source})"
             )
         return "\n".join(lines)

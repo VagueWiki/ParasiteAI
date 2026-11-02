@@ -30,8 +30,8 @@ def test_default_config_instantiation():
     assert cfg.system.log_level == "INFO"
     assert cfg.system.integrity_mode == "development"
     assert cfg.persona.name == "Parasite"
-    assert cfg.brain.mode == "browser_offload"
-    assert cfg.mind.mode == "browser_offload"  # mind alias property
+    assert cfg.brain.mode == "local_llm"
+    assert cfg.mind.mode == "local_llm"  # mind alias property
     assert cfg.brain.local_model.vram_budget_mb == 5500
     assert cfg.safety.interrupt_enabled is True
     assert cfg.safety.interrupt_latency_budget_ms == 2.0
@@ -79,7 +79,7 @@ def test_partial_yaml_loading(tmp_path: Path):
     assert cfg.hands.mouse.speed_factor == 1.8
     # Unspecified fields must hold default values
     assert cfg.system.log_level == "INFO"
-    assert cfg.brain.mode == "browser_offload"
+    assert cfg.brain.mode == "local_llm"
     assert cfg.safety.interrupt_enabled is True
 
 
@@ -123,7 +123,7 @@ def test_missing_config_auto_generates_file(tmp_path: Path):
     cfg = load_config(target_file)
     assert isinstance(cfg, AppConfig)
     assert target_file.exists()
-    assert "browser_offload" in target_file.read_text(encoding="utf-8")
+    assert "local_llm" in target_file.read_text(encoding="utf-8")
 
 
 def test_validation_bounds():
@@ -184,5 +184,5 @@ def test_empty_yaml_returns_default_config(tmp_path: Path):
     cfg = load_config(empty_file)
     assert isinstance(cfg, AppConfig)
     assert cfg.persona.name == "Parasite"
-    assert cfg.brain.mode == "browser_offload"
+    assert cfg.brain.mode == "local_llm"
 

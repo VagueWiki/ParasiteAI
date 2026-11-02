@@ -250,7 +250,7 @@ class RuntimeOrchestrator(QObject):
                 continue
 
             try:
-                self.memory.reset_loop_detector()
+                self.memory.reset_loop_detector(reset_escalation=True)
                 self._execute_goal_episode(goal)
             except Exception as exc:
                 logger.critical(
@@ -357,7 +357,7 @@ class RuntimeOrchestrator(QObject):
             time.sleep(0.1)
 
         # Episode Teardown & Reset Loop Detector
-        self.memory.reset_loop_detector()
+        self.memory.reset_loop_detector(reset_escalation=True)
         self.bridge.clear_hud_targets()
         self.bridge.clear_reticle()
         if not self._stop_event.is_set() and not self.interrupt_guard.is_panic() and not was_panic_or_loop:
@@ -377,7 +377,7 @@ class RuntimeOrchestrator(QObject):
     ) -> StepRecord:
         """Executes one deterministic closed-loop step synchronously."""
         if hasattr(self, "_last_single_step_goal") and self._last_single_step_goal != goal:
-            self.memory.reset_loop_detector()
+            self.memory.reset_loop_detector(reset_escalation=True)
         self._last_single_step_goal = goal
 
         self._is_in_cognitive_step = True
@@ -420,7 +420,7 @@ class RuntimeOrchestrator(QObject):
         """Resets emergency panic state, clears tokens, and re-arms interrupt guard."""
         logger.info("Resetting emergency panic state and re-arming.")
         self.interrupt_guard.reset_interrupt()
-        self.memory.reset_loop_detector()
+        self.memory.reset_loop_detector(reset_escalation=True)
         self.bridge.notify_state("WATCHING", "Curious")
         self.bridge.notify_telemetry("Re-armed: Ready for goals")
 

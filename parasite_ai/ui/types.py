@@ -7,7 +7,8 @@ operational states, mood badges, and category color themes.
 
 from __future__ import annotations
 
-from typing import Dict, Literal, Tuple
+from typing import Dict, Literal, Optional, Tuple
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # Operational cognitive states
@@ -57,6 +58,75 @@ SOM_ROLE_COLORS: Dict[str, str] = {
 }
 
 
+class BoundingBox(BaseModel):
+    """
+    Immutable 2D bounding box with padding, virtual screen boundary clamping, and frame slicing.
+    """
+    model_config = ConfigDict(extra="ignore", validate_default=True, frozen=True)
+
+    x: int
+    y: int
+    width: int
+    height: int
+
+    def pad(
+        self,
+        padding_px: int = 20,
+        bounds: Optional[Tuple[int, int, int, int]] = None,
+    ) -> BoundingBox:
+        """
+        Expands the bounding box uniformly by padding_px on all four sides,
+        clamping coordinates to virtual desktop bounds (min_x, min_y, max_w, max_h).
+        Defaults to get_virtual_screen_bounds() if bounds is None.
+        """
+        if bounds is None:
+            from parasite_ai.vision.capture import get_virtual_screen_bounds
+            vx, vy, vw, vh = get_virtual_screen_bounds()
+        else:
+            vx, vy, vw, vh = bounds
+
+        min_x = vx
+        min_y = vy
+        max_x = vx + vw
+        max_y = vy + vh
+
+        new_x = max(min_x, self.x - padding_px)
+        new_y = max(min_y, self.y - padding_px)
+        new_right = min(max_x, self.x + self.width + padding_px)
+        new_bottom = min(max_y, self.y + self.height + padding_px)
+
+        new_w = max(0, new_right - new_x)
+        new_h = max(0, new_bottom - new_y)
+        return BoundingBox(x=new_x, y=new_y, width=new_w, height=new_h)
+
+    def as_tuple(self) -> Tuple[int, int, int, int]:
+        """Returns (x, y, width, height) tuple."""
+        return (self.x, self.y, self.width, self.height)
+
+    def crop_frame(
+        self,
+        frame: Optional[np.ndarray],
+        bounds: Optional[Tuple[int, int, int, int]] = None,
+    ) -> Optional[np.ndarray]:
+        """
+        Extracts localized ROI crop from a numpy image frame clamped to array dimensions.
+        """
+        if frame is None or frame.size == 0:
+            return None
+        fh, fw = frame.shape[:2]
+        vx = bounds[0] if bounds else 0
+        vy = bounds[1] if bounds else 0
+
+        rel_x1 = max(0, min(self.x - vx, fw))
+        rel_y1 = max(0, min(self.y - vy, fh))
+        rel_x2 = max(0, min(self.x + self.width - vx, fw))
+        rel_y2 = max(0, min(self.y + self.height - vy, fh))
+
+        if rel_y2 <= rel_y1 or rel_x2 <= rel_x1:
+            return None
+        return frame[rel_y1:rel_y2, rel_x1:rel_x2]
+
+
 class UIElement(BaseModel):
     """
     Standard data contract representing a grounded desktop interactive element.
@@ -81,6 +151,14 @@ class UIElement(BaseModel):
         default=True,
         description="Whether element resides within the active foreground window."
     )
+    process_name: str = Field(
+        default="",
+        description="Parent application process executable name, e.g. notepad.exe."
+    )
+    window_title: str = Field(
+        default="",
+        description="Parent window title containing this element."
+    )
 
     @computed_field
     @property
@@ -99,6 +177,19 @@ class UIElement(BaseModel):
         """Alias returning role for compatibility with PROJECT.md spec."""
         return self.role
 
+    @property
+    def target_bbox(self) -> BoundingBox:
+        """Returns BoundingBox instance corresponding to this element."""
+        return BoundingBox(x=self.x, y=self.y, width=self.width, height=self.height)
+
+    def pad(
+        self,
+        padding_px: int = 20,
+        bounds: Optional[Tuple[int, int, int, int]] = None,
+    ) -> BoundingBox:
+        """Convenience method returning target_bbox padded and clamped to virtual bounds."""
+        return self.target_bbox.pad(padding_px=padding_px, bounds=bounds)
+
     @classmethod
     def from_bbox(
         cls,
@@ -108,6 +199,8 @@ class UIElement(BaseModel):
         role: str = "Button",
         source: Literal["uia", "ocr", "merged", "mock"] = "uia",
         is_active_window: bool = True,
+        process_name: str = "",
+        window_title: str = "",
     ) -> UIElement:
         """Convenience constructor calculating centers automatically."""
         x, y, w, h = bbox
@@ -123,6 +216,8 @@ class UIElement(BaseModel):
             center_y=y + h // 2,
             source=source,
             is_active_window=is_active_window,
+            process_name=process_name,
+            window_title=window_title,
         )
 
 

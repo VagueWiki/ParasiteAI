@@ -17,6 +17,9 @@ from parasite_ai.config import SafetyConfig
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
+# 64-bit Win32 RECT Structure (16 bytes: left, top, right, bottom)
+RECT = wintypes.RECT
+
 
 class WindowGuardedException(RuntimeError):
     """Raised when an action or perception is attempted while a sensitive window is active."""

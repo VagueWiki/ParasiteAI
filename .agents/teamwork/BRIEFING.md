@@ -1,39 +1,42 @@
-# BRIEFING — 2026-10-29T22:48:00Z
+# BRIEFING — 2026-10-31T12:11:00Z
 
 ## Mission
-Complete Milestone 5 Iteration 2 Gate Verification, Local GGUF Runtime Readiness Check, and Final Project Sign-Off for ParasiteAI.
+Coordinate and monitor Phase 3 implementation (Execution Loop Hardening) for ParasiteAI.
 
 ## 🔒 My Identity
 - Archetype: sentinel
-- Working directory: g:\__Docs\ParasiteAI\.agents\teamwork\
-- Orchestrator: bbc655af-180c-4186-a769-6237314a47ee
-- Victory Auditor: to be spawned on victory claim
+- Working directory: c:\ParasiteAI\.agents\teamwork\
+- Orchestrator: e0c349d0-ebff-40df-ad27-90045e79724a
+- Victory Auditor: 5f68bb3e-0e89-4a65-b7a3-60f42de4eff2
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
 - Victory Audit is MANDATORY before reporting completion
-- 100% visible, desktop-native local AI assistant operating on physical desktop (zero headless browsers, zero invisible scrapers, zero CLI-only interfaces)
-- Win32 low-level hardware hooks must abort in <2ms on physical touch
-- Clipboard operations must verify and restore original user clipboard content
-- No live mouse or keyboard takeover without explicit user consent
+- Maintain sub-2ms hardware touch preemption and Ctrl+Alt+K hard kill
+- brain.mode: "local_llm"
+- Strict anti-hardcoding rule (no application-specific branching)
+- Dual-monitor virtual desktop coordinate safety (3840x1080 @ 100% DPI)
+- All 797 existing tests must pass + new tests for 3A, 3B, 3C
 
 ## User Context
-- **Last user request**: Complete Milestone 5 Iteration 2 Gate Verification, Local GGUF Runtime Readiness Check, and Final Project Sign-Off for ParasiteAI.
+- **Last user request**: Approved task prompt for Phase 3
 - **Pending clarifications**: none
 - **Delivered results**:
-  - Milestones M1–M4 passed gates unanimously (552 tests).
-  - Milestone M5 core implemented and 4 resilience defects remediated (660 tests passing).
-  - Local model `models/qwen2.5-3b-instruct-q4_k_m.gguf` downloaded and verified on disk.
+  - Phase 3A: Localized ROI diffing (target bounding box + 20px) in `dual_mind.py`.
+  - Phase 3B: Win32 Caret Focus verification (`GetGUIThreadInfo`) before `TYPE` actions.
+  - Phase 3C: Start Search cadence buffer (250ms) in `resolver.py`.
+  - Phase 3D: Test Suite expanded from 797 to 877 tests, all passing 100% green.
 
 ## Project Status
-- **Phase**: in progress (Dispatching Orchestrator 3 for M5 Iteration 2 Gate Swarm & Project Sign-Off)
+- **Phase**: complete
 
 ## Victory Audit Status
-- **Triggered**: no
-- **Verdict**: pending
+- **Triggered**: yes
+- **Verdict**: VICTORY CONFIRMED
 - **Retry count**: 0
 
 ## Artifact Index
-- .agents/teamwork/ORIGINAL_REQUEST.md — Authoritative record of user requests
-- PROJECT.md — Repository project tracking and roadmap
-- GATE_STATUS.md — Formal milestone gate evaluations
+- .agents/teamwork/ORIGINAL_REQUEST.md — Approved user request
+- .agents/teamwork/orchestrator_1/handoff.md — Orchestrator handoff report
+- .agents/teamwork/victory_auditor/handoff.md — Independent Victory Audit report
+- .agents/teamwork/handoff.md — Sentinel final handoff report

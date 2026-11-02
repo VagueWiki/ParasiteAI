@@ -30,6 +30,7 @@ from PyQt6.QtGui import (
     QPainter,
     QPixmap,
     QScreen,
+    QTextCursor,
 )
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -283,6 +284,9 @@ class CompanionDock(QWidget):
             "font-size: 8.5pt; background: transparent; border: none;"
         )
         self.thought_text.setPlainText("Monitoring foreground UI tree...")
+        init_cursor = self.thought_text.textCursor()
+        init_cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.thought_text.setTextCursor(init_cursor)
 
         thought_layout.addWidget(self.thought_header)
         thought_layout.addWidget(self.thought_text)
@@ -603,9 +607,15 @@ class CompanionDock(QWidget):
 
     @pyqtSlot(str)
     def update_thought(self, text: str) -> None:
-        """Appends to the internal monologue and scrolls into view."""
+        """Appends to the internal monologue and scrolls into view (ensuring newest line is visible)."""
         self.thought_text.appendPlainText(text)
+        cursor = self.thought_text.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.thought_text.setTextCursor(cursor)
         self.thought_text.ensureCursorVisible()
+        sb = self.thought_text.verticalScrollBar()
+        if sb is not None:
+            sb.setValue(sb.maximum())
         self.sig_thought_updated.emit(text)
 
     @pyqtSlot(str)

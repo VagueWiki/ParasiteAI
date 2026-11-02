@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
+import os
+import subprocess
 import threading
+import time
 from typing import Any, Callable, List, Optional, Tuple
 
 from parasite_ai.config import SafetyConfig
@@ -89,6 +92,11 @@ class PanicManager:
         self._is_shift_down = False
         self.allow_process_exit: bool = False
 
+        # Corner slam edge-triggered debouncing state
+        self._last_corner_slam_time: float = 0.0
+        self._in_corner_zone: bool = False
+        self.corner_debounce_sec: float = 1.0
+
     def is_panic(self) -> bool:
         """Returns True if panic abort is currently triggered."""
         return self._panic_event.is_set()
@@ -110,13 +118,19 @@ class PanicManager:
         """
         Activates emergency panic:
         1. Sets panic event
-        2. Neutralizes hardware state (releases stuck buttons/keys)
-        3. Invokes all registered panic callbacks
+        2. If Ctrl+Alt+K and allow_process_exit, immediately executes hard kill
+        3. Neutralizes hardware state (releases stuck buttons/keys)
+        4. Invokes all registered panic callbacks
         """
         with self._lock:
             self._panic_reason = source
             self._panic_event.set()
             callbacks = list(self._callbacks)
+
+        # If Instant Hard Kill requested and exit is enabled, prioritize termination immediately
+        if source == PanicTriggerSource.CTRL_ALT_K_KILL and self.allow_process_exit:
+            self.hard_kill_all_processes()
+            return
 
         self.emergency_hardware_release()
 
@@ -126,15 +140,10 @@ class PanicManager:
             except Exception:
                 pass
 
-        if source == PanicTriggerSource.CTRL_ALT_K_KILL and self.allow_process_exit:
-            self.hard_kill_all_processes()
-
     def hard_kill_all_processes(self) -> None:
         """
         Instantly neutralizes physical inputs and terminates the entire ParasiteAI process tree.
         """
-        import os
-        import subprocess
         try:
             self.emergency_hardware_release()
         except Exception:
@@ -149,7 +158,7 @@ class PanicManager:
             )
         except Exception:
             pass
-        os._exit(0)
+        os._exit(1)
 
     def reset_panic(self) -> None:
         """Resets panic state (e.g. user resumed operation)."""
@@ -159,6 +168,8 @@ class PanicManager:
             self._is_ctrl_down = False
             self._is_alt_down = False
             self._is_shift_down = False
+            self._in_corner_zone = False
+            self._last_corner_slam_time = 0.0
 
     def emergency_hardware_release(self) -> None:
         """
@@ -302,11 +313,24 @@ class PanicManager:
         ]
 
         all_corners = primary_corners + virtual_corners
-        for cx_k, cy_k in all_corners:
-            if abs(x - cx_k) <= delta and abs(y - cy_k) <= delta:
-                self.trigger_panic(PanicTriggerSource.CORNER_SLAM)
-                return True
+        in_corner = any(
+            abs(x - cx_k) <= delta and abs(y - cy_k) <= delta
+            for cx_k, cy_k in all_corners
+        )
 
+        if not in_corner:
+            self._in_corner_zone = False
+            return False
+
+        now = time.monotonic()
+        # Edge-triggered & 1.0-second debounced
+        if not self._in_corner_zone and (now - self._last_corner_slam_time >= self.corner_debounce_sec):
+            self._in_corner_zone = True
+            self._last_corner_slam_time = now
+            self.trigger_panic(PanicTriggerSource.CORNER_SLAM)
+            return True
+
+        self._in_corner_zone = True
         return False
 
     def _get_screen_metrics(self) -> Tuple[int, int, int, int, int, int]:

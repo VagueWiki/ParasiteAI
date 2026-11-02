@@ -334,7 +334,7 @@ class TestAdversarialBrowserOffloaderSelectors:
 
         # Copy trigger must have fallen back to Tier 2: click canvas + Ctrl+C
         assert mock_kbd.hotkey.called
-        assert mock_kbd.hotkey.call_args_list[1].args == ("ctrl", "c")
+        assert any(call.args == ("ctrl", "c") for call in mock_kbd.hotkey.call_args_list)
 
 
 # ===========================================================================

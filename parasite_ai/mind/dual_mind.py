@@ -11,7 +11,12 @@ Implements:
 
 from __future__ import annotations
 
+import ctypes
+from ctypes import wintypes
+import json
 import logging
+import re
+import sys
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -19,18 +24,38 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from parasite_ai.config import AppConfig
+from parasite_ai.mind.affordance import (
+    ActionAffordance,
+    AffordanceAssessment,
+    AffordanceEvaluator,
+    CLIExecutionResult,
+    CLIExecutionSandbox,
+)
 from parasite_ai.mind.brain_manager import LocalBrainManager
 from parasite_ai.mind.memory import (
     ActionPlan,
     ActionType,
+    CadenceTier,
     EpisodicMemory,
+    EscalationStateMachine,
     INTERACTIVE_ACTION_TYPES,
     StepRecord,
     compute_dhash,
     compute_pixel_diff,
 )
+from parasite_ai.mind.plan import (
+    LivingPlan,
+    PlanStep,
+    StepIntent,
+    StepStatus,
+    check_and_insert_contingencies,
+    extract_strategic_blueprint_json,
+    parse_gemini_consultation_response,
+    verify_step_completion,
+)
+from parasite_ai.mind.resolver import UniversalAppResolver
 from parasite_ai.ui.bridge import UIBridge
-from parasite_ai.ui.types import UIElement
+from parasite_ai.ui.types import BoundingBox, UIElement
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +73,7 @@ class ActionResult(BaseModel):
     error: Optional[str] = None
     resolved_coordinates: Optional[Tuple[int, int]] = None
     action_executed: Optional[ActionPlan] = None
+    returncode: Optional[int] = None
 
 
 class PersonaOutput(BaseModel):
@@ -154,8 +180,14 @@ class PersonaEngine:
         else:
             raw_text = f"Observing desktop for goal: {user_goal}"
 
+        if not isinstance(raw_text, str):
+            raw_text = str(raw_text)
+
         thought, speech = self._parse_thought_and_speech(raw_text)
         mood = mood_override or "Curious"
+        logger.info("[PERSONA MONOLOGUE] State: %s | Mood: %s | Goal: %r", state, mood, user_goal)
+        logger.info("  Thought: %s", thought)
+        logger.info("  Speech:  %s", speech)
 
         if self.bridge:
             if thought:
@@ -203,6 +235,130 @@ class PersonaEngine:
 
 
 # ---------------------------------------------------------------------------
+# Win32 Caret Focus Verification (Requirement R2 / Phase 3B)
+# ---------------------------------------------------------------------------
+
+GUI_CARETBLINKING = 0x00000001
+
+
+class GUITHREADINFO(ctypes.Structure):
+    """Win32 tagGUITHREADINFO structure for thread GUI status queries."""
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("hwndActive", wintypes.HWND),
+        ("hwndFocus", wintypes.HWND),
+        ("hwndCapture", wintypes.HWND),
+        ("hwndMenuOwner", wintypes.HWND),
+        ("hwndMoveSize", wintypes.HWND),
+        ("hwndCaret", wintypes.HWND),
+        ("rcCaret", wintypes.RECT),
+    ]
+
+
+def check_caret_focus(thread_id: int = 0) -> bool:
+    """
+    Verifies that the target or foreground GUI thread currently holds caret focus.
+    Returns True if flags & GUI_CARETBLINKING or hwndCaret != 0.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        user32 = getattr(ctypes, "windll", None)
+        if user32 is not None:
+            user32 = getattr(user32, "user32", None)
+        if user32 is None:
+            return False
+        info = GUITHREADINFO()
+        info.cbSize = ctypes.sizeof(GUITHREADINFO)
+        ret = user32.GetGUIThreadInfo(thread_id, ctypes.byref(info))
+        if not ret:
+            return False
+        has_blinking = bool(info.flags & GUI_CARETBLINKING)
+        has_caret_hwnd = bool(info.hwndCaret and info.hwndCaret != 0)
+        return has_blinking or has_caret_hwnd
+    except Exception as exc:
+        logger.debug("Win32 GetGUIThreadInfo caret check failed: %s", exc)
+        return False
+
+
+def verify_caret_focus(
+    thread_id: int = 0,
+    timeout_ms: float = 250.0,
+    poll_interval_ms: float = 25.0,
+    cancellation_token: Optional[threading.Event] = None,
+) -> bool:
+    """
+    Polls check_caret_focus up to timeout_ms with short backoff intervals.
+    Honors cancellation_token for immediate sub-2ms preemption.
+    """
+    deadline = time.time() + (timeout_ms / 1000.0)
+    poll_s = poll_interval_ms / 1000.0
+
+    while True:
+        if cancellation_token and cancellation_token.is_set():
+            return False
+        if check_caret_focus(thread_id):
+            return True
+        if time.time() >= deadline:
+            break
+        if cancellation_token:
+            if cancellation_token.wait(timeout=poll_s):
+                return False
+        else:
+            time.sleep(poll_s)
+
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Localized Target ROI Extraction (Requirement R1 / Phase 3A)
+# ---------------------------------------------------------------------------
+
+def extract_action_target_roi(
+    action: ActionPlan,
+    elements: List[UIElement],
+    resolved_coords: Optional[Tuple[int, int]] = None,
+    active_window_rect: Optional[Tuple[int, int, int, int]] = None,
+    padding_px: int = 20,
+    bounds: Optional[Tuple[int, int, int, int]] = None,
+) -> Optional[BoundingBox]:
+    """
+    Resolves the target bounding box for localized visual diffing:
+    1. By target_id in grounded elements.
+    2. By explicit coordinates intersecting any grounded element, or point ROI.
+    3. By active window rectangle for ungrounded typing or scrolling.
+    4. Returns None for global actions (HOTKEY, WAIT, DONE, PANIC).
+    """
+    # 1. Target ID resolution
+    if action.target_id is not None:
+        matched = next((e for e in elements if e.id == action.target_id), None)
+        if matched:
+            return matched.pad(padding_px=padding_px, bounds=bounds)
+
+    # 2. Coordinates resolution
+    coords = action.coordinates or resolved_coords
+    if coords is not None:
+        cx, cy = coords
+        matched = next(
+            (e for e in elements if e.x <= cx <= e.x + e.width and e.y <= cy <= e.y + e.height),
+            None,
+        )
+        if matched:
+            return matched.pad(padding_px=padding_px, bounds=bounds)
+        return BoundingBox(x=cx, y=cy, width=0, height=0).pad(padding_px=padding_px, bounds=bounds)
+
+    # 3. Active window resolution for ungrounded typing or scrolling
+    if active_window_rect and action.action in (ActionType.TYPE, ActionType.SCROLL):
+        wx, wy, ww, wh = active_window_rect
+        if ww > 0 and wh > 0:
+            return BoundingBox(x=wx, y=wy, width=ww, height=wh).pad(padding_px=padding_px, bounds=bounds)
+
+    # 4. Global actions or ungrounded hotkeys
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Pass 2: Action Dispatcher
 # ---------------------------------------------------------------------------
 
@@ -241,6 +397,21 @@ class ActionDispatcher:
         # Fallback coordinate boundary check for test/headless sessions
         return 0 <= x < 10000 and 0 <= y < 10000
 
+    def verify_caret_focus(
+        self,
+        thread_id: int = 0,
+        timeout_ms: float = 250.0,
+        poll_interval_ms: float = 25.0,
+        cancellation_token: Optional[threading.Event] = None,
+    ) -> bool:
+        """Helper delegating to module-level verify_caret_focus."""
+        return verify_caret_focus(
+            thread_id=thread_id,
+            timeout_ms=timeout_ms,
+            poll_interval_ms=poll_interval_ms,
+            cancellation_token=cancellation_token,
+        )
+
     def resolve_target(
         self,
         action: ActionPlan,
@@ -265,14 +436,26 @@ class ActionDispatcher:
         cancellation_token: Optional[threading.Event] = None,
     ) -> ActionResult:
         """Dispatches action command to physical mouse/keyboard drivers."""
+        logger.info(
+            "[ACTION DISPATCH] Action: %s | Target: %s | Coords: %s | Text: %r | Keys: %s | Reasoning: %s",
+            action.action.value,
+            action.target_id,
+            action.coordinates,
+            action.text,
+            action.keys,
+            action.reasoning,
+        )
+
         # 1. Preemption check
         if cancellation_token and cancellation_token.is_set():
             self._release_all()
+            logger.info("[ACTION PREEMPTED] Preempted by physical human input token before dispatch.")
             return ActionResult(
                 success=False,
                 interrupted=True,
                 error="Interrupted by physical human input",
                 action_executed=action,
+                returncode=-1 if action.action == ActionType.RUN_CLI_COMMAND else None,
             )
 
         # 2. Coordinate resolution
@@ -287,14 +470,17 @@ class ActionDispatcher:
         if needs_coords:
             coords, err = self.resolve_target(action, som_elements)
             if err:
+                logger.warning("[ACTION MISFIRE] Target resolution error: %s (action=%s)", err, action.action.value)
                 return ActionResult(success=False, error=err, action_executed=action)
             if coords is None:
+                logger.warning("[ACTION MISFIRE] Missing coordinates/target_id for interactive click (action=%s)", action.action.value)
                 return ActionResult(
                     success=False,
                     error="Target ID or coordinates required for interactive click",
                     action_executed=action,
                 )
             if not self.validate_coordinates(coords[0], coords[1]):
+                logger.warning("[ACTION MISFIRE] Coordinates %s out of virtual screen bounds", coords)
                 return ActionResult(
                     success=False,
                     error=f"Coordinates {coords} out of desktop bounds",
@@ -449,6 +635,19 @@ class ActionDispatcher:
                             )
                 except Exception:
                     pass
+
+                # Caret focus verification prior to typing
+                if not self.verify_caret_focus(cancellation_token=cancellation_token):
+                    interrupted = bool(cancellation_token and cancellation_token.is_set())
+                    err_msg = "Interrupted by physical input" if interrupted else "Caret focus not detected"
+                    logger.warning("[ACTION MISFIRE] Typing aborted: %s. Keystrokes suppressed to prevent unfocused input.", err_msg)
+                    return ActionResult(
+                        success=False,
+                        interrupted=interrupted,
+                        error=err_msg,
+                        action_executed=action,
+                    )
+
                 if self.keyboard_driver:
                     ok = self.keyboard_driver.type_text(
                         text=action.text or "",
@@ -512,8 +711,37 @@ class ActionDispatcher:
                 self._release_all()
                 return ActionResult(success=True, action_executed=action)
 
+            elif action.action == ActionType.RUN_CLI_COMMAND:
+                cmd = action.cli_command or action.text or ""
+                if not cmd:
+                    return ActionResult(
+                        success=False,
+                        error="No CLI command specified for RUN_CLI_COMMAND",
+                        action_executed=action,
+                        returncode=-1,
+                    )
+                try:
+                    cli_res = CLIExecutionSandbox.execute(
+                        command_str=cmd,
+                        cancellation_token=cancellation_token,
+                    )
+                    return ActionResult(
+                        success=(cli_res.exit_code == 0),
+                        interrupted=cli_res.preempted,
+                        error=cli_res.stderr if cli_res.exit_code != 0 else None,
+                        action_executed=action,
+                        returncode=cli_res.exit_code,
+                    )
+                except Exception as exc:
+                    return ActionResult(
+                        success=False,
+                        error=str(exc),
+                        action_executed=action,
+                        returncode=-1,
+                    )
+
             elif action.action in (ActionType.DONE, ActionType.OFFLOAD_WEB_AI):
-                return ActionResult(success=True, action_executed=action)
+                return ActionResult(success=True, action_executed=action, returncode=0)
 
             return ActionResult(
                 success=True,
@@ -546,6 +774,179 @@ class ActionDispatcher:
 
 
 # ---------------------------------------------------------------------------
+# Dual-Channel Output Router (Channel A: Machine LivingPlan JSON vs Channel B: Persona Monologue)
+# ---------------------------------------------------------------------------
+
+class DualChannelRouter:
+    """
+    Dual-Channel Output Router enforcing strict channel separation:
+    - Channel A (Machine Plan): Ingests LivingPlan blueprints supporting both
+      'steps' and 'recommended_strategy' keys without leaking JSON to user UI.
+    - Channel B (Persona Dialogue): Synthesizes natural, character-aligned monologue
+      while permanently stripping raw JSON, markdown code blocks, backticks, coordinate
+      tuples, and suppressing raw error tokens.
+    """
+
+    def __init__(
+        self,
+        bridge: Optional[Any] = None,
+        persona_engine: Optional[Any] = None,
+    ) -> None:
+        self.bridge = bridge
+        self.persona_engine = persona_engine
+
+    def route_consultation_output(
+        self,
+        raw_advisor_text: str,
+        user_goal: str,
+        active_plan: Optional[LivingPlan] = None,
+    ) -> Tuple[Optional[LivingPlan], str]:
+        """
+        Routes advisor response across Channel A and Channel B:
+        Channel A: Extracts strategic blueprint JSON supporting both 'steps' and 'recommended_strategy' keys.
+        Channel B: Translates rationale into natural character dialogue without technical leaks.
+        Emits visible speech through self.bridge.notify_speech(persona_speech) if bridge is present.
+        Returns (updated_plan, persona_speech).
+        """
+        blueprint_json = extract_strategic_blueprint_json(raw_advisor_text)
+        has_steps = bool(
+            blueprint_json
+            and (
+                ("steps" in blueprint_json and bool(blueprint_json["steps"]))
+                or ("recommended_strategy" in blueprint_json and bool(blueprint_json["recommended_strategy"]))
+            )
+        )
+
+        if has_steps:
+            try:
+                if (
+                    isinstance(blueprint_json.get("recommended_strategy"), str)
+                    and isinstance(blueprint_json.get("steps"), list)
+                    and bool(blueprint_json["steps"])
+                ):
+                    norm = dict(blueprint_json)
+                    norm["overall_strategy"] = norm.pop("recommended_strategy")
+                    text_to_parse = json.dumps(norm)
+                else:
+                    text_to_parse = raw_advisor_text
+
+                updated_plan = parse_gemini_consultation_response(text_to_parse, user_goal)
+                raw_rationale = (
+                    blueprint_json.get("rationale")
+                    or blueprint_json.get("overall_strategy", "")
+                    or (blueprint_json.get("recommended_strategy", "") if isinstance(blueprint_json.get("recommended_strategy"), str) else "")
+                    or ""
+                )
+            except Exception as exc:
+                logger.warning("Failed parsing strategic blueprint response: %s", exc)
+                updated_plan = None
+                raw_rationale = ""
+        else:
+            updated_plan = None
+            raw_rationale = (
+                blueprint_json.get("rationale", "")
+                if (blueprint_json and isinstance(blueprint_json, dict))
+                else ""
+            )
+
+        if updated_plan and not updated_plan.steps and not getattr(updated_plan, "needs_clarification", False):
+            updated_plan = None
+
+        persona_speech = self.translate_to_persona_voice(
+            raw_rationale=raw_rationale,
+            updated_plan=updated_plan,
+            user_goal=user_goal,
+        )
+
+        if self.bridge and hasattr(self.bridge, "notify_speech"):
+            self.bridge.notify_speech(persona_speech)
+
+        return updated_plan, persona_speech
+
+    def translate_to_persona_voice(
+        self,
+        raw_rationale: str,
+        updated_plan: Optional[LivingPlan],
+        user_goal: str,
+    ) -> str:
+        """
+        Translates raw advisor rationale and/or updated plan into clean, friendly persona monologue.
+        Filters out error tokens, technical jargon, code blocks, and coordinates.
+        """
+        clean_text = self._sanitize_text(raw_rationale)
+
+        error_tokens = (
+            "error:",
+            "exception",
+            "resource_exhausted",
+            "resource exhausted",
+            "code 429",
+            "429",
+            "rate limit",
+            "quota exceeded",
+            "503 service",
+            "500 internal",
+            "traceback",
+            "stack trace",
+            "status_code",
+            "failed with",
+            "syntaxerror",
+            "typeerror",
+            "valueerror",
+        )
+        is_error = (
+            any(kw in clean_text.lower() for kw in error_tokens)
+            or bool(re.search(r"\berror\b\s*:", clean_text, re.IGNORECASE))
+            or bool(re.search(r"\b(?:429|500|502|503)\b", clean_text))
+        )
+
+        if updated_plan and hasattr(updated_plan, "steps") and updated_plan.steps:
+            first_step = updated_plan.steps[0]
+            clean_desc = self._sanitize_text(getattr(first_step, "description", "") or "")
+            desc_is_error = (
+                any(kw in clean_desc.lower() for kw in error_tokens)
+                or bool(re.search(r"\berror\b\s*:", clean_desc, re.IGNORECASE))
+                or bool(re.search(r"\b(?:429|500|502|503)\b", clean_desc))
+            )
+            if clean_desc and not desc_is_error:
+                return f"Gemini suggested we try {clean_desc.lower()}. Let's give that a shot!"
+            return "I've updated our plan with the advisor's guidance. Let's do this!"
+        elif not is_error and ("modal" in clean_text.lower() or "dialog" in clean_text.lower()):
+            return "Looks like an unexpected dialog popped up. Let me dismiss it so we can keep going."
+        elif clean_text and not is_error:
+            return clean_text[:140]
+        else:
+            return "I've re-evaluated our plan. Moving to the next step now!"
+
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        """
+        Sanitizes text by stripping markdown code blocks, backticks, braces, brackets,
+        quotes, coordinate tuples, and dimension pairs.
+        """
+        if not text or not isinstance(text, str):
+            return ""
+
+        # Strip all markdown code blocks (```python, ```json, ```bash, etc.)
+        text = re.sub(r"```[\w]*[\s\S]*?```", "", text)
+        text = re.sub(r"```[\w]*[\s\S]*$", "", text)
+        text = re.sub(r"```", "", text)
+
+        # Strip inline backticks and code snippets
+        text = re.sub(r"`[^`]*`", "", text)
+        text = re.sub(r"`", "", text)
+
+        # Strip curly braces, square brackets, quotes
+        text = re.sub(r"[{}\[\]\"]", "", text)
+
+        # Strip coordinate pairs and dimensions
+        text = re.sub(r"\b\d+x\d+\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\(\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)\s*,\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)\s*\)", "", text)
+
+        return " ".join(text.split()).strip()
+
+
+# ---------------------------------------------------------------------------
 # End-to-End Orchestrator: DualMindPipeline
 # ---------------------------------------------------------------------------
 
@@ -568,9 +969,14 @@ class DualMindPipeline:
         bridge: Optional[UIBridge] = None,
         offloader: Optional[Any] = None,
         config: Optional[AppConfig] = None,
+        escalation_sm: Optional[EscalationStateMachine] = None,
+        affordance_evaluator: Optional[AffordanceEvaluator] = None,
     ) -> None:
         self.brain_manager = brain_manager
         self.memory = memory or EpisodicMemory()
+        self.escalation_sm = escalation_sm or (
+            getattr(self.memory, "escalation_sm", None) or EscalationStateMachine()
+        )
         self.mouse_driver = mouse_driver
         self.keyboard_driver = keyboard_driver
         self.screen_grounder = screen_grounder
@@ -580,6 +986,7 @@ class DualMindPipeline:
         self.bridge = bridge
         self.offloader = offloader
         self.config = config
+        self.affordance_evaluator = affordance_evaluator or AffordanceEvaluator()
 
         self.persona_engine = PersonaEngine(
             brain_manager=self.brain_manager,
@@ -592,6 +999,95 @@ class DualMindPipeline:
             bridge=self.bridge,
             config=self.config,
         )
+        self.dual_channel_router = DualChannelRouter(
+            bridge=self.bridge,
+            persona_engine=self.persona_engine,
+        )
+        self.resolver = UniversalAppResolver()
+        self.active_plan: Optional[LivingPlan] = None
+
+    def evaluate_goal_affordance(
+        self,
+        goal: str,
+        active_window_title: str = "",
+    ) -> AffordanceAssessment:
+        """Evaluates whether the goal is best achieved via GUI, CLI, or Advisor."""
+        return self.affordance_evaluator.evaluate(goal, active_window_title)
+
+    def _initialize_or_update_plan(self, user_goal: str) -> LivingPlan:
+        """Initializes or retrieves the active LivingPlan for user_goal."""
+        if (
+            self.active_plan is not None
+            and self.active_plan.user_goal == user_goal
+            and not self.active_plan.is_completed()
+        ):
+            return self.active_plan
+
+        active_title = ""
+        if self.window_guard and hasattr(self.window_guard, "get_active_window_info"):
+            try:
+                winfo = self.window_guard.get_active_window_info()
+                if winfo and hasattr(winfo, "title"):
+                    active_title = winfo.title
+            except Exception:
+                pass
+
+        affordance_assessment = self.affordance_evaluator.evaluate(user_goal, active_title)
+        if affordance_assessment.affordance == ActionAffordance.LOCAL_DEVELOPER_TOOL:
+            route = "CLI"
+        elif affordance_assessment.affordance == ActionAffordance.STRATEGIC_ADVISOR:
+            route = "ADVISOR"
+        else:
+            route = "GUI"
+
+        target_app = self.resolver.extract_target_app(user_goal)
+        steps: List[PlanStep] = []
+        step_id = 1
+
+        if target_app:
+            steps.append(
+                PlanStep(
+                    step_id=step_id,
+                    intent=StepIntent.LAUNCH_OR_ACTIVATE,
+                    description=f"Launch or focus target application: {target_app}",
+                    target_description=target_app,
+                    success_criteria=f"Application '{target_app}' is visible and active on desktop",
+                    tool_route="GUI",
+                )
+            )
+            step_id += 1
+
+        steps.append(
+            PlanStep(
+                step_id=step_id,
+                intent=StepIntent.INPUT_DATA
+                if any(k in user_goal.lower() for k in ("write", "type", "enter", "input", "fill"))
+                else StepIntent.NAVIGATE,
+                description=f"Execute objective: {user_goal}",
+                success_criteria="Objective actions executed and changes visible",
+                tool_route=route,
+            )
+        )
+        step_id += 1
+
+        steps.append(
+            PlanStep(
+                step_id=step_id,
+                intent=StepIntent.CONCLUDE,
+                description="Verify final state and conclude task",
+                success_criteria="Goal completed satisfactorily",
+                tool_route=route,
+            )
+        )
+
+        plan = LivingPlan(
+            user_goal=user_goal,
+            overall_strategy=f"Generic multi-stage resolution for: {user_goal}",
+            steps=steps,
+            current_step_id=1,
+        )
+        self.active_plan = plan
+        return plan
 
     def step(
         self,
@@ -613,6 +1109,10 @@ class DualMindPipeline:
         # 1. Safety Guard Checks
         if self.interrupt_guard and hasattr(self.interrupt_guard, "is_interrupted"):
             if self.interrupt_guard.is_interrupted():
+                self.escalation_sm.on_hardware_interrupt()
+                if self.active_plan:
+                    self.active_plan.escalation_tier = self.escalation_sm.current_tier
+                    self.active_plan.tier_strikes = self.escalation_sm.current_strikes
                 if self.bridge:
                     self.bridge.notify_state("USER_OVERRIDE", "Curious")
                 return self.memory.record_step(
@@ -621,7 +1121,23 @@ class DualMindPipeline:
                     screen_diff=0.0,
                     user_goal=user_goal,
                     error_message="User override active (physical human input detected)",
+                    tier_level=self.escalation_sm.current_tier,
                 )
+
+        if self.escalation_sm.current_tier == CadenceTier.USER_OVERRIDE:
+            if self.active_plan:
+                self.active_plan.escalation_tier = self.escalation_sm.current_tier
+                self.active_plan.tier_strikes = self.escalation_sm.current_strikes
+            if self.bridge:
+                self.bridge.notify_state("USER_OVERRIDE", "Curious")
+            return self.memory.record_step(
+                action=ActionPlan(action=ActionType.WAIT, reasoning="User override active"),
+                success=False,
+                screen_diff=0.0,
+                user_goal=user_goal,
+                error_message="User override active (system in USER_OVERRIDE state)",
+                tier_level=self.escalation_sm.current_tier,
+            )
 
         if self.window_guard and hasattr(self.window_guard, "is_safe_to_operate"):
             if not self.window_guard.is_safe_to_operate():
@@ -633,6 +1149,7 @@ class DualMindPipeline:
                     screen_diff=0.0,
                     user_goal=user_goal,
                     error_message="Sensitive window detected; pausing actions",
+                    tier_level=self.escalation_sm.current_tier,
                 )
 
         # 2. Perception & Grounding
@@ -660,6 +1177,141 @@ class DualMindPipeline:
 
         pre_hash = compute_dhash(current_frame) if current_frame is not None else None
 
+        # Living Plan initialization and modal contingency check
+        active_plan = self._initialize_or_update_plan(user_goal)
+        active_plan.escalation_tier = self.escalation_sm.current_tier
+        active_plan.tier_strikes = self.escalation_sm.current_strikes
+
+        # Tier 2: Deep Strategic Gemini Consultation
+        if self.escalation_sm.current_tier == CadenceTier.TIER_2_CONSULT:
+            if self.offloader is None:
+                logger.info("No offloader configured for Tier 2 consultation; recording consultation failure.")
+                self.escalation_sm.on_consultation_failure()
+                self.memory.reset_loop_detector()
+                if self.active_plan:
+                    self.active_plan.escalation_tier = self.escalation_sm.current_tier
+                    self.active_plan.tier_strikes = self.escalation_sm.current_strikes
+                if self.escalation_sm.current_tier == CadenceTier.USER_OVERRIDE:
+                    if self.bridge:
+                        self.bridge.notify_state("USER_OVERRIDE", "Curious")
+                        self.bridge.notify_speech("Strategic consultation unavailable and retry limit exceeded. Requesting user override.")
+                    wait_action = ActionPlan(
+                        action=ActionType.WAIT,
+                        wait_ms=1000,
+                        reasoning="Tier 2 consultation unavailable: maximum consultation failures exceeded. Escalated to USER_OVERRIDE.",
+                    )
+                    return self.memory.record_step(
+                        action=wait_action,
+                        success=False,
+                        screen_diff=0.0,
+                        user_goal=user_goal,
+                        persona_thought="Consultation unavailable and retry limit exceeded. Awaiting user intervention.",
+                        persona_speech="Strategic consultation unavailable. Requesting user assistance.",
+                        tier_level=self.escalation_sm.current_tier,
+                    )
+            else:
+                consult_action = ActionPlan(
+                    action=ActionType.WAIT,
+                    wait_ms=500,
+                    reasoning="Tier 2 Consultation: Halting physical hands to consult strategic advisor.",
+                )
+                if self.bridge:
+                    self.bridge.notify_state("OFFLOADING", "Focused")
+
+                active_title = "Desktop"
+                pname = "explorer.exe"
+                if self.window_guard and hasattr(self.window_guard, "get_active_window_info"):
+                    try:
+                        winfo = self.window_guard.get_active_window_info()
+                        if winfo:
+                            active_title = getattr(winfo, "title", "Desktop") or "Desktop"
+                            pname = getattr(winfo, "process_name", "explorer.exe") or "explorer.exe"
+                    except Exception:
+                        pass
+
+                dilemma = f"Local cognitive deadlock: {self.escalation_sm.local_strikes} consecutive failure strikes in Tier 1."
+                from parasite_ai.mind.plan import format_gemini_consultation_prompt
+                prompt = format_gemini_consultation_prompt(
+                    goal=user_goal,
+                    active_window_title=active_title,
+                    process_name=pname,
+                    visual_scene_summary=f"{len(elements)} targets detected",
+                    dilemma_description=dilemma,
+                )
+
+                harvested = None
+                try:
+                    harvested = self.offloader.query_web_ai(prompt)
+                except Exception as exc:
+                    logger.warning("Tier 2 consultation query failed: %s", exc)
+                    harvested = None
+
+                blueprint = None
+                persona_speech = ""
+                if harvested and isinstance(harvested, str):
+                    blueprint, persona_speech = self.dual_channel_router.route_consultation_output(
+                        raw_advisor_text=harvested,
+                        user_goal=user_goal,
+                        active_plan=self.active_plan,
+                    )
+                else:
+                    _, persona_speech = self.dual_channel_router.route_consultation_output(
+                        raw_advisor_text="",
+                        user_goal=user_goal,
+                        active_plan=self.active_plan,
+                    )
+
+                if blueprint and blueprint.steps:
+                    self.active_plan = blueprint
+                    self.escalation_sm.on_consultation_success()
+                    self.memory.reset_loop_detector()
+                    consult_success = True
+                    speech = persona_speech or "Consulted advisor and updated strategic blueprint. Resuming guided execution."
+                else:
+                    self.escalation_sm.on_consultation_failure()
+                    self.memory.reset_loop_detector()
+                    consult_success = False
+                    speech = persona_speech or "Strategic consultation unavailable or timed out."
+
+                if self.escalation_sm.current_tier == CadenceTier.USER_OVERRIDE:
+                    if self.bridge:
+                        self.bridge.notify_state("USER_OVERRIDE", "Curious")
+
+                if self.active_plan:
+                    self.active_plan.escalation_tier = self.escalation_sm.current_tier
+                    self.active_plan.tier_strikes = self.escalation_sm.current_strikes
+
+                return self.memory.record_step(
+                    action=consult_action,
+                    success=consult_success,
+                    screen_diff=0.0,
+                    user_goal=user_goal,
+                    persona_thought=f"Tier 2 consultation: {'Success' if consult_success else 'Failure'}.",
+                    persona_speech=speech,
+                    tier_level=self.escalation_sm.current_tier,
+                )
+        current_plan_step = active_plan.get_current_step()
+        if current_plan_step and current_plan_step.intent != StepIntent.DISMISS_DIALOG:
+            blocking_dialog = next(
+                (
+                    e for e in elements
+                    if e.role in ("Window", "Dialog")
+                    and any(w in (e.label or "").lower() for w in ("confirm", "warning", "error", "save changes", "save as", "alert", "notice"))
+                ),
+                None,
+            )
+            if blocking_dialog:
+                logger.info("Unexpected modal dialog detected: %s. Inserting DISMISS_DIALOG contingency.", blocking_dialog.label)
+                active_plan.insert_contingency_step(
+                    PlanStep(
+                        step_id=len(active_plan.steps) + 1,
+                        intent=StepIntent.DISMISS_DIALOG,
+                        description=f"Dismiss blocking dialog: {blocking_dialog.label or 'Dialog'}",
+                        success_criteria="Dialog dismissed",
+                    )
+                )
+                current_plan_step = active_plan.get_current_step()
+
         # 3. Pass 1: Persona Engine
         current_mood = self.persona_engine.derive_mood(self.memory, state="THINKING")
         scene_summary = (
@@ -667,6 +1319,9 @@ class DualMindPipeline:
             if self.screen_grounder and hasattr(self.screen_grounder, "format_som_summary")
             else f"{len(elements)} targets detected"
         )
+        if current_plan_step:
+            scene_summary = f"[Active Step {current_plan_step.step_id}]: {current_plan_step.description}\n{scene_summary}"
+
         memory_context = self.memory.format_for_prompt()
 
         persona_out = self.persona_engine.generate_monologue(
@@ -680,7 +1335,7 @@ class DualMindPipeline:
         # 4. Pass 2: Action Planning
         if override_action is not None:
             action_plan = override_action
-        elif self.memory.is_in_loop():
+        elif self.escalation_sm.current_tier == CadenceTier.TIER_1_LOCAL and self.memory.is_in_loop():
             # Detected cognitive failure loop! Trigger emergency strategy switch
             action_plan = ActionPlan(
                 action=ActionType.PANIC,
@@ -696,6 +1351,8 @@ class DualMindPipeline:
                     "y": e.y,
                     "width": e.width,
                     "height": e.height,
+                    **({"app": e.process_name} if getattr(e, "process_name", None) else {}),
+                    **({"window": e.window_title} if getattr(e, "window_title", None) else {}),
                 }
                 for e in elements
             ]
@@ -705,6 +1362,87 @@ class DualMindPipeline:
                 memory_context=memory_context,
             )
             action_plan = ActionPlan.model_validate(raw_action)
+
+            token = (
+                self.interrupt_guard.get_cancellation_token()
+                if self.interrupt_guard and hasattr(self.interrupt_guard, "get_cancellation_token")
+                else None
+            )
+
+            target_app = (
+                (current_plan_step.target_description if current_plan_step else None)
+                or self.resolver.extract_target_app(user_goal)
+                or (self.resolver.extract_target_app(current_plan_step.description) if current_plan_step else None)
+                or self.resolver.extract_target_app(persona_out.thought)
+            )
+            target_app_clean = target_app.strip().lower() if target_app else None
+
+            cur_win = self.window_guard.get_active_window() if self.window_guard else None
+            is_target_active = bool(
+                cur_win
+                and target_app_clean
+                and (
+                    target_app_clean in (getattr(cur_win, "title", None) or "").lower()
+                    or target_app_clean in (getattr(cur_win, "process_name", None) or "").lower()
+                )
+            )
+
+            # 1. Run dialog / Launch intercept: If Run dialog is open and target app not active, ensure we type into Run dialog
+            run_edit = next(
+                (
+                    e for e in elements
+                    if e.role == "Edit" and any(
+                        kw in (e.label or "").lower()
+                        for kw in ("open", "type the name of a program", "run")
+                    )
+                ),
+                None,
+            )
+            if run_edit and target_app_clean and not is_target_active:
+                if action_plan.target_id != run_edit.id or not action_plan.text or target_app_clean not in (action_plan.text or "").lower():
+                    logger.warning(
+                        "[LAUNCH REDIRECT] Run dialog is open; typing target app '%s' into Run dialog instead of misdirected action: %s",
+                        target_app,
+                        action_plan.action.value,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.CLICK_AND_TYPE,
+                        target_id=run_edit.id,
+                        text=target_app,
+                        submit=True,
+                        reasoning=f"Run dialog detected; typing '{target_app}' and pressing Enter to execute launch.",
+                    )
+
+            # 2. Premature DONE intercept: Do not conclude if target application is not active
+            elif action_plan.action == ActionType.DONE:
+                if target_app_clean and not is_target_active:
+                    logger.warning(
+                        "[PREMATURE DONE INTERCEPTED] LLM emitted DONE while target application '%s' is not active on screen. Continuing execution.",
+                        target_app,
+                    )
+                    action_plan = self.resolver.resolve_launch_action(
+                        target_app=target_app,
+                        elements=elements,
+                        cancellation_token=token,
+                    )
+
+            # 3. Terminal/Debug window hijack guard: Prevent clicking into background consoles when target app is pending
+            elif action_plan.action in (ActionType.CLICK, ActionType.CLICK_AND_TYPE) and action_plan.target_id:
+                matched = next((e for e in elements if e.id == action_plan.target_id), None)
+                if matched and matched.process_name and target_app_clean and not is_target_active:
+                    matched_proc = matched.process_name.lower()
+                    if target_app_clean not in matched_proc and matched_proc in ("windowsterminal.exe", "cmd.exe", "powershell.exe", "code.exe"):
+                        logger.warning(
+                            "[WINDOW HIJACK PREVENTED] Blocked click/type into non-target terminal/debug window (%s) while target '%s' is not running.",
+                            matched.process_name,
+                            target_app,
+                        )
+                        action_plan = self.resolver.resolve_launch_action(
+                            target_app=target_app,
+                            elements=elements,
+                            cancellation_token=token,
+                        )
+
             if action_plan.action == ActionType.OFFLOAD_WEB_AI:
                 goal_lower = user_goal.lower()
                 wants_offload = any(
@@ -712,37 +1450,16 @@ class DualMindPipeline:
                     for kw in ("gemini", "web ai", "offload", "browser ai", "chatgpt", "claude", "ask ai", "ask browser")
                 )
                 if not wants_offload:
-                    app_map = {
-                        "notepad": "notepad",
-                        "calculator": "calc",
-                        "calc": "calc",
-                        "paint": "mspaint",
-                        "cmd": "cmd",
-                        "command prompt": "cmd",
-                        "powershell": "powershell",
-                        "explorer": "explorer",
-                        "file explorer": "explorer",
-                    }
-                    matched_cmd = next((cmd for name, cmd in app_map.items() if name in goal_lower), None)
-                    if matched_cmd and any(w in goal_lower for w in ("open", "launch", "start", "run")):
-                        run_edit = next(
-                            (e for e in elements if e.role == "Edit" and ("open" in e.label.lower() or "type the name" in e.label.lower())),
-                            None,
+                    target_app = (
+                        self.resolver.extract_target_app(user_goal)
+                        or self.resolver.extract_target_app(persona_out.thought)
+                    )
+                    if target_app:
+                        action_plan = self.resolver.resolve_launch_action(
+                            target_app=target_app,
+                            elements=elements,
+                            cancellation_token=token,
                         )
-                        if run_edit:
-                            action_plan = ActionPlan(
-                                action=ActionType.CLICK_AND_TYPE,
-                                target_id=run_edit.id,
-                                text=matched_cmd,
-                                submit=True,
-                                reasoning=f"Type '{matched_cmd}' into Run dialog and press Enter",
-                            )
-                        else:
-                            action_plan = ActionPlan(
-                                action=ActionType.HOTKEY,
-                                keys=["win", "r"],
-                                reasoning=f"Open Windows Run dialog (Win+R) to launch {matched_cmd}",
-                            )
                     else:
                         action_plan = ActionPlan(
                             action=ActionType.WAIT,
@@ -774,10 +1491,15 @@ class DualMindPipeline:
             try:
                 harvested = self.offloader.query_web_ai(user_goal)
                 if isinstance(harvested, str) and harvested.strip():
-                    persona_out.thought = f"{persona_out.thought}\n[Web AI Advice]: {harvested.strip()}"
-                    persona_out.speech = f"Web AI advises: {harvested.strip()[:180]}"
-                    if self.bridge:
-                        self.bridge.notify_speech(persona_out.speech)
+                    updated_plan, persona_speech = self.dual_channel_router.route_consultation_output(
+                        raw_advisor_text=harvested,
+                        user_goal=user_goal,
+                        active_plan=self.active_plan,
+                    )
+                    if updated_plan and updated_plan.steps:
+                        self.active_plan = updated_plan
+                    persona_out.thought = f"{persona_out.thought}\n[Advisor Consultation Completed]"
+                    persona_out.speech = persona_speech
                 action_res = ActionResult(success=True, action_executed=action_plan)
             except Exception as exc:
                 action_res = ActionResult(success=False, error=str(exc), action_executed=action_plan)
@@ -788,7 +1510,7 @@ class DualMindPipeline:
                 cancellation_token=token,
             )
 
-        # 6. Settling & Screen Diff
+        # 6. Settling & Localized Screen Diff Verification
         post_frame = current_frame
         if action_res.success and action_plan.action in INTERACTIVE_ACTION_TYPES and not action_res.interrupted:
             time.sleep(0.05)
@@ -798,14 +1520,85 @@ class DualMindPipeline:
                 except Exception:
                     pass
 
-        post_hash = compute_dhash(post_frame) if post_frame is not None else None
-        screen_diff = (
-            compute_pixel_diff(current_frame, post_frame)
-            if (current_frame is not None and post_frame is not None)
-            else 0.0
+        # Resolve virtual screen bounds and target ROI
+        from parasite_ai.vision.capture import get_virtual_screen_bounds
+        vbounds = get_virtual_screen_bounds()
+        active_rect = None
+        if self.window_guard and hasattr(self.window_guard, "get_active_window_info"):
+            try:
+                winfo = self.window_guard.get_active_window_info()
+                if winfo and hasattr(winfo, "rect"):
+                    active_rect = winfo.rect
+            except Exception:
+                pass
+
+        target_roi = extract_action_target_roi(
+            action=action_plan,
+            elements=elements,
+            resolved_coords=action_res.resolved_coordinates,
+            active_window_rect=active_rect,
+            padding_px=20,
+            bounds=vbounds,
         )
 
-        # 7. Episodic Memory Recording
+        # Localized ROI diffing if target bounding box resolved
+        roi_pre = target_roi.crop_frame(current_frame, bounds=vbounds) if target_roi else None
+        roi_post = target_roi.crop_frame(post_frame, bounds=vbounds) if target_roi else None
+
+        if roi_pre is not None and roi_post is not None and roi_pre.shape == roi_post.shape and roi_pre.size > 0:
+            screen_diff = compute_pixel_diff(roi_pre, roi_post)
+            post_hash = compute_dhash(roi_post)
+            pre_hash = compute_dhash(roi_pre)
+        else:
+            # Fallback to full desktop diffing for global actions or ungrounded hotkeys
+            screen_diff = (
+                compute_pixel_diff(current_frame, post_frame)
+                if (current_frame is not None and post_frame is not None)
+                else 0.0
+            )
+            post_hash = compute_dhash(post_frame) if post_frame is not None else None
+            pre_hash = compute_dhash(current_frame) if current_frame is not None else None
+
+        # 7. Action-Aware Strike Evaluation & Tier Transition
+        is_interactive = action_plan.action in INTERACTIVE_ACTION_TYPES
+        cli_rc = getattr(action_res, "returncode", None)
+        new_tier = self.escalation_sm.on_action_result(
+            success=action_res.success,
+            screen_diff=screen_diff,
+            action_type=action_plan.action,
+            is_interactive=is_interactive,
+            cli_returncode=cli_rc,
+            diff_threshold=self.memory.screen_diff_threshold,
+        )
+
+        logger.info(
+            "[ACTION VERIFIED] Action: %s | Success: %s | Screen Diff: %.4f (Threshold: %.4f) | Tier: %s (Strikes: %d/3)",
+            action_plan.action.value,
+            action_res.success,
+            screen_diff,
+            self.memory.screen_diff_threshold,
+            new_tier.value,
+            self.escalation_sm.current_strikes,
+        )
+        if not action_res.success or (is_interactive and screen_diff < self.memory.screen_diff_threshold):
+            logger.warning(
+                "[STRIKE RECORDED] Action %s registered failure/no-change strike (Success: %s, Diff: %.4f, Error: %s). Tier: %s, Strikes: %d/3",
+                action_plan.action.value,
+                action_res.success,
+                screen_diff,
+                action_res.error,
+                new_tier.value,
+                self.escalation_sm.current_strikes,
+            )
+
+        if active_plan:
+            active_plan.escalation_tier = self.escalation_sm.current_tier
+            active_plan.tier_strikes = self.escalation_sm.current_strikes
+
+        if new_tier == CadenceTier.USER_OVERRIDE and self.bridge:
+            self.bridge.notify_state("USER_OVERRIDE", "Curious")
+
+        # 8. Episodic Memory Recording
         target_info = None
         if action_plan.target_id:
             matched = next((e for e in elements if e.id == action_plan.target_id), None)
@@ -828,7 +1621,26 @@ class DualMindPipeline:
             pre_hash=pre_hash,
             post_hash=post_hash,
             error_message=action_res.error,
+            tier_level=self.escalation_sm.current_tier,
         )
+
+        # 8. Living Plan Step Advancement & Contingency Generation
+        if active_plan:
+            cur = active_plan.get_current_step()
+            if cur:
+                current_window = self.window_guard.get_active_window() if self.window_guard else None
+                if verify_step_completion(cur, action_plan, action_res, screen_diff, current_window):
+                    active_plan.advance_step()
+                elif action_res.success:
+                    caret_active = True
+                    if cur.intent == StepIntent.INPUT_DATA:
+                        caret_active = check_caret_focus()
+                    check_and_insert_contingencies(
+                        plan=active_plan,
+                        step=cur,
+                        screen_diff=screen_diff,
+                        caret_active=caret_active,
+                    )
 
         # Post-action telemetry & cleanup
         if action_plan.action == ActionType.DONE:

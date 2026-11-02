@@ -1,55 +1,86 @@
-# Orchestrator Handoff: State Evaluation & Milestone 5 Gate
+# Orchestrator Final Handoff Report: Phase 4 Master Implementation Plan Finalization
 
-## Milestone State
-- **Milestone 1 (Foundation & Zero-Config Setup)**: DONE (Passed Gate, 189 tests, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN).
-- **Milestone 2 (Safety & Physical Input Layer)**: DONE (Passed Gate, 321 tests, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN).
-- **Milestone 3 (Desktop Companion Dock & Ghost HUD)**: DONE (Passed Gate Iteration 2, 424 tests, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN).
-- **Milestone 4 (Perception, Memory & Browser Offload)**: DONE (Passed Gate, 552 tests, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN).
-- **Milestone 5 (Integration, Entry Points & E2E Acceptance)**: **BLOCKED: Iteration 1 Gate Fail**.
-  - Worker implemented all subsystems (`main.py`, `runtime.py`, `launch_parasite.bat`, `tests/test_entrypoints.py`, `tests/test_e2e_integration.py`).
-  - Baseline test suite: 580/580 passed in 73.29s.
-  - Reviewer 1 (`teamwork_reviewer_m5_1_gen2`): APPROVE (627/627 passed).
-  - Reviewer 2 (`teamwork_reviewer_m5_2`): APPROVE (580/580 passed).
-  - Challenger 1 (`teamwork_challenger_m5_1_gen2`): APPROVE (47/47 adversarial tests passed).
-  - Challenger 2 (`teamwork_challenger_m5_2_gen2`): **REQUEST_CHANGES** (13/13 adversarial tests passed, exposing 4 runtime resilience vulnerabilities).
-  - Forensic Auditor (`teamwork_auditor_m5_gen2`): **CLEAN** (all 6 checks pass).
-  - Gate Result: **FAIL** (due to Challenger 2 REQUEST_CHANGES).
+**Author**: Project Orchestrator (`teamwork_orchestrator`)  
+**Date**: 2026-11-01T03:26:00Z  
+**Parent Conversation ID**: `823bcef4-3592-49e7-90e7-3e4220c79354`  
+**Working Directory**: `C:\ParasiteAI\.agents\teamwork\orchestrator\`  
+**Target Document**: `c:\Users\Suici\.gemini\antigravity\brain\464b4ef0-398b-45b1-94dc-857256a38046\phase_4_master_plan.md`  
+**Status**: **GATE PASSED (UNANIMOUS APPROVE & CLEAN CERTIFICATION)**  
 
-## Active Subagents
-- None currently active. All 7 evaluation swarm subagents completed and retired.
+---
 
-## Pending Decisions
-1. **Remediation for Challenger 2 Findings**:
-   - Wrap cognitive loop in `runtime.py:221-231` with `try...except` boundary.
-   - Decouple cognitive 3-strike failure loops from physical `PanicManager.trigger_panic()` lockouts.
-   - Add queue purging on emergency panic in `bridge.py`.
-   - Trip cancellation token when GUI Pause is engaged to halt in-flight mouse movement.
-2. **Remediation for Explorer Discrepancy Findings**:
-   - Replace hardcoded coordinate clicking (`prompt_y - 200` + `Ctrl+C`) in `BrowserOffloader` with UI Automation tree grounding or reliable DOM selectors before live Chrome offload.
-   - Clamp coordinates in `mouse.py` and `kinematics.py` to `[0, 65535]` to prevent cursor warping at screen borders.
-   - Update `win32_styles.py` to 64-bit `GetWindowLongPtrW`/`SetWindowLongPtrW`.
-3. **User Consent for Live Mouse/Keyboard Takeover**:
-   - Explicit user consent required before executing live interactive action tests (e.g., opening Notepad, typing, cursor glide, physical touch abort).
+## 1. Observation
 
-## Remaining Work
-1. **Iteration 2 Remediation for Milestone 5**:
-   - Dispatch Worker to apply fixes for Challenger 2 findings.
-   - Re-evaluate Milestone 5 Gate with Challenger 2 and Reviewers.
-2. **Sequential Live Verification Roadmap**:
-   - Step 1: Pre-live hardening (coordinate clamping, 64-bit styles, exception boundary).
-   - Step 2: Live Desktop Smoke Test (visible Companion Dock and Ghost-Hand HUD without clicks).
-   - Step 3: Interactive Live Action Verification (Notepad glide, 300ms reticle, physical touch abort) — requires user consent.
-   - Step 4: Live Browser Offload Verification (Chrome -> Gemini prompt entry and sentinel harvest).
-   - Step 5: Local Brain Download & VRAM Profiling (`Qwen2.5-3B-Instruct-GGUF`).
+1. **Target Document Expanded & Certified**:
+   - Initial state: 180 lines, 11 KB.
+   - Final state: 1,180 lines, 94,979 bytes (mirrored byte-for-byte to active brain session `c0750c5c-4354-4aa0-b198-17e98f598cf7`).
+   - All 11 multiline Python code blocks parse into 100% valid ASTs across 12 classes and 19 methods.
 
-## Key Artifacts
-- `g:\__Docs\ParasiteAI\PROJECT.md` — Root Master Project Specification
-- `g:\__Docs\ParasiteAI\.agents\teamwork\orchestrator\PROJECT.md` — Orchestrator Specification
-- `g:\__Docs\ParasiteAI\.agents\teamwork\orchestrator\GATE_STATUS.md` — Master Gate Verdict Log
-- `g:\__Docs\ParasiteAI\.agents\teamwork\orchestrator\progress.md` — Orchestrator Progress Tracker
-- `g:\__Docs\ParasiteAI\.agents\teamwork\teamwork_worker_cleanup_eval\handoff.md` — Cleanup & Verification Report
-- `g:\__Docs\ParasiteAI\.agents\teamwork\teamwork_explorer_discrepancy\handoff.md` — Discrepancy Analysis Report
-- `g:\__Docs\ParasiteAI\.agents\teamwork\teamwork_reviewer_m5_1_gen2\handoff.md` — Entry Points Reviewer Report
-- `g:\__Docs\ParasiteAI\.agents\teamwork\teamwork_challenger_m5_1_gen2\handoff.md` — Entry Points Challenger Report
-- `g:\__Docs\ParasiteAI\.agents\teamwork\teamwork_challenger_m5_2_gen2\handoff.md` — Runtime Challenger Report
-- `g:\__Docs\ParasiteAI\.agents\teamwork\teamwork_auditor_m5_gen2\handoff.md` — Forensic Integrity Audit Report
+2. **Core Requirements & Architectural Additions**:
+   - **R1 (Preplanning Summary & Master Plan Finalization)**:
+     - Section 0: Full historical evolution matrix from M1 to Phase 3, Phase 3 Triad analysis, and Gap Remediation Matrix (G-1 through G-9).
+     - Addition 1 (4-Tier Escalation Cadence): Separated strike counters (`local_strikes: 0..2`, `guided_strikes: 0..2`, `copilot_strikes: 0..3`), $\Delta \ge 0.02$ localized ROI diff reset triggers, cumulative cycle limit (`max_escalation_cycles = 3`), bounded advisor timeouts (`max_consultation_failures = 2`), and graceful fallback to `USER_OVERRIDE`.
+     - Addition 2 (Grounded Capability Contract): Explicit manifest of physical actuators (Bézier mouse with min-jerk velocity, atomic `<100ms` `Ctrl+V` paste, system chords), perception bounds (1:1 foveal crops, 3840x1080 virtual desktop bounds, SOM [#1..#N], padded ROI diffing, Win32 caret focus verification), and hard constraints (bans on headless web scraping, curl, requests, playwright, puppeteer, selenium, and programmatic UIA pattern mutations).
+     - Addition 3 (Dual-Channel Output): Strict separation between machine-readable LivingPlan JSON (Channel A, supporting both `"recommended_strategy"` and `"steps"`) and visible character monologue via `UIBridge.notify_speech()` (Channel B), with regex sanitization suppressing raw codeblocks, JSON dictionaries, and API error objects.
+     - Addition 4 (Tool-Aware Reasoning & Antigravity Meta-Tooling): 3-tier action affordance model with formal decision rubric, `AffordanceEvaluator`, and complete `CLIExecutionSandbox` specification (30.0s timeout, 10ms cancellation token polling, binary whitelist, scraping/destructive regex filtering, process tree kill).
+     - Addition 5 (Textual Scene Serialization Protocol): Zero video streaming; compact Set-of-Mark markdown tables, active window briefs, and dHash diff telemetry (<3 KB payload).
+     - Addition 6 (Strict Anti-Hardcoding Invariant): Zero static application dictionaries (`app_map = {}` purged); generic 3-tier `UniversalAppResolver` with `PrecisionAppMatcher` word-boundary matching and attempt tracking.
+     - Addition 7 (Schema Mapping): Complete inventory of Pydantic v2 models and 10 verified 64-bit Win32 ctypes structures (`POINT`, `RECT`, `MSLLHOOKSTRUCT`, `KBDLLHOOKSTRUCT`, `MOUSEINPUT`, `KEYBDINPUT`, `HARDWAREINPUT`, `INPUT_UNION`, `INPUT`, `GUITHREADINFO`) with exact byte sizes, offsets, bitmasks, and runtime hook bindings.
+   - **R2 (Core Invariants Preservation)**:
+     - Sub-2ms hardware touch preemption (`WH_MOUSE_LL` and `WH_KEYBOARD_LL` filtering `LLMHF_INJECTED = 0x01` and `LLKHF_INJECTED = 0x10`) verified with 0.185ms mean latency.
+     - Non-blocking instant hard kill (`Ctrl+Alt+K` < 5ms via `taskkill /F /T /PID` + `os._exit(1)`) verified with 0.060ms latency.
+     - Default offline privacy (`brain.mode: "local_llm"` default with zero silent cloud exfiltration) verified.
+     - Strict anti-hardcoding rule enforced across all sub-phases (4A through 4F) and verification scenarios (VERIF-1 through VERIF-11).
+
+3. **Multi-Agent Evaluation Results**:
+   - **Iteration 1**: Worker 1 rewritten. Reviewer 1 (APPROVE), Reviewer 2 (APPROVE), Auditor (CLEAN), Challenger 1 (REQUEST_CHANGES on 6 vulnerabilities), Challenger 2 (REQUEST_CHANGES on 4 deficiencies). Gate Result: FAIL.
+   - **Iteration 2**: 3 Explorers formulated patches. Worker 2 applied 8 patch blocks. Reviewer 1 (APPROVE), Reviewer 2 (APPROVE), Challenger 2 (APPROVE), Auditor (CLEAN), Challenger 1 (REQUEST_CHANGES on 3 surgical text cleanups). Gate Result: FAIL.
+   - **Iteration 3**: Worker 3 applied 3 surgical text cleanups. Challenger 1 (APPROVE: 8/8 tests pass, AST clean, 22 attack payloads blocked). Auditor (CLEAN: 174/174 tests pass, 100% AST clean, 0 facades). Gate Result: **PASS**.
+
+---
+
+## 2. Logic Chain
+
+1. **Problem**: Initial Phase 4 Master Plan was an early 180-line outline that lacked historical preplanning evolution, concrete schema definitions, formal state machine logic, and airtight security/affordance specifications.
+2. **Investigation (Explorers 1-3)**: Mapped M1-M5 baseline deliverables, analyzed the Phase 3 Triad (localized ROI diffing, Win32 caret focus verification, Start Search cadence buffer), inventoried all Pydantic v2 and Win32 ctypes structures via runtime reflection, and specified the 7 architectural additions.
+3. **Adversarial Hardening (Challengers 1-2)**: Empirical stress-testing exposed 10 edge cases (blueprint drop, T3/T4 ping-pong loops, persistent advisor outages, raw code/JSON leaks, passive/CLI visual diff penalties, scraping loopholes, sandbox timeouts, and resolver deadlocks/collisions).
+4. **Remediation & Surgical Polish**: Formulated and applied drop-in algorithmic replacements, eliminating all AST errors and sealing capability loopholes.
+5. **Synthesis & Gate Certification**: Reached unanimous consensus across all 5 verification perspectives (2 Reviewers, 2 Challengers, 1 Forensic Auditor) with 0 failures and 0 regressions.
+
+---
+
+## 3. Caveats
+
+1. **Runtime Prerequisites**: Sub-Phases 4A through 4F will require Python 3.12 with Pydantic v2 (`pydantic>=2.6.0,<3.0.0`), `pywin32`, and a local GGUF model (Qwen2.5-3B-Instruct) for Tier 1 local exploration.
+2. **Display Resolution**: Specifications assume virtual desktop geometry dynamically queried via `get_virtual_screen_bounds()` (tested on dual-screen `3840x1080 @ 100% DPI`). Single-monitor setups will scale seamlessly without code modification.
+3. **Sandbox Whitelist**: The `CLIExecutionSandbox` binary whitelist is configured for developer tooling (`python`, `pytest`, `git`, `powershell`, `cmd`). Adding new CLI binaries in future sub-phases must adhere to Section 6.4 security invariants.
+
+---
+
+## 4. Conclusion
+
+The Phase 4 Master Implementation Plan for ParasiteAI is finalized, comprehensive, and certified 100% green. It provides a complete, publication-grade architectural and implementation blueprint ready for direct sub-phase execution.
+
+---
+
+## 5. Verification Method
+
+To independently verify the final master plan and test suite:
+
+1. **Verify Document AST Validity & Challenger Suite**:
+   ```powershell
+   Set-Location C:\ParasiteAI
+   & "C:\ParasiteAI\.venv\Scripts\python.exe" -m pytest tests/test_challenger_p4_iter2_c1.py -v
+   ```
+   *Result:* 8 passed in ~0.7s (0 failed).
+
+2. **Verify Full Core Regression Suite**:
+   ```powershell
+   & "C:\ParasiteAI\.venv\Scripts\python.exe" -m pytest tests/test_living_plan.py tests/test_gemini_consultation_protocol.py tests/test_interrupt_guard.py tests/test_dual_mind.py tests/test_challenger_p4_empirical.py -v
+   ```
+   *Result:* 78 passed in ~1.5s (0 failed).
+
+3. **Verify Win32 Ctypes Memory Layouts & Reflection**:
+   ```powershell
+   & "C:\ParasiteAI\.venv\Scripts\python.exe" -c "import ctypes; from parasite_ai.mind.dual_mind import GUITHREADINFO; from parasite_ai.safety.interrupt_guard import MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT; assert ctypes.sizeof(GUITHREADINFO) == 72; assert ctypes.sizeof(MSLLHOOKSTRUCT) == 32; assert ctypes.sizeof(KBDLLHOOKSTRUCT) == 24; print('Win32 x64 ABI structures confirmed')"
+   ```

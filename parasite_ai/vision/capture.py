@@ -8,10 +8,32 @@ and synthetic numpy frame fallbacks for headless CI environments.
 from __future__ import annotations
 
 import logging
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
+import sys
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def get_virtual_screen_bounds() -> Tuple[int, int, int, int]:
+    """
+    Returns (vx, vy, vw, vh) of the entire virtual desktop spanning all monitors.
+    Safe across platforms and headless test environments.
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            vx = user32.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN
+            vy = user32.GetSystemMetrics(77)  # SM_YVIRTUALSCREEN
+            vw = user32.GetSystemMetrics(78)  # SM_CXVIRTUALSCREEN
+            vh = user32.GetSystemMetrics(79)  # SM_CYVIRTUALSCREEN
+            if vw > 0 and vh > 0:
+                return (int(vx), int(vy), int(vw), int(vh))
+        except Exception as exc:
+            logger.debug("Failed querying Win32 virtual screen metrics: %s", exc)
+
+    return (0, 0, 1920, 1080)
 
 
 def compute_frame_diff(frame_a: np.ndarray, frame_b: np.ndarray) -> float:
@@ -108,7 +130,8 @@ class ScreenCapture:
                 elif len(monitors) > 0:
                     mon = monitors[0]
                 else:
-                    mon = {"top": 0, "left": 0, "width": 1920, "height": 1080}
+                    vx, vy, vw, vh = get_virtual_screen_bounds()
+                    mon = {"top": vy, "left": vx, "width": vw, "height": vh}
 
                 sct_img = sct.grab(mon)
                 # sct_img.rgb is RGB bytes, shape (H, W, 3)
@@ -130,8 +153,9 @@ class ScreenCapture:
         except Exception as exc:
             logger.debug("PIL capture failed (%s), returning synthetic frame", exc)
 
-        # Headless synthetic fallback: blank 1920x1080 frame
-        return np.zeros((1080, 1920, 3), dtype=np.uint8)
+        # Headless synthetic fallback: blank frame sized to virtual desktop
+        vx, vy, vw, vh = get_virtual_screen_bounds()
+        return np.zeros((vh, vw, 3), dtype=np.uint8)
 
     def capture_rect(self, rect: Tuple[int, int, int, int]) -> np.ndarray:
         """Captures specific bounding rectangle (x, y, width, height)."""

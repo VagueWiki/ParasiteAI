@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import logging.handlers
 import os
 import signal
 import sys
@@ -53,8 +54,76 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=None,
         help="Logging verbosity.",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable maximum debug logging verbosity (forces log-level to DEBUG).",
+    )
+    parser.add_argument(
+        "--log-file",
+        dest="log_file",
+        type=str,
+        default=None,
+        help="Path to write rotating debug log file (defaults to logs/parasite_debug.log).",
+    )
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
     return parser.parse_args(argv)
+
+
+def setup_logging(
+    config: AppConfig,
+    debug: bool = False,
+    log_file_override: Optional[str] = None,
+) -> Path:
+    """
+    Configures unified dual-stream logging:
+    1. Console stream (StreamHandler to sys.stderr) with clean formatting.
+    2. High-fidelity rotating debug log file (RotatingFileHandler at DEBUG level)
+       recording line numbers, thread names, LLM reasoning, and diagnostic traces.
+    """
+    root_logger = logging.getLogger()
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+
+    console_level = logging.DEBUG if debug else getattr(logging, config.system.log_level.upper(), logging.INFO)
+    root_logger.setLevel(logging.DEBUG)
+
+    console_formatter = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)-7s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(console_level)
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+
+    log_path = Path(log_file_override) if log_file_override else config.system.log_file or Path("logs/parasite_debug.log")
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_formatter = logging.Formatter(
+            fmt="%(asctime)s.%(msecs)03d [%(levelname)-7s] [%(threadName)s] [%(name)s:%(funcName)s:%(lineno)d] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        file_handler = logging.handlers.RotatingFileHandler(
+            filename=str(log_path),
+            maxBytes=15 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(file_formatter)
+        root_logger.addHandler(file_handler)
+    except Exception as exc:
+        console_handler.stream.write(f"[WARNING] Could not initialize log file at {log_path}: {exc}\n")
+
+    logger.info("=== ParasiteAI Logger Initialized ===")
+    logger.info(
+        "Diagnostics Active -> Console Level: %s | Debug Log File: %s",
+        logging.getLevelName(console_level),
+        log_path.resolve() if hasattr(log_path, "resolve") else log_path,
+    )
+    return log_path
 
 
 class ParasiteApp:
@@ -84,13 +153,16 @@ class ParasiteApp:
         self.config: AppConfig = load_config(self.args.config_path)
         if self.args.brain_mode:
             self.config.brain.mode = self.args.brain_mode
-        if self.args.log_level:
+        if self.args.debug:
+            self.config.system.log_level = "DEBUG"
+        elif self.args.log_level:
             self.config.system.log_level = self.args.log_level
 
-        # 5. Configure logging
-        logging.basicConfig(
-            level=getattr(logging, self.config.system.log_level.upper(), logging.INFO),
-            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        # 5. Configure dual-stream logging (Console + Rotating Debug Log File)
+        self.log_path = setup_logging(
+            config=self.config,
+            debug=bool(self.args.debug),
+            log_file_override=self.args.log_file,
         )
 
         # 6. Instantiate UIBridge

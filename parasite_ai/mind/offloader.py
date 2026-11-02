@@ -308,9 +308,11 @@ class SentinelClipboardVerifier:
         trigger_copy_action: Callable[[], bool],
         timeout_s: Optional[float] = None,
         cancellation_token: Optional[threading.Event] = None,
+        retrigger_interval_s: float = 0.5,
     ) -> Optional[str]:
         """
         Executes atomic backup -> sentinel inject -> copy trigger -> poll -> restore.
+        Periodically retriggers trigger_copy_action to prevent harvest deadlocks.
         """
         # Step 1: Backup current clipboard text
         try:
@@ -338,15 +340,13 @@ class SentinelClipboardVerifier:
             if cancellation_token and cancellation_token.is_set():
                 return None
 
-            # Step 3: Trigger copy action (physical keystroke or mouse click)
-            copy_ok = trigger_copy_action()
-            if not copy_ok:
-                logger.debug("Trigger copy action returned False.")
-                return None
+            # Step 3: Initial trigger copy action (physical keystroke or mouse click)
+            trigger_copy_action()
 
             # Step 4: Poll clipboard until it changes from sentinel
             duration = timeout_s if timeout_s is not None else self.default_timeout_s
             deadline = time.perf_counter() + duration
+            last_retrigger = time.perf_counter()
 
             while time.perf_counter() < deadline:
                 if cancellation_token and cancellation_token.is_set():
@@ -359,6 +359,13 @@ class SentinelClipboardVerifier:
                         break
                 except Exception:
                     pass
+
+                now = time.perf_counter()
+                if retrigger_interval_s > 0 and (now - last_retrigger) >= retrigger_interval_s:
+                    if cancellation_token and cancellation_token.is_set():
+                        return None
+                    trigger_copy_action()
+                    last_retrigger = now
 
                 time.sleep(self.poll_interval_s)
 
@@ -531,7 +538,7 @@ class BrowserOffloader:
             else:
                 time.sleep(settle_s)
 
-            # 4. Focus Prompt & Type Text
+            # 4. Focus Prompt & Deliver Text via High-Speed Clipboard Paste (<100ms)
             self._update_state(OffloaderState.FOCUSING_PROMPT)
             prompt_x, prompt_y = self._find_prompt_target(hwnd)
 
@@ -539,10 +546,28 @@ class BrowserOffloader:
                 self.mouse_driver.click(prompt_x, prompt_y, button="left", cancellation_token=cancellation_token)
 
             self._update_state(OffloaderState.TYPING_PROMPT)
-            if self.keyboard_driver:
-                ok = self.keyboard_driver.type_text(prompt, submit=True, cancellation_token=cancellation_token)
-                if not ok:
-                    raise OffloadHarvestError("Typing was aborted or interrupted by user")
+            original_user_clip = ""
+            try:
+                original_user_clip = self.clipboard_backend.get_text()
+            except Exception as exc:
+                logger.debug("Failed reading user clipboard before prompt paste: %s", exc)
+
+            try:
+                self.clipboard_backend.set_text(prompt)
+                time.sleep(0.01)
+                if self.keyboard_driver:
+                    pasted = self.keyboard_driver.hotkey("ctrl", "v", cancellation_token=cancellation_token)
+                    if not pasted:
+                        raise OffloadHarvestError("Paste was aborted or interrupted by user")
+                    time.sleep(0.02)
+                    submitted = self.keyboard_driver.hotkey("enter", cancellation_token=cancellation_token)
+                    if not submitted:
+                        raise OffloadHarvestError("Submit was aborted or interrupted by user")
+            finally:
+                try:
+                    self.clipboard_backend.set_text(original_user_clip)
+                except Exception as exc:
+                    logger.error("Failed restoring user clipboard: %s", exc)
 
             # 5. Wait for Response & Harvest
             self._update_state(OffloaderState.WAITING_RESPONSE)

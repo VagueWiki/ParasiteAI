@@ -707,9 +707,9 @@ class TestDualMindPipelineIntegrationAdversarial:
         assert rec2.consecutive_strikes == 2
         assert pipeline.memory.get_consecutive_strikes() == 2
 
-        # Step 3: real visual diff (delta = 100 > 15 across 20% of frame -> 0.20 diff >= 0.02) -> RESETS TO 0
+        # Step 3: real visual diff (delta = 100 > 15 inside target ROI -> diff >= 0.02) -> RESETS TO 0
         real_change_frame = base_frame.copy()
-        real_change_frame[0:20, :, :] = 200
+        real_change_frame[50:70, 50:70, :] = 200
         pipeline.capturer.capture_screen.return_value = real_change_frame
 
         rec3 = pipeline.step(

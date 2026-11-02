@@ -1,83 +1,42 @@
-## Gate — Milestone M1 (Iteration 4)
-| Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| worker_m1_iter4 | teamwork_worker | DONE (178/189 tests passed) | handoff.md |
-| reviewer_m1_iter4_1 | teamwork_reviewer | APPROVE | handoff.md |
-| reviewer_m1_iter4_2 | teamwork_reviewer | APPROVE | handoff.md |
-| challenger_m1_iter4_1 | teamwork_challenger | APPROVE | handoff.md |
-| challenger_m1_iter4_2 | teamwork_challenger | APPROVE | handoff.md |
-| auditor_m1_iter4 | teamwork_auditor | CLEAN | handoff.md |
+## Gate — Iteration 1 (Phase 4 Master Plan Finalization)
+
+| Agent | Role | Verdict | Source | Notes |
+|---|---|---|---|---|
+| teamwork_worker_p4 | teamwork_worker | DONE | handoff.md | Master plan rewritten (1,069 lines, 68KB) |
+| teamwork_reviewer_p4_1 | teamwork_reviewer | APPROVE | handoff.md | Architectural completeness & invariants (877 tests pass) |
+| teamwork_reviewer_p4_2 | teamwork_reviewer | APPROVE | handoff.md | Schemas, 10 Win32 structs & 4A-4F verified (877 tests pass) |
+| teamwork_challenger_p4_1 | teamwork_challenger | REQUEST_CHANGES | handoff.md | 6 state machine/contract vulnerabilities identified |
+| teamwork_challenger_p4_2 | teamwork_challenger | REQUEST_CHANGES | handoff.md | 4 empirical deficiencies in CLI affordance, sandbox, and app resolver |
+| teamwork_auditor_p4 | teamwork_auditor | CLEAN | handoff.md | All 4 forensic checks PASS; authentic architectures |
+
+Gate Result: **FAIL** (Challenger 1 & Challenger 2 REQUEST_CHANGES)
+
+---
+
+## Gate — Iteration 2 (Remediation & Final Certification)
+
+| Agent | Role | Verdict | Source | Notes |
+|---|---|---|---|---|
+| teamwork_worker_p4_iter2 | teamwork_worker | DONE | handoff.md | All 8 remediation blocks integrated (33/33 assertions pass) |
+| teamwork_reviewer_p4_iter2_1 | teamwork_reviewer | APPROVE | handoff.md | All 7 additions + 8 remediations verified (895 tests pass) |
+| teamwork_reviewer_p4_iter2_2 | teamwork_reviewer | APPROVE | handoff.md | Schemas, 10 Win32 structs & VERIF-1..11 verified (895 tests pass) |
+| teamwork_challenger_p4_iter2_1 | teamwork_challenger | REQUEST_CHANGES | handoff.md | 3 surgical text defects found via test_challenger_p4_iter2_c1.py |
+| teamwork_challenger_p4_iter2_2 | teamwork_challenger | APPROVE | handoff.md | All 4 deficiencies (VULN-1..4) certified sealed (19 tests pass) |
+| teamwork_auditor_p4_iter2 | teamwork_auditor | CLEAN | handoff.md | All 4 forensic checks PASS; authentic architectures (78 tests pass) |
+
+Gate Result: **FAIL** (Challenger 1 REQUEST_CHANGES on 3 surgical text cleanups)
+
+---
+
+## Gate — Iteration 3 (Surgical Cleanup & Final Certification)
+
+| Agent | Role | Verdict | Source | Notes |
+|---|---|---|---|---|
+| teamwork_worker_p4_iter3 | teamwork_worker | DONE | handoff.md | All 3 surgical text cleanups applied |
+| teamwork_reviewer_p4_iter2_1 | teamwork_reviewer | APPROVE | handoff.md | All 7 additions + 8 remediations verified (895 tests pass) |
+| teamwork_reviewer_p4_iter2_2 | teamwork_reviewer | APPROVE | handoff.md | Schemas, 10 Win32 structs & VERIF-1..11 verified (895 tests pass) |
+| teamwork_challenger_p4_iter2_2 | teamwork_challenger | APPROVE | handoff.md | All 4 deficiencies (VULN-1..4) certified sealed (19 tests pass) |
+| teamwork_challenger_p4_iter3_1 | teamwork_challenger | APPROVE | handoff.md | All 3 defects resolved; AST clean; 22 attack payloads blocked (8/8 tests pass) |
+| teamwork_auditor_p4_iter3 | teamwork_auditor | CLEAN | handoff.md | 100% AST pass; 0 facades; sub-2ms preemption verified (174/174 tests pass) |
 
 Gate Result: **PASS**
-
----
-
-## Gate — Milestone M2 (Iteration 1)
-| Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| worker_m2_gen3 | teamwork_worker | DONE (267/267 tests passed) | handoff.md |
-| reviewer_m2_1 | teamwork_reviewer | APPROVE | handoff.md |
-| reviewer_m2_2 | teamwork_reviewer | APPROVE | handoff.md |
-| challenger_m2_1 | teamwork_challenger | APPROVE (29/29 adversarial tests passed) | handoff.md |
-| challenger_m2_2_gen2 | teamwork_challenger | APPROVE (25/25 adversarial tests passed) | handoff.md |
-| auditor_m2 | teamwork_auditor | CLEAN | handoff.md |
-
-Gate Result: **PASS**
-
----
-
-## Gate — Milestone M3 (Iteration 1)
-| Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| teamwork_worker_m3 | teamwork_worker | DONE (365/365 tests passed) | handoff.md |
-| teamwork_reviewer_m3_1 | teamwork_reviewer | APPROVE | handoff.md |
-| teamwork_reviewer_m3_2 | teamwork_reviewer | APPROVE | handoff.md |
-| teamwork_challenger_m3_1 | teamwork_challenger | REQUEST_CHANGES (3 defects in companion_dock.py & bridge.py) | handoff.md |
-| teamwork_challenger_m3_2 | teamwork_challenger | APPROVE (33/33 adversarial tests passed) | handoff.md |
-| teamwork_auditor_m3 | teamwork_auditor | CLEAN | handoff.md |
-
-Gate Result: **FAIL** (teamwork_challenger_m3_1 REQUEST_CHANGES)
-
----
-
-## Gate — Milestone M3 (Iteration 2)
-| Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| teamwork_worker_m3_iter2 | teamwork_worker | DONE (412/412 tests passed) | handoff.md |
-| teamwork_reviewer_m3_iter2_1 | teamwork_reviewer | APPROVE | handoff.md |
-| teamwork_reviewer_m3_iter2_2 | teamwork_reviewer | APPROVE | handoff.md |
-| teamwork_challenger_m3_iter2_1 | teamwork_challenger | APPROVE (17/17 adversarial tests passed) | handoff.md |
-| teamwork_challenger_m3_iter2_2 | teamwork_challenger | APPROVE (9/9 cross-subsystem tests passed) | handoff.md |
-| teamwork_auditor_m3_iter2 | teamwork_auditor | CLEAN | handoff.md |
-
-Gate Result: **PASS**
-
----
-
-## Gate — Milestone M4 (Iteration 1)
-| Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| teamwork_worker_m4 | teamwork_worker | DONE (475/475 tests passed) | handoff.md |
-| teamwork_reviewer_m4_1 | teamwork_reviewer | APPROVE | handoff.md |
-| teamwork_reviewer_m4_2 | teamwork_reviewer | APPROVE | handoff.md |
-| teamwork_challenger_m4_1 | teamwork_challenger | APPROVE (28/28 adversarial tests passed) | handoff.md |
-| teamwork_challenger_m4_2 | teamwork_challenger | APPROVE (49/49 adversarial tests passed) | handoff.md |
-| teamwork_auditor_m4 | teamwork_auditor | CLEAN | handoff.md |
-
-Gate Result: **PASS**
-
----
-
-## Gate — Milestone M5 (Iteration 1)
-| Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| teamwork_worker_cleanup_eval | teamwork_worker | DONE (580/580 baseline tests passed, cleanup completed, models & dry-run verified) | handoff.md |
-| teamwork_reviewer_m5_1_gen2 | teamwork_reviewer | APPROVE (627/627 tests passed, 0 integrity violations) | handoff.md |
-| teamwork_reviewer_m5_2 | teamwork_reviewer | APPROVE (580/580 tests passed, 0 integrity violations) | handoff.md |
-| teamwork_challenger_m5_1_gen2 | teamwork_challenger | APPROVE (47/47 adversarial tests passed, 627/627 full suite passed) | handoff.md |
-| teamwork_challenger_m5_2_gen2 | teamwork_challenger | REQUEST_CHANGES (13/13 adversarial tests exposed worker thread exception boundary, loop panic latching, goal queue backlog, in-flight pause) | handoff.md |
-| teamwork_auditor_m5_gen2 | teamwork_auditor | CLEAN (All 6 checks pass, 0 integrity violations) | handoff.md |
-
-Gate Result: **FAIL** (teamwork_challenger_m5_2_gen2 REQUEST_CHANGES)
-
-

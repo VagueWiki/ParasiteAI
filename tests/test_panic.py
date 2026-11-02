@@ -7,7 +7,11 @@ and panic reset lifecycle.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import threading
+import time
+from unittest.mock import MagicMock
 import pytest
 
 from parasite_ai.config import SafetyConfig
@@ -30,7 +34,7 @@ from parasite_ai.hands.keyboard import (
     VK_SHIFT,
     MockInputBackend,
 )
-from parasite_ai.safety.panic import PanicManager, PanicTriggerSource
+from parasite_ai.safety.panic import PanicManager, PanicTriggerSource, VK_K, VK_Q
 
 
 class TestPanicManagerKeyTriggers:
@@ -293,3 +297,255 @@ class TestPanicManagerHardwareReleaseAndCallbacks:
         t.join(timeout=1.0)
         assert not t.is_alive()
         assert panic.is_panic() is True
+
+
+class TestPanicManagerCornerDebouncing:
+    """Verifies edge-triggered 1.0-second corner slam debouncing."""
+
+    def test_rapid_mouse_packets_in_corner_only_trip_once(self):
+        backend = MockInputBackend(screen_metrics=(1920, 1080, 0, 0, 1920, 1080))
+        callback = MagicMock()
+        panic = PanicManager(backend=backend, on_panic_callback=callback)
+
+        # Initial packet into top-left corner (0, 0)
+        assert panic.check_mouse_position(0, 0, flags=0) is True
+        assert panic.is_panic() is True
+        assert panic.get_panic_reason() == PanicTriggerSource.CORNER_SLAM
+        assert callback.call_count == 1
+
+        # 50 subsequent mouse move packets within the same corner zone
+        for offset in range(50):
+            # Within delta=4 of (0, 0)
+            x, y = offset % 4, (offset + 1) % 4
+            fired = panic.check_mouse_position(x, y, flags=0)
+            assert fired is False, f"Expected False on repeated packet {offset}"
+
+        # Panic was triggered only once; callback called only once
+        assert callback.call_count == 1
+        assert panic.is_panic() is True
+
+    def test_staying_in_corner_does_not_retrigger_after_cooldown(self, monkeypatch):
+        backend = MockInputBackend(screen_metrics=(1920, 1080, 0, 0, 1920, 1080))
+        callback = MagicMock()
+        panic = PanicManager(backend=backend, on_panic_callback=callback)
+
+        current_time = 100.0
+        monkeypatch.setattr(time, "monotonic", lambda: current_time)
+
+        # First entry at t=100.0
+        assert panic.check_mouse_position(0, 0, flags=0) is True
+        assert callback.call_count == 1
+
+        # Advance time by 2.0s (well past the 1.0s debounce time) while remaining in corner
+        current_time = 102.0
+        fired = panic.check_mouse_position(0, 0, flags=0)
+        assert fired is False
+        assert callback.call_count == 1
+
+        # Advance time by another 10.0s, still in corner
+        current_time = 112.0
+        fired = panic.check_mouse_position(1, 1, flags=0)
+        assert fired is False
+        assert callback.call_count == 1
+
+    def test_exiting_corner_and_reentering_before_cooldown_does_not_trigger(self, monkeypatch):
+        backend = MockInputBackend(screen_metrics=(1920, 1080, 0, 0, 1920, 1080))
+        callback = MagicMock()
+        panic = PanicManager(backend=backend, on_panic_callback=callback)
+
+        current_time = 100.0
+        monkeypatch.setattr(time, "monotonic", lambda: current_time)
+
+        # First entry at t=100.0
+        assert panic.check_mouse_position(0, 0, flags=0) is True
+        assert callback.call_count == 1
+        assert panic._in_corner_zone is True
+
+        # Move outside corner (e.g. center of screen)
+        current_time = 100.2
+        assert panic.check_mouse_position(500, 500, flags=0) is False
+        assert panic._in_corner_zone is False
+
+        # Re-enter corner at t=100.5 (only 0.5s elapsed, < 1.0s debounce)
+        current_time = 100.5
+        fired = panic.check_mouse_position(0, 0, flags=0)
+        assert fired is False
+        assert callback.call_count == 1
+        assert panic._in_corner_zone is True
+
+    def test_exiting_corner_and_waiting_cooldown_reenables_trigger(self, monkeypatch):
+        backend = MockInputBackend(screen_metrics=(1920, 1080, 0, 0, 1920, 1080))
+        callback = MagicMock()
+        panic = PanicManager(backend=backend, on_panic_callback=callback)
+
+        current_time = 100.0
+        monkeypatch.setattr(time, "monotonic", lambda: current_time)
+
+        # 1. First trigger at t=100.0
+        assert panic.check_mouse_position(0, 0, flags=0) is True
+        assert callback.call_count == 1
+
+        # 2. Exit corner to center
+        current_time = 100.3
+        assert panic.check_mouse_position(960, 540, flags=0) is False
+        assert panic._in_corner_zone is False
+
+        # 3. Wait until t=101.1 (1.1s >= 1.0s debounce elapsed)
+        current_time = 101.1
+        # Re-enter different corner (top-right: 1919, 0)
+        assert panic.check_mouse_position(1919, 0, flags=0) is True
+        assert callback.call_count == 2
+
+        # 4. Exit corner again
+        current_time = 101.4
+        assert panic.check_mouse_position(960, 540, flags=0) is False
+
+        # 5. Re-enter at t=101.9 (< 1.0s since 101.1) -> should NOT trigger
+        current_time = 101.9
+        assert panic.check_mouse_position(0, 1079, flags=0) is False
+        assert callback.call_count == 2
+
+        # 6. Exit again and re-enter at t=102.2 (1.1s since 101.1) -> should trigger
+        current_time = 102.0
+        assert panic.check_mouse_position(960, 540, flags=0) is False
+        current_time = 102.2
+        assert panic.check_mouse_position(0, 1079, flags=0) is True
+        assert callback.call_count == 3
+
+    def test_reset_panic_clears_corner_debounce_state(self):
+        backend = MockInputBackend(screen_metrics=(1920, 1080, 0, 0, 1920, 1080))
+        panic = PanicManager(backend=backend)
+
+        # Trigger corner panic
+        assert panic.check_mouse_position(0, 0, flags=0) is True
+        assert panic._in_corner_zone is True
+        assert panic._last_corner_slam_time > 0.0
+
+        # Reset panic
+        panic.reset_panic()
+        assert panic._in_corner_zone is False
+        assert panic._last_corner_slam_time == 0.0
+        assert panic.is_panic() is False
+
+        # Can trigger corner slam again immediately
+        assert panic.check_mouse_position(0, 0, flags=0) is True
+        assert panic.is_panic() is True
+
+
+class TestPanicManagerHardKillTermination:
+    """Verifies unblocked Ctrl+Alt+K taskkill and os._exit(1) termination."""
+
+    def test_ctrl_alt_k_triggers_immediate_hard_kill_unblocked(self, monkeypatch):
+        mock_popen = MagicMock()
+        mock_exit = MagicMock()
+        monkeypatch.setattr(subprocess, "Popen", mock_popen)
+        monkeypatch.setattr(os, "_exit", mock_exit)
+
+        callback = MagicMock()
+        backend = MockInputBackend()
+        panic = PanicManager(backend=backend)
+        panic.register_callback(callback)
+        panic.allow_process_exit = True
+
+        panic.trigger_panic(PanicTriggerSource.CTRL_ALT_K_KILL)
+
+        # Verified: callback is NOT called because hard_kill occurs before callbacks
+        assert callback.call_count == 0
+
+        # Verified: subprocess.Popen called with taskkill /F /T /PID <pid>
+        mock_popen.assert_called_once()
+        args, kwargs = mock_popen.call_args
+        cmd = args[0]
+        assert cmd[:4] == ["taskkill", "/F", "/T", "/PID"]
+        assert cmd[4] == str(os.getpid())
+        assert kwargs.get("creationflags") == 0x08000000
+        assert kwargs.get("stdout") == subprocess.DEVNULL
+        assert kwargs.get("stderr") == subprocess.DEVNULL
+
+        # Verified: os._exit(1) called immediately with exit code 1
+        mock_exit.assert_called_once_with(1)
+
+    def test_hard_kill_all_processes_releases_hardware_before_kill(self, monkeypatch):
+        mock_popen = MagicMock()
+        mock_exit = MagicMock()
+        monkeypatch.setattr(subprocess, "Popen", mock_popen)
+        monkeypatch.setattr(os, "_exit", mock_exit)
+
+        backend = MockInputBackend()
+        panic = PanicManager(backend=backend)
+
+        panic.hard_kill_all_processes()
+
+        # Hardware events were dispatched
+        assert len(backend.events) > 0
+        mouse_events = [e for e in backend.events if e.type == INPUT_MOUSE]
+        assert len(mouse_events) == 1
+        key_events = [e for e in backend.events if e.type == INPUT_KEYBOARD]
+        assert len(key_events) >= 3
+
+        # Taskkill and exit(1) executed
+        mock_popen.assert_called_once()
+        mock_exit.assert_called_once_with(1)
+
+    def test_ctrl_alt_k_when_allow_process_exit_is_false(self, monkeypatch):
+        mock_popen = MagicMock()
+        mock_exit = MagicMock()
+        monkeypatch.setattr(subprocess, "Popen", mock_popen)
+        monkeypatch.setattr(os, "_exit", mock_exit)
+
+        callback = MagicMock()
+        backend = MockInputBackend()
+        panic = PanicManager(backend=backend, on_panic_callback=callback)
+        panic.allow_process_exit = False
+
+        panic.trigger_panic(PanicTriggerSource.CTRL_ALT_K_KILL)
+
+        # When allow_process_exit is False, does not kill or exit
+        mock_popen.assert_not_called()
+        mock_exit.assert_not_called()
+
+        # Normal callbacks run
+        assert callback.call_count == 1
+        callback.assert_called_once_with(PanicTriggerSource.CTRL_ALT_K_KILL)
+
+    def test_check_key_event_ctrl_alt_k_invokes_hard_kill_when_exit_allowed(self, monkeypatch):
+        mock_popen = MagicMock()
+        mock_exit = MagicMock()
+        monkeypatch.setattr(subprocess, "Popen", mock_popen)
+        monkeypatch.setattr(os, "_exit", mock_exit)
+
+        backend = MockInputBackend()
+        panic = PanicManager(backend=backend)
+        panic.allow_process_exit = True
+
+        # Ctrl down
+        panic.check_key_event(VK_CONTROL, flags=0)
+        # Alt down
+        panic.check_key_event(VK_MENU, flags=0)
+        # Press K
+        fired = panic.check_key_event(VK_K, flags=0)
+
+        assert fired is True
+        mock_popen.assert_called_once()
+        mock_exit.assert_called_once_with(1)
+
+    def test_check_key_event_ctrl_alt_q_invokes_hard_kill_when_exit_allowed(self, monkeypatch):
+        mock_popen = MagicMock()
+        mock_exit = MagicMock()
+        monkeypatch.setattr(subprocess, "Popen", mock_popen)
+        monkeypatch.setattr(os, "_exit", mock_exit)
+
+        backend = MockInputBackend()
+        panic = PanicManager(backend=backend)
+        panic.allow_process_exit = True
+
+        # Ctrl down
+        panic.check_key_event(VK_CONTROL, flags=0)
+        # Alt down
+        panic.check_key_event(VK_MENU, flags=0)
+        # Press Q
+        fired = panic.check_key_event(VK_Q, flags=0)
+
+        assert fired is True
+        mock_popen.assert_called_once()
+        mock_exit.assert_called_once_with(1)
