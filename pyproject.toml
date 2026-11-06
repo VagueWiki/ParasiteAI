@@ -33,33 +33,29 @@ dependencies = [
     # Core schema & configuration
     "pydantic>=2.6.0,<3.0.0",
     "pyyaml>=6.0.1",
-    
     # Desktop GUI & Overlay
     "pyqt6>=6.6.0",
-    
     # Perception & Screen capture
     "mss>=9.0.1",
     "pillow>=10.2.0",
     "numpy>=1.26.0",
-    
     # Win32 Grounding & OCR
     "uiautomation>=2.0.19",
     "rapidocr-onnxruntime>=1.3.8",
-    
     # Physical input & Kinematics
     "pyautogui>=0.9.54",
     "pytweening>=1.2.0",
     "pynput>=1.7.6",
-    
     # Clipboard & Offloader
     "pyperclip>=1.8.2",
     "httpx>=0.27.0",
     "huggingface-hub>=0.23.0",
-
     # Local GGUF GPU Engine (CUDA 12 prebuilt wheel + runtime DLLs)
     "llama-cpp-python>=0.3.0",
     "nvidia-cuda-runtime-cu12>=12.0",
     "nvidia-cublas-cu12>=12.0",
+    "discord-py>=2.7.1",
+    "python-dotenv>=1.2.4",
 ]
 
 [project.optional-dependencies]
