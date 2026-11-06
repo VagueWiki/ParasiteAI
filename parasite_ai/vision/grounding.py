@@ -585,7 +585,15 @@ class ScreenGrounder:
 
         for ocr in ocr_elements:
             matched_uia = False
+            ox, oy, ow, oh = ocr.bbox
             for uia in uia_elements:
+                ux, uy, uw, uh = uia.bbox
+
+                # Fast AABB intersection check before expensive IoU/containment calculation
+                # If boxes don't overlap at all, skip full calculation
+                if ox >= ux + uw or ox + ow <= ux or oy >= uy + uh or oy + oh <= uy:
+                    continue
+
                 iou = compute_iou(ocr.bbox, uia.bbox)
                 containment = compute_containment(ocr.bbox, uia.bbox)
 
