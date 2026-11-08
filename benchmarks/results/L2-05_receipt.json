@@ -1,104 +1,98 @@
 {
   "goal": "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer",
-  "success": true,
-  "claimed_done": true,
+  "success": false,
+  "claimed_done": false,
   "total_steps": 5,
   "max_steps": 5,
-  "duration_sec": 37.935,
-  "exit_reason": "DONE",
+  "duration_sec": 63.66,
+  "exit_reason": "MAX_STEPS",
   "step_latencies_sec": [
-    8.108,
-    7.763,
-    7.446,
-    7.331,
-    6.873
+    3.916,
+    3.49,
+    47.827,
+    4.257,
+    3.664
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "*new 7 - Notepad++",
-    "process_name": "notepad++.exe"
+    "title": "",
+    "process_name": "explorer.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 3,
-      "target_label": "New folder",
-      "coordinates": [
-        202,
-        340
-      ],
-      "text": "",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.870213963963964,
-      "error_message": null,
-      "duration_sec": 8.108
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "File Explorer",
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 3.916
     },
     {
       "step_id": 2,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 10,
-      "target_label": "Normal text file",
-      "coordinates": [
-        580,
-        1029
-      ],
-      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.42646568491247566,
-      "error_message": null,
-      "duration_sec": 7.763
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "File Explorer",
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 3.49
     },
     {
       "step_id": 3,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 10,
-      "target_label": "Normal text file",
-      "coordinates": [
-        580,
-        1029
-      ],
-      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.10883578771881078,
-      "error_message": null,
-      "duration_sec": 7.446
-    },
-    {
-      "step_id": 4,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 10,
-      "target_label": "Normal text file",
-      "coordinates": [
-        241,
-        81
-      ],
-      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.11296193387051959,
-      "error_message": null,
-      "duration_sec": 7.331
-    },
-    {
-      "step_id": 5,
-      "action_type": "DONE",
+      "action_type": "WAIT",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
       "keys": null,
-      "success": true,
+      "success": false,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 6.873
+      "duration_sec": 47.827
+    },
+    {
+      "step_id": 4,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        24,
+        1060
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.9051470588235294,
+      "error_message": null,
+      "duration_sec": 4.257
+    },
+    {
+      "step_id": 5,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        24,
+        1060
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.27990196078431373,
+      "error_message": null,
+      "duration_sec": 3.664
     }
   ],
   "error": null,
-  "timestamp": 1794048901.0222101
+  "timestamp": 1794175971.7319286
 }

@@ -4,104 +4,92 @@
   "claimed_done": false,
   "total_steps": 5,
   "max_steps": 5,
-  "duration_sec": 37.818,
+  "duration_sec": 25.767,
   "exit_reason": "MAX_STEPS",
   "step_latencies_sec": [
-    7.004,
-    5.48,
-    11.215,
-    5.982,
-    7.632
+    5.643,
+    5.349,
+    5.336,
+    4.822,
+    4.111
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "",
-    "process_name": "explorer.exe"
+    "title": "Google Gemini - Google Chrome",
+    "process_name": "chrome.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "RIGHT_CLICK",
-      "target_id": 3,
-      "target_label": "File Explorer - 1 running window",
-      "coordinates": [
-        220,
-        165
-      ],
-      "text": null,
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.6292134831460674,
-      "error_message": null,
-      "duration_sec": 7.004
-    },
-    {
-      "step_id": 2,
-      "action_type": "CLICK",
-      "target_id": 1,
-      "target_label": "ParasiteAI",
-      "coordinates": [
-        509,
-        715
-      ],
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
       "text": null,
       "keys": null,
       "success": true,
-      "screen_diff": 1.0,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 5.48
+      "duration_sec": 5.643
+    },
+    {
+      "step_id": 2,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 5.349
     },
     {
       "step_id": 3,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 1,
-      "target_label": "File Explorer",
-      "coordinates": [
-        454,
-        954
-      ],
-      "text": "",
-      "keys": [],
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 0.751740462266778,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 11.215
+      "duration_sec": 5.336
     },
     {
       "step_id": 4,
       "action_type": "CLICK",
-      "target_id": 44,
-      "target_label": "File Explorer - 2 running windows",
+      "target_id": null,
+      "target_label": null,
       "coordinates": [
-        509,
-        1060
+        36,
+        218
       ],
       "text": null,
       "keys": null,
       "success": true,
-      "screen_diff": 0.6822097378277153,
+      "screen_diff": 0.03758759231285666,
       "error_message": null,
-      "duration_sec": 5.982
+      "duration_sec": 4.822
     },
     {
       "step_id": 5,
-      "action_type": "CLICK",
-      "target_id": 46,
-      "target_label": "File Explorer - 2 running windows",
-      "coordinates": [
-        509,
-        1060
-      ],
-      "text": null,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
       "keys": null,
-      "success": true,
-      "screen_diff": 0.12041198501872659,
-      "error_message": null,
-      "duration_sec": 7.632
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 4.111
     }
   ],
   "error": null,
-  "timestamp": 1794048857.5249352
+  "timestamp": 1794175904.9593625
 }

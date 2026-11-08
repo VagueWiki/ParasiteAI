@@ -4,104 +4,95 @@
   "claimed_done": false,
   "total_steps": 5,
   "max_steps": 5,
-  "duration_sec": 45.204,
+  "duration_sec": 22.46,
   "exit_reason": "MAX_STEPS",
   "step_latencies_sec": [
-    10.137,
-    7.754,
-    9.832,
-    8.648,
-    8.327
+    5.022,
+    3.947,
+    5.192,
+    3.803,
+    3.99
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Save As",
-    "process_name": "notepad++.exe"
+    "title": "Start menu",
+    "process_name": "explorer.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 1,
-      "target_label": "Save file \"new 7\" ?",
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
       "coordinates": [
-        1006,
-        563
+        75,
+        15
       ],
-      "text": "",
-      "keys": [],
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 1.0,
+      "screen_diff": 0.9729175897208684,
       "error_message": null,
-      "duration_sec": 10.137
+      "duration_sec": 5.022
     },
     {
       "step_id": 2,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 64,
-      "target_label": "Yes",
-      "coordinates": [
-        912,
-        622
-      ],
-      "text": "Yes",
-      "keys": [],
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 0.40193236714975844,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 7.754
+      "duration_sec": 3.947
     },
     {
       "step_id": 3,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 7,
-      "target_label": "Save as type:",
-      "coordinates": [
-        540,
-        505
-      ],
-      "text": "All Files",
-      "keys": [],
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 0.983773837403814,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 9.832
+      "duration_sec": 5.192
     },
     {
       "step_id": 4,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 8,
-      "target_label": "Save",
-      "coordinates": [
-        791,
-        550
-      ],
-      "text": "",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.4464962121212121,
-      "error_message": null,
-      "duration_sec": 8.648
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Calculator",
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 3.803
     },
     {
       "step_id": 5,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 10,
-      "target_label": "Save",
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
       "coordinates": [
-        791,
-        550
+        24,
+        1060
       ],
-      "text": "",
-      "keys": [],
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 0.4991714015151515,
+      "screen_diff": 0.9029411764705882,
       "error_message": null,
-      "duration_sec": 8.327
+      "duration_sec": 3.99
     }
   ],
   "error": null,
-  "timestamp": 1794049061.5842106
+  "timestamp": 1794176182.3645296
 }

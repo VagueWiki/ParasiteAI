@@ -4,95 +4,92 @@
   "claimed_done": false,
   "total_steps": 5,
   "max_steps": 5,
-  "duration_sec": 22.936,
+  "duration_sec": 25.175,
   "exit_reason": "MAX_STEPS",
   "step_latencies_sec": [
-    5.514,
-    3.757,
-    4.003,
-    4.688,
-    4.464
+    5.634,
+    5.4,
+    4.813,
+    5.247,
+    3.575
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Start menu",
-    "process_name": "explorer.exe"
+    "title": "Google Gemini - Google Chrome",
+    "process_name": "chrome.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "HOTKEY",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": "win",
-      "keys": [
-        "enter"
-      ],
-      "success": true,
-      "screen_diff": 0.938080150462963,
-      "error_message": null,
-      "duration_sec": 5.514
-    },
-    {
-      "step_id": 2,
-      "action_type": "HOTKEY",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": "win",
-      "keys": [
-        "enter"
-      ],
-      "success": true,
-      "screen_diff": 0.0666232638888889,
-      "error_message": null,
-      "duration_sec": 3.757
-    },
-    {
-      "step_id": 3,
-      "action_type": "HOTKEY",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": "win",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.1256394675925926,
-      "error_message": null,
-      "duration_sec": 4.003
-    },
-    {
-      "step_id": 4,
-      "action_type": "HOTKEY",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": "win",
-      "keys": [
-        "enter"
-      ],
-      "success": true,
-      "screen_diff": 0.03390769675925926,
-      "error_message": null,
-      "duration_sec": 4.688
-    },
-    {
-      "step_id": 5,
-      "action_type": "CLOSE_WINDOW",
+      "action_type": "WAIT",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
       "keys": null,
       "success": true,
-      "screen_diff": 0.0029721257716049383,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 4.464
+      "duration_sec": 5.634
+    },
+    {
+      "step_id": 2,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 5.4
+    },
+    {
+      "step_id": 3,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        973,
+        324
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.03989121769050017,
+      "error_message": null,
+      "duration_sec": 4.813
+    },
+    {
+      "step_id": 4,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 5.247
+    },
+    {
+      "step_id": 5,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Calculator",
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 3.575
     }
   ],
   "error": null,
-  "timestamp": 1794048813.6311626
+  "timestamp": 1794175875.76844
 }

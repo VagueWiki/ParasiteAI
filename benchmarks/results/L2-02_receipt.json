@@ -1,76 +1,29 @@
 {
   "goal": "Open C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt in Notepad and append ' - Approved' to the end",
-  "success": true,
-  "claimed_done": true,
-  "total_steps": 4,
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
   "max_steps": 5,
-  "duration_sec": 21.033,
-  "exit_reason": "DONE",
+  "duration_sec": 23.299,
+  "exit_reason": "MAX_STEPS",
   "step_latencies_sec": [
-    6.275,
-    4.971,
-    5.282,
-    4.194
+    5.409,
+    5.112,
+    3.61,
+    4.305,
+    4.354
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "*new 7 - Notepad++",
-    "process_name": "notepad++.exe"
+    "title": "Google Gemini - Google Chrome",
+    "process_name": "chrome.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 2,
-      "target_label": "Open Folder as Workspace...",
-      "coordinates": [
-        337,
-        144
-      ],
-      "text": "",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.9976425003501237,
-      "error_message": null,
-      "duration_sec": 6.275
-    },
-    {
-      "step_id": 2,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 1,
-      "target_label": "Ah, looking at the scene, I see Discord is active, and I’ve successfully guided ",
-      "coordinates": [
-        204,
-        120
-      ],
-      "text": " - Approved",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.02454474505723205,
-      "error_message": null,
-      "duration_sec": 4.971
-    },
-    {
-      "step_id": 3,
-      "action_type": "DOUBLE_CLICK",
-      "target_id": 2,
-      "target_label": "File",
-      "coordinates": [
-        14,
-        32
-      ],
-      "text": " - Approved",
-      "keys": [],
-      "success": true,
-      "screen_diff": 0.333116036505867,
-      "error_message": null,
-      "duration_sec": 5.282
-    },
-    {
-      "step_id": 4,
-      "action_type": "DONE",
+      "action_type": "WAIT",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
@@ -79,9 +32,61 @@
       "success": true,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 4.194
+      "duration_sec": 5.409
+    },
+    {
+      "step_id": 2,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 5.112
+    },
+    {
+      "step_id": 3,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "notepad",
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 3.61
+    },
+    {
+      "step_id": 4,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.305
+    },
+    {
+      "step_id": 5,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.354
     }
   ],
   "error": null,
-  "timestamp": 1794048784.9760606
+  "timestamp": 1794175847.1237655
 }

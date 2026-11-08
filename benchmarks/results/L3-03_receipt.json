@@ -1,100 +1,95 @@
 {
-  "goal": "Open Calculator and compute 7 * 8",
-  "success": false,
-  "claimed_done": false,
+  "goal": "Open Chrome, go to https://example.com, and write the main heading text into Notepad",
+  "success": true,
+  "claimed_done": true,
   "total_steps": 5,
   "max_steps": 5,
-  "duration_sec": 32.679,
-  "exit_reason": "MAX_STEPS",
+  "duration_sec": 23.912,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    9.295,
-    5.718,
-    5.671,
-    5.601,
-    5.888
+    5.445,
+    5.31,
+    4.88,
+    4.61,
+    3.258
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Google Gemini - Google Chrome",
+    "title": "AO3 Tag Recommendations for Story - Google Gemini - Google Chrome",
     "process_name": "chrome.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "HOTKEY",
+      "action_type": "CLICK",
       "target_id": null,
       "target_label": null,
-      "coordinates": null,
-      "text": "win",
-      "keys": [
-        "enter"
+      "coordinates": [
+        202,
+        392
       ],
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 0.15350067515432098,
+      "screen_diff": 0.9910409323598522,
       "error_message": null,
-      "duration_sec": 9.295
+      "duration_sec": 5.445
     },
     {
       "step_id": 2,
-      "action_type": "HOTKEY",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": "win",
-      "keys": [
-        "win"
-      ],
-      "success": true,
-      "screen_diff": 0.1036815200617284,
-      "error_message": null,
-      "duration_sec": 5.718
-    },
-    {
-      "step_id": 3,
-      "action_type": "HOTKEY",
+      "action_type": "WAIT",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": [
-        "win"
-      ],
+      "keys": null,
       "success": true,
-      "screen_diff": 0.12262635030864198,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 5.671
+      "duration_sec": 5.31
+    },
+    {
+      "step_id": 3,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.88
     },
     {
       "step_id": 4,
-      "action_type": "TYPE",
+      "action_type": "WAIT",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "Calculator\n",
+      "text": null,
       "keys": null,
-      "success": false,
+      "success": true,
       "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 5.601
+      "error_message": null,
+      "duration_sec": 4.61
     },
     {
       "step_id": 5,
-      "action_type": "HOTKEY",
+      "action_type": "DONE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "win",
-      "keys": [
-        "enter"
-      ],
+      "text": null,
+      "keys": null,
       "success": true,
-      "screen_diff": 0.01322289737654321,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 5.888
+      "duration_sec": 3.258
     }
   ],
   "error": null,
-  "timestamp": 1794048668.1712756
+  "timestamp": 1794176209.7625444
 }
