@@ -384,6 +384,9 @@ class CompanionDock(QWidget):
             "QPushButton:hover { background-color: #0369a1; } "
             "QPushButton:pressed { background-color: #075985; }"
         )
+        self.btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_send.setAccessibleName("Send Goal")
+        self.btn_send.setToolTip("Submit your current goal to the Parasite")
         self.btn_send.clicked.connect(self._on_submit_goal)
 
         goal_row.addWidget(self.goal_input)
@@ -400,6 +403,9 @@ class CompanionDock(QWidget):
             "border-radius: 6px; padding: 6px; font-weight: bold; font-size: 8.5pt; } "
             "QPushButton:hover { background-color: #475569; }"
         )
+        self.btn_pause.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pause.setAccessibleName("Pause Hands")
+        self.btn_pause.setToolTip("Toggle pause for physical hand kinematics")
         self.btn_pause.clicked.connect(self._on_toggle_pause)
 
         self.btn_panic = QPushButton("⚠ PANIC ABORT", self.main_card)
@@ -409,6 +415,9 @@ class CompanionDock(QWidget):
             "QPushButton:hover { background-color: #b91c1c; } "
             "QPushButton:pressed { background-color: #991b1b; }"
         )
+        self.btn_panic.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_panic.setAccessibleName("Panic Abort")
+        self.btn_panic.setToolTip("Immediately stop all physical actions")
         self.btn_panic.clicked.connect(self._on_panic_clicked)
 
         action_row.addWidget(self.btn_pause)
@@ -422,6 +431,9 @@ class CompanionDock(QWidget):
         self.chk_hud = QCheckBox("Show HUD Tags", self.main_card)
         self.chk_hud.setChecked(True)
         self.chk_hud.setStyleSheet("QCheckBox { color: #94a3b8; font-size: 8pt; }")
+        self.chk_hud.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.chk_hud.setAccessibleName("Show HUD Tags")
+        self.chk_hud.setToolTip("Toggle visibility of Ghost HUD overlay tags")
         self.chk_hud.toggled.connect(self._on_toggle_hud)
 
         self.combo_brain_mode = QComboBox(self.main_card)
