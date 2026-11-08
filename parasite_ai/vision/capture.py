@@ -54,16 +54,14 @@ def compute_frame_diff(frame_a: np.ndarray, frame_b: np.ndarray) -> float:
     sub_a = frame_a[::4, ::4]
     sub_b = frame_b[::4, ::4]
 
-    # Convert to int16 to avoid unsigned underflow
-    arr_a = sub_a.astype(np.int16)
-    arr_b = sub_b.astype(np.int16)
-
-    # Pixel-wise max channel difference
-    if arr_a.ndim == 3 and arr_a.shape[2] >= 3:
+    # Optimization (Bolt): Only cast the required RGB channels to int16
+    # to avoid allocating/processing unused alpha channels. Inline the abs diff
+    # operation to reduce intermediate array allocations.
+    if sub_a.ndim == 3 and sub_a.shape[2] >= 3:
         # Check first 3 channels (RGB / BGR)
-        diff = np.max(np.abs(arr_a[:, :, :3] - arr_b[:, :, :3]), axis=2)
+        diff = np.max(np.abs(sub_a[:, :, :3].astype(np.int16) - sub_b[:, :, :3].astype(np.int16)), axis=2)
     else:
-        diff = np.abs(arr_a - arr_b)
+        diff = np.abs(sub_a.astype(np.int16) - sub_b.astype(np.int16))
 
     # Threshold channel noise > 15
     changed_pixels = np.count_nonzero(diff > 15)
