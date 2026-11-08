@@ -68,8 +68,21 @@ from parasite_ai.mind.resolver import (
     PrecisionAppMatcher,
     UniversalAppResolver,
 )
+from parasite_ai.mind.uitars_parser import (
+    UITARS_SYSTEM_PROMPT,
+    extract_thought_and_action,
+    parse_coordinates,
+    parse_uitars_action,
+    snap_coordinates_to_element,
+)
 
 __all__ = [
+    # UITARS Parser
+    "UITARS_SYSTEM_PROMPT",
+    "extract_thought_and_action",
+    "parse_coordinates",
+    "parse_uitars_action",
+    "snap_coordinates_to_element",
     # Brain Manager
     "BrainMode",
     "BrainState",

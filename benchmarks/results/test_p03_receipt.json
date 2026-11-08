@@ -1,0 +1,39 @@
+{
+  "goal": "Verify exit telemetry",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 1,
+  "max_steps": 1,
+  "duration_sec": 29.398,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    29.297
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Desktop",
+    "process_name": "explorer.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win + r",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 29.297
+    }
+  ],
+  "error": null,
+  "timestamp": 1794040676.6308234
+}

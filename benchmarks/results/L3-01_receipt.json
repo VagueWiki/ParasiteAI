@@ -1,0 +1,39 @@
+{
+  "goal": "Close the open Notepad window and choose Don't Save on the prompt",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 1,
+  "max_steps": 5,
+  "duration_sec": 16.593,
+  "exit_reason": "ERROR",
+  "step_latencies_sec": [
+    9.66
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Untitled - Notepad",
+    "process_name": "notepad.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "RIGHT_CLICK",
+      "target_id": 1,
+      "target_label": "Windows (CRLF)",
+      "coordinates": [
+        1204,
+        926
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 1.0,
+      "error_message": null,
+      "duration_sec": 9.66
+    }
+  ],
+  "error": "1 validation error for ActionPlan\naction\n  Input should be 'CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'CLICK_AND_TYPE', 'TYPE', 'HOTKEY', 'SCROLL', 'MINIMIZE_WINDOW', 'CLOSE_WINDOW', 'WAIT', 'PANIC', 'OFFLOAD_WEB_AI', 'DONE' or 'RUN_CLI_COMMAND' [type=enum, input_value='SELECT MenuItem', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.14/v/enum",
+  "timestamp": 1794049010.3231108
+}

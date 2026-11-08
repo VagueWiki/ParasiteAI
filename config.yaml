@@ -23,12 +23,21 @@ persona:
 brain:
   mode: "local_llm"  # "local_llm", "browser_offload", or "hybrid"
   local_model:
-    model_id: "Qwen/Qwen2.5-3B-Instruct-GGUF"
-    filename: "qwen2.5-3b-instruct-q4_k_m.gguf"
+    model_id: "mradermacher/UI-TARS-1.5-7B-GGUF"
+    filename: "UI-TARS-1.5-7B.IQ4_XS.gguf"
+    mmproj_filename: "UI-TARS-1.5-7B.mmproj-Q8_0.gguf"
     context_size: 4096
     gpu_layers: -1
-    vram_budget_mb: 5500
+    vram_budget_mb: 6500
     local_endpoint: "http://127.0.0.1:8080/v1"
+    server_binary_path: "bin/llama-server/llama-server.exe"
+    server_host: "127.0.0.1"
+    server_port: 8080
+    auto_start_server: true
+    server_startup_timeout_sec: 60.0
+    server_parallel_slots: 1
+    image_min_tokens: 1024
+    keep_server_alive_on_exit: true
     download_auto: false
   offload:
     preferred_browser: "chrome"  # "chrome" or "opera_gx"
@@ -43,7 +52,7 @@ brain:
 safety:
   interrupt_enabled: true
   interrupt_latency_budget_ms: 2.0
-  override_pause_duration_sec: 10.0
+  override_pause_duration_sec: 2.5
   panic_hotkeys:
     - "ctrl+alt+backspace"
     - "ctrl+alt+p"
@@ -95,10 +104,11 @@ ui:
 
 vision:
   grounding_mode: "hybrid"  # "hybrid", "uia_only", or "ocr_only"
-  max_som_elements: 60
+  max_som_elements: 100
   screen_diff_threshold: 0.02
   ocr_scoped_only: true
   capture_backend: "mss"
+  monitor_index: 1
   settling_diff_threshold: 0.003
   settling_consecutive_polls: 3
 
@@ -117,3 +127,51 @@ hands:
     micro_pause_duration_ms: [200, 600]
     punctuation_pause_ms: [80, 150]
     multiline_shift_enter: true
+
+window_rules:
+  persistent_processes:
+    - "antigravity.exe"
+    - "code.exe"
+    - "cursor.exe"
+    - "devenv.exe"
+    - "pycharm64.exe"
+    - "idea64.exe"
+    - "chrome.exe"
+    - "msedge.exe"
+    - "firefox.exe"
+    - "opera.exe"
+    - "brave.exe"
+    - "discord.exe"
+    - "slack.exe"
+    - "teams.exe"
+    - "steam.exe"
+    - "epicgameslauncher.exe"
+    - "gog galaxy.exe"
+    - "battle.net.exe"
+    - "spotify.exe"
+    - "obs64.exe"
+    - "conhost.exe"
+    - "windowsterminal.exe"
+    - "powershell.exe"
+    - "pwsh.exe"
+    - "cmd.exe"
+    - "python.exe"
+    - "pythonw.exe"
+  ephemeral_processes:
+    - "notepad.exe"
+    - "calc.exe"
+    - "calculatorapp.exe"
+    - "mspaint.exe"
+    - "snippingtool.exe"
+    - "wordpad.exe"
+  intermediate_launcher_processes:
+    - "steam.exe"
+    - "steamwebhelper.exe"
+    - "epicgameslauncher.exe"
+    - "riotclientservices.exe"
+    - "riotclientux.exe"
+    - "battle.net.exe"
+    - "eadestkop.exe"
+    - "eaapp.exe"
+    - "ubisoftconnect.exe"
+    - "goggalaxy.exe"

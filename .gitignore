@@ -1,3 +1,9 @@
 models/
 .venv/
 .pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+logs/
+benchmarks/runs/
+bin/

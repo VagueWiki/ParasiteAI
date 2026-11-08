@@ -1,0 +1,107 @@
+{
+  "goal": "Open File Explorer to C:\\ParasiteAI\\benchmarks\\workspace and rename old_name.txt to new_name.txt",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 37.818,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    7.004,
+    5.48,
+    11.215,
+    5.982,
+    7.632
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "",
+    "process_name": "explorer.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "RIGHT_CLICK",
+      "target_id": 3,
+      "target_label": "File Explorer - 1 running window",
+      "coordinates": [
+        220,
+        165
+      ],
+      "text": null,
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.6292134831460674,
+      "error_message": null,
+      "duration_sec": 7.004
+    },
+    {
+      "step_id": 2,
+      "action_type": "CLICK",
+      "target_id": 1,
+      "target_label": "ParasiteAI",
+      "coordinates": [
+        509,
+        715
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 1.0,
+      "error_message": null,
+      "duration_sec": 5.48
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "File Explorer",
+      "coordinates": [
+        454,
+        954
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.751740462266778,
+      "error_message": null,
+      "duration_sec": 11.215
+    },
+    {
+      "step_id": 4,
+      "action_type": "CLICK",
+      "target_id": 44,
+      "target_label": "File Explorer - 2 running windows",
+      "coordinates": [
+        509,
+        1060
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.6822097378277153,
+      "error_message": null,
+      "duration_sec": 5.982
+    },
+    {
+      "step_id": 5,
+      "action_type": "CLICK",
+      "target_id": 46,
+      "target_label": "File Explorer - 2 running windows",
+      "coordinates": [
+        509,
+        1060
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.12041198501872659,
+      "error_message": null,
+      "duration_sec": 7.632
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048857.5249352
+}

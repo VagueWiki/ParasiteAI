@@ -1,0 +1,105 @@
+{
+  "goal": "Open Paint",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 34.65,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    12.074,
+    4.615,
+    5.391,
+    5.986,
+    6.077
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Untitled - Paint.NET 5.1.12",
+    "process_name": "paintdotnet.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.32035542052469135,
+      "error_message": null,
+      "duration_sec": 12.074
+    },
+    {
+      "step_id": 2,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "esc"
+      ],
+      "success": true,
+      "screen_diff": 0.1085546875,
+      "error_message": null,
+      "duration_sec": 4.615
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "paint.net",
+      "coordinates": [
+        37,
+        710
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.6852183650615902,
+      "error_message": null,
+      "duration_sec": 5.391
+    },
+    {
+      "step_id": 4,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "paint.net",
+      "coordinates": [
+        37,
+        710
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.5737961926091826,
+      "error_message": null,
+      "duration_sec": 5.986
+    },
+    {
+      "step_id": 5,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 2,
+      "target_label": "File",
+      "coordinates": [
+        21,
+        38
+      ],
+      "text": "File",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.8283699059561128,
+      "error_message": null,
+      "duration_sec": 6.077
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048469.998982
+}

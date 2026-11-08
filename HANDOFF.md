@@ -1,185 +1,154 @@
-# ParasiteAI — Master Session Handoff & Architecture Blueprint
-**Generated:** 2026-11-01  
+# ParasiteAI — Master Session Handoff & Stage P1 Planning Blueprint
+**Generated:** 2026-11-07  
 **Project Workspace:** `C:\ParasiteAI`  
-**Current Status:** Phase 1, Phase 2, Phase 3, & Phase 4 **100% Complete & Certified** (2,178 / 2,178 Tests Passing)  
-**Next Objective:** Phase 5 (Tiered Persistent Memory Engine & Verified Routine Replay)
+**Current Status:** Stage P0 (`P0.1`–`P0.5`) **100% COMPLETE & VERIFIED**; Empirical Baseline (`baseline_p0`) Captured  
+**Next Objective:** Plan and execute **Stage P1: Local CUA Engine Upgrade (`llama-server` + `UI-TARS-1.5-7B`)**
 
 ---
 
-## 1. Executive Summary & Core Identity
+## 1. Executive Summary & Architectural Identity
 
-**ParasiteAI** is a **100% visible, desktop-native local AI assistant** that lives on the physical Windows desktop and operates applications via natural, human-like mouse and keyboard kinematics (Bézier curves, Min-Jerk velocity profile, micro-jitter).
+**ParasiteAI** is a **100% visible, desktop-native local AI assistant** operating directly on the physical **Windows 10** desktop via natural, human-like mouse and keyboard kinematics (Cubic Bézier trajectories, Flash & Hogan Min-Jerk velocity profiles, and a click-through `GhostHUD` reticle).
 
-### Strict Architectural Invariants
-1. **Physical Safety & Human Preemption:** Low-level Win32 hardware hooks (`WH_MOUSE_LL`, `WH_KEYBOARD_LL`) provide **sub-2ms hardware touch preemption**. If the human user moves the mouse or presses a key, ParasiteAI aborts immediately.
-2. **Instant Hard Kill (`Ctrl+Alt+K`):** Non-blocking native hard process termination (`taskkill /F /T /PID` + `os._exit(1)`) guarantees instantaneous termination (<5ms) without hanging in frozen GUI loops.
-3. **Strict Anti-Hardcoding Rule:** Absolutely no application-specific branching or hardcoded lookup tables (`app_map = {"notepad": ...}` has been completely eliminated). The engine must handle arbitrary Windows applications generically.
-4. **VRAM Ceiling:** Total local model consumption is strictly capped under **3.5 GB VRAM** on the 8 GB RTX 4060, leaving >4.5 GB free.
-5. **Zero Silent Cloud Exfiltration:** The system defaults to local offline inference (`brain.mode: "local_llm"`). Web offload to Gemini is strictly an optional, user-authorized strategic consultation advisor, never an unrequested runtime dependency.
-
----
-
-## 2. Hardware Profile & Live Empirical Geometry
-
-* **OS:** Windows 11 64-bit
-* **GPU:** NVIDIA GeForce RTX 4060 (8,187 MiB VRAM, driver CUDA 12 compliant)
-* **RAM:** 16 GB System Memory
-* **Display Configuration:** Dual-Monitor Side-by-Side (`3840×1080` total virtual desktop at 100% DPI, 96 DPI):
-  * **Monitor 1 (Primary):** Bounds `(0, 0, 1920, 1080)`
-  * **Monitor 2 (Secondary):** Bounds `(1920, 0, 3840, 1080)`
-  * *Important Rule:* All coordinate math and screen capture fallbacks must query `get_virtual_screen_bounds()` dynamically (`SM_CXVIRTUALSCREEN = 3840`) so Monitor 2 targets ($x \ge 1920$) are never clipped or zeroed.
-* **Environment:** Python 3.12 managed with `uv` in `C:\ParasiteAI\.venv`.
-  * *Command Execution Note:* Always run Python/Pytest commands with `Set-Location C:\ParasiteAI; & "C:\ParasiteAI\.venv\Scripts\python.exe" ...`.
-  * *CUDA DLLs Note:* Must call `parasite_ai.mind.brain_manager._register_cuda_dll_directories()` before importing `llama_cpp`.
+### Ratified Architectural Decisions & Invariants (D1–D6)
+| ID | Decision / Invariant | Specification |
+| :--- | :--- | :--- |
+| **D1** | **VRAM Ceiling & WDDM Governance** | `vram_budget_mb: 6500` (6.5 GB ceiling on the 8,188 MiB RTX 4060). Because Windows 10 desktop compositing + standard apps consume ~1,600–2,400 MiB VRAM (~5,700–6,300 MiB free), active model + `mmproj` + KV cache must stay within **~4.8–5.4 GB** to avoid Windows WDDM PCIe system-RAM spillover. Checked via `scripts/check_gpu_governance.py`. |
+| **D2** | **100% Visible Physical Kinematics** | All cursor and keyboard actions must remain 100% visible (`MouseDriver` Bézier paths, `GhostHUD` reticle, `KeyboardDriver` fast clipboard paste / cadence typing) with **< 2ms** physical touch preemption (`InterruptGuard`), **2.5s** human override cooldown (`override_pause_duration_sec: 2.5`), and **< 5ms** `Ctrl+Alt+K` instant hard kill. Structured UIA + VLM coordinate grounding and deterministic launch helpers are permitted under the hood provided actuation is visible. |
+| **D3** | **Browser-First / Zero Required Paid API Keys** | Zero required paid API keys. Local computer-use VLM (`TIER_1_LOCAL`) is the primary brain; strategic consultation (`TIER_2_CONSULT`) drives the user's real visible browser (`BrowserOffloader`), with an *opt-in* API planner tier only for users who explicitly configure an API key. |
+| **D4** | **Zero Hardcoded App Logic in Core (`parasite_ai/`), Learned App Data Allowed (`data/`)** | Core Python source (`parasite_ai/`) contains zero app-specific branches (`if "warsim" in ...`). Static window rules live in `config.yaml` (`WindowRulesConfig`), and learned per-application schemas/notes/routines live in external `data/` files. |
+| **D5** | **Phase 5 Frozen Until Alpha Gate Passes** | Self-learning routine caching / SimuLang compilation (Phase 5) remains frozen until the core loop passes the **Alpha Gate** on the 20-task Windows 10 benchmark: **`L1 >= 70%`**, **`L2 >= 40%`**, **`False-DONE <= 5%`**, **`Median Step <= 5.0s`**. |
+| **D6** | **Strict Stint Cadence & Result-Oriented Testing** | Enforced by `.agents/rules/strict_stint_cadence.md`: strictly **one stint per execution turn**, mandatory pre-stint implementation plan (`RequestFeedback: true`) and user approval, post-stint `walkthrough.md` gate, and objective OS outcome tests rather than mocked internal plumbing. |
 
 ---
 
-## 3. Certified Deliverables & Completed Milestones
+## 2. Host Hardware, OS & Environment Profile
 
-### Phase 1: Core Remediation & Foundational Safety (100% Certified)
-* [x] **Decoupled Local Brain Mode:** `LocalBrainManager` retains `local_llm` mode without silently falling back to Chrome web offload on local errors.
-* [x] **Fast Clipboard Typing:** Replaced character-by-character Unicode key typing with high-speed `<100ms` `Ctrl+V` paste accompanied by atomic user clipboard backup and restoration.
-* [x] **Debounced Panic Slam:** Added 1.0s edge-triggered debouncing on screen corner mouse slams to eliminate Qt event loop queue flooding.
-* [x] **Emergency Hard Termination (`Ctrl+Alt+K`):** Implemented clean non-blocking subprocess termination.
-* [x] **`LivingPlan` Pydantic Schemas:** Created `parasite_ai/mind/plan.py` defining `StepIntent`, `StepStatus`, `PlanStep`, and `LivingPlan`.
-* [x] **Project Changelog:** Initialized `C:\ParasiteAI\CHANGELOG.md` adhering to Keep a Changelog v1.0.0.
-
-### Phase 2: Foveated Perception & Universal App Resolution (100% Certified)
-* [x] **Foveated Perception Engine (`parasite_ai/vision/foveated.py`):**
-  * Captures 1:1 unscaled native pixel crops around cursor/active focus windows alongside downscaled macro glances.
-  * Employs 64-bit `dHash` perceptual difference gating (0% GPU/CPU overhead when desktop is static).
-  * Bidirectional coordinate transforms between foveal/macro crops and global desktop coordinates.
-* [x] **Universal Application Resolver (`parasite_ai/mind/resolver.py`):**
-  * Completely eliminated the hardcoded `app_map = {"notepad": ...}` dictionary from `dual_mind.py`.
-  * Generic regex target extraction (`open|launch|start|run <app>`).
-  * Three-Tier Resolution: Tier 1 (Visible Desktop/Taskbar icons via Set-of-Mark) $\rightarrow$ Tier 2 (Windows Start Search chord `Win` $\rightarrow$ type name $\rightarrow$ `Enter`) $\rightarrow$ Tier 3 (`Win+R` Run dialog fallback).
-* [x] **Multimodal Visual Grounder (`parasite_ai/vision/vlm_grounder.py`):**
-  * Parses Qwen2.5-VL box tags, point coordinates, and JSON schemas.
-  * Implements **Hybrid Coordinate Snapping** to the nearest UI Automation element center within 35px.
-* [x] **Dynamic Living Plan Runtime (`parasite_ai/mind/dual_mind.py`):**
-  * `DualMindPipeline.step()` maintains active multi-stage plan progress.
-  * Intercepts unexpected modal dialogs (*Save changes, Error alerts*) and injects `DISMISS_DIALOG` contingency steps.
-* [x] **Default Configuration:** `config.yaml` defaults to `brain.mode: "local_llm"`.
-* [x] **Full Regression Pass:** **797 / 797 tests passing (100% green)** in 128.83s.
-
-### Phase 3: Execution Loop Hardening (100% Certified)
-* [x] **3A — Localized ROI Diffing (`parasite_ai/mind/dual_mind.py`):**
-  * Implemented immutable `BoundingBox` model with `.pad(padding_px=20)` and multi-monitor virtual screen bounds clamping (`3840x1080 @ 100% DPI`).
-  * Scoped post-action visual difference verification to the padded action bounding box (`extract_action_target_roi()`), eliminating false negative strikes on small UI elements while rejecting peripheral background and taskbar noise.
-* [x] **3B — Win32 Caret Focus Verification (`parasite_ai/mind/dual_mind.py`):**
-  * Defined 64-bit authentic Win32 `GUITHREADINFO` ctypes struct (72 bytes on x64) and helper `check_caret_focus` verifying `(flags & GUI_CARETBLINKING) or (hwndCaret != 0)`.
-  * Integrated `verify_caret_focus` in `ActionDispatcher.dispatch()` before emitting `ActionType.TYPE` with a 250ms polling loop (checked every 25ms). If caret focus is unacquired, returns `ActionResult(success=False, error="Caret focus not detected")` without injecting blind keystrokes into unfocused surfaces.
-* [x] **3C — Start Search Cadence Buffer (`parasite_ai/mind/resolver.py`):**
-  * Enforced a 250ms cadence pause in `UniversalAppResolver` post-`Win` key chord before typing target application names, preventing dropped keystrokes while the Windows Search UI initializes.
-  * Cadence wait loop checks hardware preemption cancellation token every millisecond.
-  * Preserved strict anti-hardcoding invariant (zero application dictionaries or hardcoded lookup tables).
-* [x] **3D — Full Regression & Adversarial Certification:**
-  * **877 / 877 tests passing (100% green)** in 131.97s (`uv run pytest`), with 80 new tests added (+32 Phase 3 unit tests + 48 adversarial stress tests).
-  * Independent Victory Audit confirmed `VICTORY CONFIRMED`. Sub-2ms preemption, `Ctrl+Alt+K` hard kill, and dual-monitor topology strictly verified.
-
-### Phase 4: Strategic Gemini Consultation & Dynamic Contingencies (100% Certified)
-* [x] **4A — Capability Contract & Textual Scene Serialization (`parasite_ai/mind/plan.py`):**
-  * Implemented `GroundedCapabilityContract`, `build_grounded_capability_manifest()`, `serialize_textual_scene_brief()`, and consultation prompt formatters.
-  * Formatted Set-of-Mark and active window telemetry strictly <3 KB payload without video streaming.
-  * Enforced `BrainConfig.mode = "local_llm"` default invariant (zero silent cloud exfiltration).
-* [x] **4B — 4-Tier Escalation State Machine (`parasite_ai/mind/memory.py`, `parasite_ai/mind/dual_mind.py`):**
-  * Implemented `EscalationStateMachine` and `CadenceTier` (`TIER_1_LOCAL` -> `TIER_2_CONSULT` -> `TIER_3_GUIDED` -> `TIER_4_CO_PILOT` -> `USER_OVERRIDE`).
-  * Action-aware strike evaluation: passive actions (`WAIT`, `DONE`) and clean CLI returncode 0 never incur visual strikes; interactive actions require physical success and localized ROI diff >= 0.02.
-  * Finite cycle boundary (`max_escalation_cycles = 3`) and advisor timeout protection (`max_consultation_failures = 2`).
-* [x] **4C — Dual-Channel Output Router & Persona Voice (`parasite_ai/mind/dual_mind.py`):**
-  * Implemented `DualChannelRouter` in `parasite_ai/mind/dual_mind.py`.
-  * Channel A extracts structured `LivingPlan` JSON (supporting both `'steps'` and `'recommended_strategy'`).
-  * Channel B multi-pattern regex strips all code blocks, raw JSON braces, backticks, coordinate pairs (including float/decimal tuples), and API error codes before delivery to `UIBridge.notify_speech()`.
-* [x] **4D — Tool-Aware Reasoning & CLI Execution Sandbox (`parasite_ai/mind/affordance.py`):**
-  * Implemented `AffordanceEvaluator` routing between `PHYSICAL_GUI`, `LOCAL_DEVELOPER_TOOL`, and `STRATEGIC_ADVISOR`.
-  * Implemented `CLIExecutionSandbox` with binary whitelisting (`python`, `pytest`, `git`, `powershell`, `cmd`), explicit web scraping tool rejection (`curl`, `requests`, `playwright`, `selenium`), 30s timeout, 10ms cancellation polling, and child-first recursive `taskkill /F /T /PID` in <20ms.
-* [x] **4E — UniversalAppResolver Hardening (`parasite_ai/mind/resolver.py`):**
-  * Implemented `PrecisionAppMatcher`: exact match (1.0), negative verb disqualification (`exit`, `close`, `uninstall`, `delete`, `kill`), prefix boundary matching (0.95), word-boundary regex scoring (0.80..0.90), and arbitrary substring rejection (eliminating 270+ collision attacks).
-  * Hardened `UniversalAppResolver` with 3-tier launching (Tier 1: SOM Match -> Tier 2: Start Search chord -> Tier 3: Win+R fallback -> `WAIT` exhaustion), non-blocking cadence waits, attached punctuation delimiter parsing, and defensive `None` guards.
-  * Implemented `verify_step_completion()` across all 8 `StepIntent` types and dynamic contingency branching (`insert_caret_contingency`, `insert_stagnation_contingency`, `insert_modal_dialog_contingency`) in `parasite_ai/mind/plan.py`.
-* [x] **4F — Win32 64-bit ABI Structs & Full System Integration (`parasite_ai/input/types.py`, `tests/test_schema_mapping.py`):**
-  * Verified all 10 Win32 ctypes structures matching 64-bit Windows ABI memory layouts (`POINT`=8, `RECT`=16, `MSLLHOOKSTRUCT`=32, `KBDLLHOOKSTRUCT`=24, `MOUSEINPUT`=32, `KEYBDINPUT`=24, `HARDWAREINPUT`=8, `INPUT_UNION`=32, `INPUT`=40, `GUITHREADINFO`=72).
-  * Added polish for trailing non-word symbols in non-prefix positions (`notepad++`, `c++`, `c#`), attached natural language punctuation parsing, and dynamic contingency pointer advancement.
-  * **2,178 / 2,178 tests passing (100% green)** in 152.47s. Independent Victory Audit confirmed `VICTORY CONFIRMED`.
+* **OS:** **Windows 10** 64-bit (Classic Win32 `notepad.exe` with `Edit` child HWND, `CalculatorApp.exe`, `mspaint.exe`, `explorer.exe`).
+* **GPU:** **NVIDIA GeForce RTX 4060** (`8,188 MiB` dedicated VRAM, Driver `610.74`, CUDA 12).
+  * *Empirical VRAM Headroom Note:* Live `check_gpu_governance.py` telemetry on Windows 10 showed `1,859–2,480 MiB` used by desktop compositing and background apps (`5,700–6,329 MiB` free VRAM, or `-171 MB` relative to the 6,500 MB ceiling). In Stage P1, configure `UI-TARS-1.5-7B` (`Q4_K_M` or `IQ4_XS` + `mmproj`) with bounded context (`-c 4096`, quantized KV cache `-ctk q8_0 -ctv q8_0` if supported) so total `llama-server` VRAM stays around **4.8–5.3 GB**, leaving comfortable headroom for Windows 10 apps.
+* **Display Geometry:** Dual-Monitor Side-by-Side (`3840x1080` virtual screen at 100% DPI / 96 DPI; Monitor 1: `0..1920`, Monitor 2: `1920..3840`).
+* **Python Environment:** Python 3.12 via `uv` at `C:\ParasiteAI\.venv\Scripts\python.exe`.
+* **Sandbox vs. Interactive Desktop Constraint:**
+  * Processes spawned inside Antigravity's `run_command` tool run under a restricted sandbox token where Win32 GDI `BitBlt` and root UIA tree enumeration are blocked (`ScreenCapture.last_capture_backend_used == "synthetic"`).
+  * `benchmarks/run_benchmark.py` includes `check_interactive_desktop_access()` to detect this immediately. Full live benchmark runs (`run_baseline_p0.bat`) are executed by the user in an interactive Windows 10 console, while `--dry-verify` and unit/subsystem tests run directly inside `run_command`.
 
 ---
 
-## 4. Master Architectural Roadmap (Phase 4 through Phase 5)
+## 3. Stage P0 Empirical Baseline Post-Mortem (`baseline_p0`)
 
-```mermaid
-flowchart TD
-    subgraph P1_P4 ["Phases 1, 2, 3, & 4 (100% COMPLETE & CERTIFIED)"]
-        F1["Safety & Hard Kill (Ctrl+Alt+K)"]
-        F2["Foveated Perception & dHash Gating"]
-        F3["Universal App Resolver (Anti-Hardcoding)"]
-        F4["VLM Grounder with Hybrid Snapping"]
-        F5["Localized ROI Diffing & Win32 Caret Focus"]
-        F6["Grounded Capability Contract & Scene Serialization"]
-        F7["4-Tier Escalation State Machine (T1->T2->T3->T4)"]
-        F8["Dual-Channel Output (LivingPlan vs Persona)"]
-        F9["Tool-Aware Reasoning & Hardened CLI Sandbox"]
-        F10["PrecisionAppMatcher & 3-Tier Resolver"]
-        F11["64-bit Win32 ABI Structs & Dynamic Contingencies"]
-    end
+All 5 stints of Stage P0 (`P0.1` Core De-Hardcoding, `P0.2` GPU Governance, `P0.3` `EpisodeReceipt` & Exit Codes, `P0.4` 20-Task Windows 10 Verifiers, `P0.5` Hands-Off Baseline Runner) are complete.
 
-    subgraph P5 ["Phase 5: Tiered Persistent Memory Engine (NEXT OBJECTIVE)"]
-        P5A["5A: SQLite WAL Procedural Store (~/.parasite/memory.sqlite)"]
-        P5B["5B: Verified Routine Caching (Fast Workflow Replay)"]
-        P5C["5C: Multi-App E2E Test Suite (Notepad, Calc, Paint, Discord)"]
-    end
+On **2026-11-07 03:07**, the full 20-task interactive baseline (`run_baseline_p0.bat` -> `benchmarks/results/baseline_p0.md` & `baseline_p0.json`) was executed against the legacy in-process `qwen2.5-3b-instruct-q4_k_m.gguf` brain (`--max-steps-cap 5`).
 
-    P1_P4 --> P5
-```
+### 3.1 Topline Scorecard (`baseline_p0` vs. Alpha Gate)
+| Metric | `baseline_p0` Result | Alpha Gate Target | Status |
+| :--- | :---: | :---: | :---: |
+| **Ground-Truth Pass Rate (All 20 Tasks)** | **5.0% (1 / 20)** | `>= 50.0%` | ❌ Baseline Established |
+| **Level 1 Pass Rate (Basic Single-App, 10 Tasks)** | **10.0% (1 / 10)** | **`>= 70.0%`** | ❌ Only `L1-07` (*Minimize Notepad*) passed |
+| **Level 2 Pass Rate (Multi-Step / File / Dialog, 7 Tasks)** | **0.0% (0 / 7)** | **`>= 40.0%`** | ❌ 4/7 claimed `FALSE_DONE`, 3/7 hit `MAX_STEPS` |
+| **Level 3 Pass Rate (Complex Multi-App / Recovery, 3 Tasks)** | **0.0% (0 / 3)** | Informational | ❌ 1 `ERROR` (`SELECT MenuItem`), 1 `MAX_STEPS`, 1 `TIMEOUT` |
+| **Agent Claimed `DONE` Rate** | **25.0% (5 / 20)** | — | 4 of 5 `DONE` claims were hallucinations (`80%` false) |
+| **False-`DONE` Rate** | **20.0% (4 / 20)** | **`<= 5.0%`** | ❌ `L2-02`, `L2-05`, `L2-06`, `L2-07` |
+| **Median Step Latency** | **5.986s** (P90: **9.798s**) | **`<= 5.0s`** | ❌ Exceeds 5.0s budget + 5 cold-start timeouts |
+| **Hardware Interrupts** | **0** | `0` | ✅ Sub-2ms hook clean (0 false self-triggers) |
 
-### Phase 3 Technical Specifications (Next Up)
-1. **3A — Localized ROI Diffing:**
-   * *Problem:* Full-screen pixel difference checks generate false positives from system tray clocks or background notifications.
-   * *Solution:* In `parasite_ai/mind/dual_mind.py`, scope post-action visual verification to `target_bbox.pad(20px)` rather than full desktop.
-2. **3B — Win32 Caret Focus Verification:**
-   * *Problem:* Clicking an input field might visually appear successful, but the application may not have focus to receive keystrokes.
-   * *Solution:* Call `win32gui.GetGUIThreadInfo` / `user32.GetGUIThreadInfo` to verify `flags & GUI_CARETBLINKING` or `hwndCaret != 0` before emitting `TYPE` actions.
-3. **3C — Start Search Cadence Buffer:**
-   * *Problem:* Typing immediately after the `Win` key can drop initial characters if Windows Search indexer UI has not initialized.
-   * *Solution:* Ensure a 250ms cadence pause is respected in `UniversalAppResolver` before typing.
+### 3.2 Five Empirical Root-Cause Failure Patterns (From `L*_receipt.json`)
+Inspecting `benchmarks/results/baseline_p0.json` and the individual task receipts (`L1-03_receipt.json` .. `L3-02_receipt.json`) reveals **five concrete engineering root causes** that Stage P1 and Stage P2 must solve:
+
+1. **Root Cause #1: Subprocess In-Process `llama-cpp-python` Cold-Start & Dual-Pass Latency (`5/20` Tasks Timed Out: `L1-01`, `L1-02`, `L1-05`, `L1-06`, `L3-03`)**
+   - Every task spawns `main.py` as a fresh subprocess. Loading the GGUF model in-process via `llama-cpp-python` + initializing RapidOCR/UIA + running **two** sequential LLM calls per step (Pass 1 Persona monologue + Pass 2 Action JSON) caused 5 tasks to hit their `45s–90s` wall-clock timeout before completing (`total_steps: 0`, `exit_reason: "TIMEOUT"`), and pushed Step 1 latency to `6.5s–12.1s`.
+   - **Stage P1 Fix:** Replace in-process `llama-cpp-python` loading with a persistent out-of-process **`llama-server` daemon** (`LlamaServerBackend` on `127.0.0.1:8080`) that keeps model weights pinned in VRAM across episodes (`0ms` cold-start per task), and switch to **single-pass CUA inference** (generating thought + action in one completion, decoupling persona speech from the critical action path).
+
+2. **Root Cause #2: Blind Text-Only 3B Model Hallucinating `DONE` (`4/20` Tasks = `FALSE_DONE`: `L2-02`, `L2-05`, `L2-06`, `L2-07`)**
+   - `qwen2.5-3b-instruct` is a **text-only** 3B model reading noisy UIA text lists without seeing the screen.
+   - In `L2-02_receipt.json` (*Open seed.txt in Notepad and append ' - Approved'*), the agent double-clicked `Open Folder as Workspace...` in Notepad++, double-clicked its own Companion Dock speech bubble, double-clicked `File`, and emitted `DONE` on Step 4!
+   - In `L2-06_receipt.json` (*Close the error dialog and then open Notepad*), the agent completely ignored the modal `ParasiteAI Benchmark Alert` dialog, clicked `File -> Close Ctrl+W` inside a background Notepad++ window, and emitted `DONE` on Step 5!
+   - **Stage P1 / P2 Fix:** Upgrade the brain to a true vision-language computer-use model (**`UI-TARS-1.5-7B`** with `--mmproj`) that directly perceives the desktop screenshot, and enforce pre-`DONE` state verification in Stage P2.
+
+3. **Root Cause #3: Self-UI Grounding Pollution & App Name Collisions (`L1-03`, `L1-10`, `L2-02`, `L2-06`)**
+   - **Self-UI Clicking:** In `L2-02` Step 2, `ScreenGrounder` indexed ParasiteAI's own `CompanionDock` window (`target_label: "Ah, looking at the scene, I see Discord is active..."` at `[204, 120]`), and the agent double-clicked its own UI!
+   - **App Collisions (`Notepad++` vs `Notepad`, `Paint.NET` vs `Paint`):**
+     - In `L1-03_receipt.json` (*Open Paint*), the agent saw a desktop shortcut `paint.net` (`[37, 710]`) and launched `paintdotnet.exe` instead of Windows Paint (`mspaint.exe`).
+     - In `L1-10_receipt.json` and `L2-02_receipt.json`, the agent clicked taskbar icon `Notepad++` (`notepad++.exe`) instead of Windows `Notepad` (`notepad.exe`).
+   - **Stage P1 Fix:** Filter out ParasiteAI's own process ID (`os.getpid()`) and window titles (`CompanionDock`, `GhostHUD`) inside `ScreenGrounder.ground()`, and enforce exact system app disambiguation (`notepad.exe` vs `notepad++.exe`, `mspaint.exe` vs `paintdotnet.exe`) during app resolution.
+
+4. **Root Cause #4: Unhandled Pydantic `ActionPlan` Enum Crashes on Hallucinated Verbs (`2/20` Tasks = `ERROR`: `L1-10`, `L3-01`)**
+   - In `L1-10_receipt.json` (Step 3), the model emitted `"action": "SELECT"`.
+   - In `L3-01_receipt.json` (Step 2), the model emitted `"action": "SELECT MenuItem"`.
+   - Because `ActionPlan` strictly requires one of `'CLICK'`, `'DOUBLE_CLICK'`, `'RIGHT_CLICK'`, `'CLICK_AND_TYPE'`, `'TYPE'`, `'HOTKEY'`, `'SCROLL'`, `'MINIMIZE_WINDOW'`, `'CLOSE_WINDOW'`, `'WAIT'`, `'PANIC'`, `'OFFLOAD_WEB_AI'`, `'DONE'`, `'RUN_CLI_COMMAND'`, the raw Pydantic `ValidationError` crashed the episode (`exit_reason: "ERROR"`).
+   - **Stage P1 Fix:** Implement the native `UI-TARS-1.5-7B` action output parser (`click(start_box=...)`, `left_double(...)`, `right_single(...)`, `type(content=...)`, `hotkey(key=...)`, `scroll(...)`, `wait()`, `finished()`) plus verb normalization (`SELECT*` -> `CLICK`) and graceful retry on malformed model outputs so a single bad token never crashes an episode.
+
+5. **Root Cause #5: Brittle `dual_mind.py` Heuristic Override Loops (`L1-04_receipt.json`)**
+   - In `L1-04` (*Open Notepad and type 'Benchmark Alpha Test 42'*), Step 1 pressed `enter`, Step 2 pressed `win` (opening the Start menu), and Steps 3, 4, and 5 spammed `CLOSE_WINDOW` three times in a row until `MAX_STEPS`!
+   - **Stage P1 / P2 Fix:** Bypass legacy `dual_mind.py` heuristic overrides when running the CUA pipeline so the grounded VLM + clean resolver drive actions directly.
 
 ---
 
-## 5. Key File Index
+## 4. Stage P1 Architecture Blueprint & Proposed Stint Map
 
-| File Path | Description |
+**Stage P1 Goal:** Replace the slow, blind in-process 3B text model (`llama-cpp-python` + `qwen2.5-3b-instruct`) with a persistent out-of-process **`llama-server`** hosting a fine-tuned Vision-Language Computer-Use Agent (**`UI-TARS-1.5-7B`** GGUF + `mmproj`), wired into a fast single-pass multimodal client with self-UI filtering and crash-proof action parsing.
+
+### Proposed Stage P1 Stints (To Be Planned One by One via `/plan`)
+
+1. **Stint P1.1 — Persistent `llama-server` Supervisor & GPU Memory Governance**
+   - Acquire/configure `llama-server.exe` (CUDA 12 build) and `UI-TARS-1.5-7B` GGUF + `mmproj` weights in `models/` (sized to ~4.8–5.3 GB total VRAM on Windows 10 RTX 4060).
+   - Implement `LlamaServerBackend` & persistent daemon lifecycle in `parasite_ai/mind/brain_manager.py` (attaching to an already-running `127.0.0.1:8080` `/health` server across benchmark subprocesses so per-task cold start drops to **0ms**).
+   - Verify live VRAM footprint and zero WDDM PCIe spillover using `scripts/check_gpu_governance.py`.
+
+2. **Stint P1.2 — Multimodal CUA Client & Crash-Proof `UI-TARS` Action Parser**
+   - Implement OpenAI-compatible multimodal `/v1/chat/completions` vision payload formatting (downscaled desktop screenshot + prompt/history) in `LlamaServerBackend`.
+   - Build `parasite_ai/mind/uitars_parser.py` translating native UI-TARS outputs (`Thought: ... Action: click(start_box='(x,y)')`, `type(content='...')`, `hotkey(key='...')`, `finished()`) and normalized `1000x1000` / pixel coordinates into `ActionPlan` with hybrid UIA coordinate snapping (`vlm_grounder.py`).
+   - Add defensive verb normalization (`SELECT` / `SELECT MenuItem` -> `CLICK`) and fallback `WAIT` recovery so malformed LLM tokens never raise an unhandled Pydantic `ValidationError`.
+
+3. **Stint P1.3 — Single-Pass CUA Execution Path, Self-UI Filtering & App Disambiguation**
+   - Decouple Pass 1 Persona monologue from the critical step loop: extract `Thought:` directly from the single-pass UI-TARS response for `CompanionDock` speech/thought display, cutting LLM calls per step from **2 to 1** (targeting median step latency **`<= 5.0s`**).
+   - Update `ScreenGrounder.ground()` (`parasite_ai/vision/grounding.py`) to exclude ParasiteAI's own PID (`os.getpid()`) and overlay windows so the agent never clicks its own `CompanionDock`.
+   - Harden system app launch disambiguation so `"Open Notepad"` resolves to Windows `notepad.exe` (not `notepad++.exe`) and `"Open Paint"` resolves to `mspaint.exe` (not `paintdotnet.exe`).
+
+4. **Stint P1.4 — Stage P1 Benchmark Validation (`stage_p1` vs `baseline_p0`)**
+   - Create `run_baseline_p1.bat` (pre-warming `llama-server` before launching `benchmarks.run_benchmark --output-name stage_p1 --resume --max-steps-cap 5`).
+   - Execute the 20-task Windows 10 benchmark suite and compare `stage_p1.md` against `baseline_p0.md` on L1/L2 pass rates, False-DONE rate, cold-start timeouts (target: `0`), and median step latency (target: `<= 5.0s`).
+
+---
+
+## 5. Key Repository Reference Index
+
+| File Path | Role |
 | :--- | :--- |
-| `C:\ParasiteAI\config.yaml` | Master configuration (`brain.mode: "local_llm"` default). |
-| `C:\ParasiteAI\launch_parasite.bat` | Windows batch launcher running `uv run python main.py %*`. |
-| `C:\ParasiteAI\CHANGELOG.md` | Formal project changelog adhering to Keep a Changelog. |
-| `C:\ParasiteAI\parasite_ai\mind\dual_mind.py` | Core dual-mind orchestrator (PersonaEngine + ActionDispatcher). |
-| `C:\ParasiteAI\parasite_ai\mind\resolver.py` | Generic 3-tier application launcher and UI resolver. |
-| `C:\ParasiteAI\parasite_ai\mind\plan.py` | `LivingPlan`, `PlanStep`, and consultation schemas. |
-| `C:\ParasiteAI\parasite_ai\vision\foveated.py` | 1:1 cursor foveal crop and 64-bit `dHash` change gating. |
-| `C:\ParasiteAI\parasite_ai\vision\vlm_grounder.py` | Qwen2.5-VL bounding box parser and coordinate snapper. |
-| `C:\ParasiteAI\parasite_ai\vision\capture.py` | MSS/PIL screen capturer with multi-monitor virtual bounds. |
-| `C:\ParasiteAI\parasite_ai\safety\panic.py` | Debounced corner slam and panic hotkey coordinator. |
-| `C:\ParasiteAI\parasite_ai\safety\interrupt_guard.py` | Low-level Win32 hardware touch preemption (<2ms). |
+| `C:\ParasiteAI\.agents\rules\strict_stint_cadence.md` | **Mandatory Workspace Rule:** 1 stint per turn, plan approval gate, post-stint walkthrough gate. |
+| `C:\ParasiteAI\PROJECT.md` | Canonical architecture, Decisions D1–D6, Stage P0–P4 roadmap, and subsystem contracts. |
+| `C:\ParasiteAI\GATE_STATUS.md` | Official Stage P0 stint audit & `baseline_p0` scorecard vs. Alpha Gate targets. |
+| `C:\ParasiteAI\benchmarks\results\baseline_p0.md` | Human-readable 20-task Stage P0 empirical baseline report. |
+| `C:\ParasiteAI\benchmarks\results\baseline_p0.json` | Full JSON telemetry & per-task failure modes for `baseline_p0`. |
+| `C:\ParasiteAI\benchmarks\suite.yaml` | 20-task Windows 10 benchmark suite definition (v1.1). |
+| `C:\ParasiteAI\benchmarks\verifiers.py` | 7 pre-task setup hooks & 12 live Windows 10 OS ground-truth verifiers. |
+| `C:\ParasiteAI\benchmarks\run_benchmark.py` | Hands-off benchmark runner with pre-flight sandbox guard, `--resume`, and `--max-steps-cap`. |
+| `C:\ParasiteAI\scripts\check_gpu_governance.py` | RTX 4060 VRAM ceiling (`6500 MB`) and Windows 10 WDDM spillover governance script. |
+| `C:\ParasiteAI\parasite_ai\mind\brain_manager.py` | Local model manager (target for `LlamaServerBackend` in Stint P1.1). |
+| `C:\ParasiteAI\parasite_ai\mind\dual_mind.py` | Cognitive pipeline & `ActionDispatcher` (target for single-pass CUA path in P1.2–P1.3). |
+| `C:\ParasiteAI\parasite_ai\vision\grounding.py` | UIA + RapidOCR screen grounder (target for self-PID exclusion in P1.3). |
 
 ---
 
-## 6. Ready-to-Paste New Chat Bootstrap Prompt
+## 6. Ready-to-Paste New Session Bootstrap Prompt (Stage P1)
 
-Copy and paste the exact block below into the new chat window to immediately resume with complete alignment:
+Copy and paste the exact block below into a new chat session to start Stage P1 planning immediately:
 
 ```markdown
-Hello Antigravity. I am resuming work on ParasiteAI.
+Hello Antigravity. We are starting Stage P1 of ParasiteAI on Windows 10.
 
-Please review our master handoff document at:
-C:\ParasiteAI\HANDOFF.md (and the architectural blueprint in the artifact directory).
+Please read the following files first to load our complete context, architectural invariants (D1-D6), and empirical Stage P0 baseline findings:
+1. `C:\ParasiteAI\.agents\rules\strict_stint_cadence.md`
+2. `C:\ParasiteAI\HANDOFF.md`
+3. `C:\ParasiteAI\PROJECT.md`
+4. `C:\ParasiteAI\GATE_STATUS.md`
+5. `C:\ParasiteAI\benchmarks\results\baseline_p0.md`
 
 Key Context Summary:
-1. Workspace: C:\ParasiteAI (Python 3.12 via uv on Windows 11).
-2. Hardware: RTX 4060 (8 GB VRAM), Dual-Monitor (3840x1080 @ 100% DPI).
-3. Status: Phase 1, Phase 2, & Phase 3 are 100% COMPLETE & CERTIFIED (877 / 877 tests passing).
-4. Safety & Invariants: Sub-2ms touch preemption, Ctrl+Alt+K hard kill, brain.mode: "local_llm", strict anti-hardcoding rule (no app-specific branching).
-5. Immediate Task: Proceed directly to Phase 4:
-   - 4A: Structured Brief Formatter & Balanced-Brace JSON Parser for strategic consultation.
-   - 4B: Real-time dynamic contingency branching in DualMindPipeline.
+- Host: Windows 10 (64-bit), NVIDIA GeForce RTX 4060 (8,188 MiB VRAM; ~5,700-6,300 MiB free after Windows 10 desktop compositing; 6,500 MB ceiling).
+- Stage P0 is 100% complete (`baseline_p0` scored 5.0% [1/20] pass rate, 20.0% [4/20] False-DONE rate, 5.986s median step latency, and 5 subprocess cold-start timeouts).
+- Strictly follow `.agents/rules/strict_stint_cadence.md` (one stint at a time, plan approval gate before any code changes, result-oriented OS verification).
 
-Please confirm you have read the handoff file, verify test suite status, and outline your execution steps for Phase 4.
+Let's begin with `/plan p1.1` (Persistent `llama-server` Supervisor, `UI-TARS-1.5-7B` Model Provisioning & GPU Memory Governance).
 ```

@@ -11,12 +11,13 @@ from __future__ import annotations
 import collections
 from enum import Enum
 import logging
+from pathlib import Path
 import threading
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +271,8 @@ class ActionType(str, Enum):
     TYPE = "TYPE"
     HOTKEY = "HOTKEY"
     SCROLL = "SCROLL"
+    MINIMIZE_WINDOW = "MINIMIZE_WINDOW"
+    CLOSE_WINDOW = "CLOSE_WINDOW"
     WAIT = "WAIT"
     PANIC = "PANIC"
     OFFLOAD_WEB_AI = "OFFLOAD_WEB_AI"
@@ -285,11 +288,56 @@ INTERACTIVE_ACTION_TYPES: Set[ActionType] = {
     ActionType.TYPE,
     ActionType.HOTKEY,
     ActionType.SCROLL,
+    ActionType.MINIMIZE_WINDOW,
+    ActionType.CLOSE_WINDOW,
+}
+
+# Mapping of common LLM verb variations & synonyms to canonical ActionType enums
+VERB_SYNONYMS: Dict[str, ActionType] = {
+    # Click variants
+    "SELECT": ActionType.CLICK,
+    "SELECT MENUITEM": ActionType.CLICK,
+    "SELECT_MENUITEM": ActionType.CLICK,
+    "LEFT_CLICK": ActionType.CLICK,
+    "TAP": ActionType.CLICK,
+    "MOUSE_CLICK": ActionType.CLICK,
+    "CLICK_ELEMENT": ActionType.CLICK,
+    "CHOOSE": ActionType.CLICK,
+    # Double click
+    "DOUBLE_TAP": ActionType.DOUBLE_CLICK,
+    "DBLCLICK": ActionType.DOUBLE_CLICK,
+    "LEFT_DOUBLE": ActionType.DOUBLE_CLICK,
+    "DOUBLECLICK": ActionType.DOUBLE_CLICK,
+    # Right click
+    "RIGHT_TAP": ActionType.RIGHT_CLICK,
+    "CONTEXT_CLICK": ActionType.RIGHT_CLICK,
+    "RIGHT_SINGLE": ActionType.RIGHT_CLICK,
+    "RIGHTCLICK": ActionType.RIGHT_CLICK,
+    # Type variants
+    "TYPE_TEXT": ActionType.TYPE,
+    "INPUT": ActionType.TYPE,
+    "WRITE": ActionType.TYPE,
+    # Hotkey variants
+    "PRESS": ActionType.HOTKEY,
+    "KEY": ActionType.HOTKEY,
+    "KEY_PRESS": ActionType.HOTKEY,
+    "KEYPRESS": ActionType.HOTKEY,
+    "SHORTCUT": ActionType.HOTKEY,
+    # Done variants
+    "FINISH": ActionType.DONE,
+    "FINISHED": ActionType.DONE,
+    "COMPLETE": ActionType.DONE,
+    "COMPLETED": ActionType.DONE,
+    "STOP": ActionType.DONE,
+    # Wait variants
+    "PAUSE": ActionType.WAIT,
+    "SLEEP": ActionType.WAIT,
+    "IDLE": ActionType.WAIT,
 }
 
 
 class ActionPlan(BaseModel):
-    """Structured action command produced by Pass 2 Action Planner."""
+    """Structured action command produced by Pass 2 Action Planner or UI-TARS Parser."""
     model_config = ConfigDict(extra="ignore", validate_default=True)
 
     action: ActionType = ActionType.WAIT
@@ -297,12 +345,65 @@ class ActionPlan(BaseModel):
     coordinates: Optional[Tuple[int, int]] = Field(default=None, description="Explicit [x, y] coordinates.")
     text: Optional[str] = Field(default=None, description="Text string for typing.")
     submit: bool = Field(default=False, description="Whether to send Enter after typing.")
+    clear_first: bool = Field(default=True, description="Whether to clear existing text before typing.")
     keys: Optional[List[str]] = Field(default=None, description="Key list for hotkey chords.")
     clicks: int = Field(default=1, ge=1, le=5)
     scroll_amount: int = Field(default=0, description="Wheel clicks (positive=up, negative=down).")
     wait_ms: int = Field(default=500, ge=0, le=30000)
     reasoning: str = Field(default="", description="Planner justification.")
     cli_command: Optional[str] = Field(default=None, description="CLI command string for headless execution.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_null_fields(cls, data: Any) -> Any:
+        """Coerces explicit null fields and normalizes verb synonyms from LLM output to valid ActionPlan."""
+        if isinstance(data, dict):
+            cleaned = dict(data)
+            defaults: Dict[str, Any] = {
+                "action": ActionType.WAIT,
+                "submit": False,
+                "clear_first": True,
+                "clicks": 1,
+                "scroll_amount": 0,
+                "wait_ms": 500,
+                "reasoning": "",
+            }
+            for k, default_val in defaults.items():
+                if k in cleaned and cleaned[k] is None:
+                    cleaned[k] = default_val
+
+            # Handle and normalize action string
+            raw_act = cleaned.get("action")
+            if isinstance(raw_act, str):
+                act_norm = raw_act.strip().upper()
+                # 1. Direct ActionType match
+                matched_action: Optional[ActionType] = None
+                for member in ActionType:
+                    if act_norm == member.value:
+                        matched_action = member
+                        break
+                # 2. Synonym table lookup
+                if matched_action is None:
+                    if act_norm in VERB_SYNONYMS:
+                        matched_action = VERB_SYNONYMS[act_norm]
+                    elif act_norm.startswith("SELECT "):
+                        matched_action = ActionType.CLICK
+                # 3. Graceful fallback on unrecognized verb
+                if matched_action is not None:
+                    cleaned["action"] = matched_action
+                else:
+                    logger.warning("Unrecognized ActionPlan verb '%s'; coercing to ActionType.WAIT", raw_act)
+                    cleaned["action"] = ActionType.WAIT
+                    existing_reason = cleaned.get("reasoning", "")
+                    cleaned["reasoning"] = f"{existing_reason} [Unrecognized verb: {raw_act}]".strip()
+
+            # Also handle string booleans like "false"/"true" if emitted by small models
+            for bool_key in ("submit", "clear_first"):
+                val = cleaned.get(bool_key)
+                if isinstance(val, str):
+                    cleaned[bool_key] = val.strip().lower() in ("true", "1", "yes")
+            return cleaned
+        return data
 
 
 class DiffResult(BaseModel):
@@ -336,6 +437,99 @@ class StepRecord(BaseModel):
     is_strike: bool = False
     consecutive_strikes: int = 0
     tier_level: CadenceTier = Field(default=CadenceTier.TIER_1_LOCAL, description="Active escalation tier level")
+
+    def to_summary(self, duration_sec: float = 0.0) -> StepRecordSummary:
+        """Projects this detailed step record into a compact summary for episode receipts."""
+        label = None
+        if self.target_info:
+            label = self.target_info.get("label") or self.target_info.get("name")
+        return StepRecordSummary(
+            step_id=self.step_id,
+            action_type=self.action.action.value,
+            target_id=self.action.target_id,
+            target_label=label,
+            coordinates=self.action.coordinates,
+            text=self.action.text,
+            keys=self.action.keys,
+            success=self.success,
+            screen_diff=self.screen_diff,
+            error_message=self.error_message,
+            duration_sec=duration_sec,
+        )
+
+
+class StepRecordSummary(BaseModel):
+    """Compact summary of a single action step for episode receipt telemetry."""
+    model_config = ConfigDict(extra="ignore")
+
+    step_id: int
+    action_type: str
+    target_id: Optional[int] = None
+    target_label: Optional[str] = None
+    coordinates: Optional[Tuple[int, int]] = None
+    text: Optional[str] = None
+    keys: Optional[List[str]] = None
+    success: bool
+    screen_diff: float
+    error_message: Optional[str] = None
+    duration_sec: float = 0.0
+
+
+class EpisodeReceipt(BaseModel):
+    """Machine-readable receipt certifying the final outcome and metrics of a goal episode."""
+    model_config = ConfigDict(extra="ignore")
+
+    goal: str
+    success: bool
+    claimed_done: bool = False
+    total_steps: int
+    max_steps: int = 15
+    duration_sec: float
+    exit_reason: str  # "DONE", "MAX_STEPS", "PANIC", "LOOP_STAGNATION", "ERROR", "TIMEOUT"
+    step_latencies_sec: List[float] = Field(default_factory=list)
+    total_strikes: int = 0
+    highest_tier_reached: str = "TIER_1_LOCAL"
+    hardware_interrupt_count: int = 0
+    final_active_window: Optional[Dict[str, str]] = None
+    steps: List[StepRecordSummary] = Field(default_factory=list)
+    error: Optional[str] = None
+    timestamp: float = Field(default_factory=time.time)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_claimed_done(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "claimed_done" not in data:
+                # If model exited with DONE or success is True, claimed_done is True
+                exit_reason = data.get("exit_reason", "")
+                data["claimed_done"] = (exit_reason == "DONE") or bool(data.get("success", False))
+        return data
+
+    @property
+    def terminal_reason(self) -> str:
+        return self.exit_reason
+
+    @property
+    def steps_executed(self) -> int:
+        return self.total_steps
+
+    @property
+    def total_duration_sec(self) -> float:
+        return self.duration_sec
+
+    @property
+    def step_trace(self) -> List[StepRecordSummary]:
+        return self.steps
+
+    def to_json(self, indent: int = 2) -> str:
+        """Serializes receipt to indented JSON string."""
+        return self.model_dump_json(indent=indent)
+
+    def save(self, path: Union[str, Path]) -> None:
+        """Writes receipt to specified file path, creating parent directories as needed."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(self.to_json(), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

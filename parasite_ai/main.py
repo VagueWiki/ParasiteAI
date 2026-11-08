@@ -49,6 +49,34 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--goal", type=str, default=None, help="Initial goal to queue at startup.")
     parser.add_argument(
+        "--monitor-index",
+        dest="monitor_index",
+        type=int,
+        default=None,
+        help="Target monitor index (0 = all monitors, 1 = primary/left monitor, 2 = secondary monitor).",
+    )
+    parser.add_argument(
+        "--auto-exit-on-complete",
+        dest="auto_exit_on_complete",
+        action="store_true",
+        default=False,
+        help="Automatically exit application after completing the initial --goal episode.",
+    )
+    parser.add_argument(
+        "--episode-report",
+        dest="episode_report",
+        type=str,
+        default=None,
+        help="Path to write machine-readable JSON episode receipt.",
+    )
+    parser.add_argument(
+        "--max-steps",
+        dest="max_steps",
+        type=int,
+        default=15,
+        help="Maximum cognitive steps per goal episode.",
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         default=None,
@@ -89,6 +117,10 @@ def setup_logging(
     console_level = logging.DEBUG if debug else getattr(logging, config.system.log_level.upper(), logging.INFO)
     root_logger.setLevel(logging.DEBUG)
 
+    # Suppress verbose third-party COM/HTTP debug log flooding
+    for noisy_logger in ("comtypes", "comtypes._post_coinit", "urllib3", "httpx", "httpcore", "PIL"):
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
     console_formatter = logging.Formatter(
         fmt="%(asctime)s [%(levelname)-7s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -101,6 +133,21 @@ def setup_logging(
     log_path = Path(log_file_override) if log_file_override else config.system.log_file or Path("logs/parasite_debug.log")
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Automatically archive existing non-empty debug log to a timestamped file before starting a new session
+        if log_path.exists() and log_path.stat().st_size > 0:
+            import datetime
+            import shutil
+            mtime = datetime.datetime.fromtimestamp(log_path.stat().st_mtime)
+            stamp = mtime.strftime("%I%M%p").lower()
+            archive_candidate = log_path.parent / f"{log_path.stem}{stamp}{log_path.suffix}"
+            if archive_candidate.exists():
+                stamp_sec = mtime.strftime("%I%M%S%p").lower()
+                archive_candidate = log_path.parent / f"{log_path.stem}{stamp_sec}{log_path.suffix}"
+            try:
+                shutil.copy2(log_path, archive_candidate)
+                log_path.write_text("", encoding="utf-8")
+            except Exception:
+                pass
         file_formatter = logging.Formatter(
             fmt="%(asctime)s.%(msecs)03d [%(levelname)-7s] [%(threadName)s] [%(name)s:%(funcName)s:%(lineno)d] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
@@ -153,6 +200,8 @@ class ParasiteApp:
         self.config: AppConfig = load_config(self.args.config_path)
         if self.args.brain_mode:
             self.config.brain.mode = self.args.brain_mode
+        if getattr(self.args, "monitor_index", None) is not None:
+            self.config.vision.monitor_index = int(self.args.monitor_index)
         if self.args.debug:
             self.config.system.log_level = "DEBUG"
         elif self.args.log_level:
@@ -174,7 +223,12 @@ class ParasiteApp:
             bridge=self.bridge,
             simulation_mode=self.args.headless,
             headless=self.args.headless,
+            episode_report_path=self.args.episode_report,
         )
+        self.runtime.auto_exit_on_complete = bool(getattr(self.args, "auto_exit_on_complete", False))
+        self.runtime.default_max_steps = int(getattr(self.args, "max_steps", 15))
+        self.bridge.sig_close_requested.connect(self._on_dock_close_requested)
+        self.exit_code: int = 0
 
         # 8. Instantiate CompanionDock
         self.dock = CompanionDock(
@@ -201,6 +255,7 @@ class ParasiteApp:
 
         # 10. Wire clean shutdown hooks & Qt signal handling
         self.qapp.aboutToQuit.connect(self.shutdown)
+        self.dock.sig_close_requested.connect(self._on_dock_close_requested)
         self._setup_signal_handling()
 
         # 11. Initial display setup (unless headless/dry-run)
@@ -212,6 +267,21 @@ class ParasiteApp:
         # 12. Submit initial goal if passed on CLI
         if self.args.goal:
             self.bridge.sig_goal_submitted.emit(self.args.goal)
+
+    def _on_dock_close_requested(self) -> None:
+        """Handles explicit Close button click from CompanionDock or auto-exit completion."""
+        logger.info("Application close requested. Evaluating episode outcome...")
+        if self.runtime and self.runtime.last_episode_receipt:
+            receipt = self.runtime.last_episode_receipt
+            if receipt.success:
+                self.exit_code = 0
+            elif receipt.exit_reason == "PANIC":
+                self.exit_code = 2
+            else:
+                self.exit_code = 1
+        self.shutdown()
+        if self.qapp:
+            self.qapp.quit()
 
     def _setup_signal_handling(self) -> None:
         """Sets up 200ms heartbeat timer and SIGINT/SIGTERM handlers for clean exit."""
@@ -259,7 +329,16 @@ class ParasiteApp:
 
         # Start runtime cognitive daemon and enter Qt event loop
         self.runtime.start()
-        return self.qapp.exec()
+        qt_exit = self.qapp.exec()
+        if self.runtime and self.runtime.last_episode_receipt and getattr(self.args, "auto_exit_on_complete", False):
+            receipt = self.runtime.last_episode_receipt
+            if receipt.success:
+                return 0
+            elif receipt.exit_reason == "PANIC":
+                return 2
+            else:
+                return 1
+        return self.exit_code if self.exit_code != 0 else qt_exit
 
     def shutdown(self) -> None:
         """Atomically shuts down all subsystems and cleans up resources."""

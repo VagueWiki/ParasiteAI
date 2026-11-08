@@ -95,10 +95,18 @@ explicit = true
 llama-cpp-python = { index = "llama-cpp-cu124" }
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration"]
+norecursedirs = ["tests/archive", ".venv", "models", "bin", "build", "dist"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "unit: Fast isolated unit tests (< 0.5s per test, mocked, no external dependencies)",
+    "integration: Subsystem and pipeline integration tests",
+    "adversarial: Heavy challenger, fuzzing, and concurrency stress tests",
+    "live_os: Tests manipulating real OS windows, processes, or hardware inputs",
+    "slow: Tests taking > 2.0s to execute",
+]
 addopts = "-v --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

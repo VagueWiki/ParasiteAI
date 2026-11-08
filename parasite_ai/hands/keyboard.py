@@ -469,13 +469,15 @@ class KeyboardDriver:
         cancellation_token: Optional[threading.Event] = None,
         mouse_driver: Optional[Any] = None,
         focus_delay_ms: float = 75.0,
+        clear_first: bool = True,
     ) -> bool:
         """
         Atomic focus and type sequence:
         1. Glides cursor to (x, y)
         2. Executes left click
         3. Waits focus_delay_ms (60-90ms) for caret initialization
-        4. Types text with per-key interrupt checking
+        4. Optionally clears existing text via Ctrl+A and Backspace
+        5. Types text with per-key interrupt checking
         """
         if cancellation_token and cancellation_token.is_set():
             return False
@@ -495,7 +497,18 @@ class KeyboardDriver:
         if self.backend.sleep_interruptible(focus_delay_ms / 1000.0, cancellation_token):
             return False
 
-        # Step 4: Type Text
+        # Step 4: Clear existing text if requested (e.g. Run dialog or dirty search field)
+        if clear_first:
+            if not self.hotkey("ctrl", "a", cancellation_token=cancellation_token):
+                return False
+            if self.backend.sleep_interruptible(0.02, cancellation_token):
+                return False
+            if not self.hotkey("backspace", cancellation_token=cancellation_token):
+                return False
+            if self.backend.sleep_interruptible(0.02, cancellation_token):
+                return False
+
+        # Step 5: Type Text
         return self.type_text(text, submit=submit, cancellation_token=cancellation_token)
 
     def hotkey(

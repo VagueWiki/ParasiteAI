@@ -1,0 +1,107 @@
+{
+  "goal": "Compute 25 * 4 in Calculator, write 'Total: 100' in Notepad, and save to C:\\ParasiteAI\\benchmarks\\workspace\\total.txt",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 45.204,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    10.137,
+    7.754,
+    9.832,
+    8.648,
+    8.327
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Save As",
+    "process_name": "notepad++.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "Save file \"new 7\" ?",
+      "coordinates": [
+        1006,
+        563
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 1.0,
+      "error_message": null,
+      "duration_sec": 10.137
+    },
+    {
+      "step_id": 2,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 64,
+      "target_label": "Yes",
+      "coordinates": [
+        912,
+        622
+      ],
+      "text": "Yes",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.40193236714975844,
+      "error_message": null,
+      "duration_sec": 7.754
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 7,
+      "target_label": "Save as type:",
+      "coordinates": [
+        540,
+        505
+      ],
+      "text": "All Files",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.983773837403814,
+      "error_message": null,
+      "duration_sec": 9.832
+    },
+    {
+      "step_id": 4,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 8,
+      "target_label": "Save",
+      "coordinates": [
+        791,
+        550
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.4464962121212121,
+      "error_message": null,
+      "duration_sec": 8.648
+    },
+    {
+      "step_id": 5,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 10,
+      "target_label": "Save",
+      "coordinates": [
+        791,
+        550
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.4991714015151515,
+      "error_message": null,
+      "duration_sec": 8.327
+    }
+  ],
+  "error": null,
+  "timestamp": 1794049061.5842106
+}

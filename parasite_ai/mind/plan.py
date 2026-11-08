@@ -107,8 +107,13 @@ class LivingPlan(BaseModel):
                     break
 
         next_step: Optional[PlanStep] = None
-        # First check pending steps located after current step in the execution list
-        if current_idx != -1:
+        # If current step was a prerequisite contingency step inserted after a paused PENDING step,
+        # return immediately to that paused step before advancing further down the plan.
+        if current_idx > 0 and self.steps[current_idx - 1].status == StepStatus.PENDING:
+            next_step = self.steps[current_idx - 1]
+
+        # Otherwise check pending steps located after current step in the execution list
+        if next_step is None and current_idx != -1:
             for s in self.steps[current_idx + 1:]:
                 if s.status == StepStatus.PENDING:
                     next_step = s
@@ -284,7 +289,7 @@ class GroundedCapabilityContract(BaseModel):
             "Sub-2ms physical hardware preemption: synthetic input instantly aborts if human moves physical mouse or types",
             "Instant Hard Kill (Ctrl+Alt+K / Ctrl+Alt+Q) terminates process tree in <5ms via taskkill /F /T",
             "Protected Windows: Password managers (Bitwarden, 1Password, KeePass) and UAC dialogs trigger safety pause",
-            "Strict Anti-Hardcoding: NO application-specific lookup tables (app_map = {} is strictly forbidden)",
+            "Strict Anti-Hardcoding: NO application-specific lookup tables or dictionaries (app_map = {} is strictly forbidden)",
         ]
     )
 
@@ -887,6 +892,9 @@ def check_and_insert_contingencies(
             contingency = plan.insert_stagnation_contingency(step)
 
     if contingency is not None:
+        if step.status == StepStatus.IN_PROGRESS:
+            step.status = StepStatus.PENDING
+        contingency.status = StepStatus.IN_PROGRESS
         plan.current_step_id = contingency.step_id
 
     return contingency
@@ -898,6 +906,7 @@ def verify_step_completion(
     result: ActionResult,
     screen_diff: float = 0.0,
     current_window: Optional[WindowInfo] = None,
+    elements: Optional[List[UIElement]] = None,
 ) -> bool:
     """
     Verifies completion of a PlanStep following physical action execution and visual settling.
@@ -931,7 +940,23 @@ def verify_step_completion(
         if target and current_window:
             win_title = (getattr(current_window, "title", None) or "").lower()
             proc_name = (getattr(current_window, "process_name", None) or "").lower()
-            if target in win_title or target in proc_name:
+            # Reject if active window or grounded elements indicate an error dialog, intermediate game launcher modal, or Windows Run/Explorer shell
+            from parasite_ai.mind.dual_mind import is_error_dialog_window, is_intermediate_launcher_window
+            if is_error_dialog_window(win_title, proc_name, elements):
+                return False
+            if is_intermediate_launcher_window(win_title, proc_name, step.description, target, elements):
+                return False
+            if proc_name == "explorer.exe" and not any(k in target for k in ("explorer", "folder", "file")):
+                return False
+            # Check for word-boundary or fuzzy PrecisionAppMatcher match in window title or process name
+            from parasite_ai.mind.resolver import PrecisionAppMatcher
+            target_pattern = r"\b" + re.escape(target)
+            if (
+                re.search(target_pattern, proc_name)
+                or re.search(target_pattern, win_title)
+                or PrecisionAppMatcher.score_match(win_title, target) >= 0.80
+                or PrecisionAppMatcher.score_match(proc_name, target) >= 0.80
+            ):
                 return True
             # Active window is known and does NOT match target application
             return False
@@ -946,6 +971,13 @@ def verify_step_completion(
     elif intent == StepIntent.NAVIGATE:
         if getattr(action, "action", None) == ActionType.RUN_CLI_COMMAND:
             return getattr(result, "returncode", None) == 0
+        desc_lower = (step.description or "").lower()
+        is_open_ended_play = any(
+            kw in desc_lower for kw in ("play ", "on your own", "without my input", "by yourself", "autonomously")
+        )
+        if is_open_ended_play and getattr(step, "attempts_on_current_step", 0) < 3:
+            # Open-ended gameplay / autonomous interaction requires multiple in-app steps before concluding
+            return False
         return screen_diff >= 0.02
 
     elif intent == StepIntent.INPUT_DATA:

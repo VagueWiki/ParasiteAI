@@ -129,6 +129,19 @@ class WindowGuard:
         except Exception:
             pass
 
+    def _is_desktop_locked(self) -> bool:
+        """Checks if Windows session is locked or on an inaccessible secure desktop."""
+        if os.name != "nt":
+            return False
+        try:
+            hdesk = self._user32.OpenInputDesktop(0, False, 0x0100)  # DESKTOP_SWITCHDESKTOP
+            if not hdesk:
+                return True
+            self._user32.CloseDesktop(hdesk)
+            return False
+        except Exception:
+            return False
+
     def evaluate_sensitivity(
         self,
         title: str,
@@ -174,16 +187,34 @@ class WindowGuard:
         """
         hwnd = self._user32.GetForegroundWindow()
         if not hwnd:
+            if self._is_desktop_locked():
+                return WindowInfo(
+                    hwnd=0,
+                    title="",
+                    class_name="",
+                    process_name="",
+                    process_path="",
+                    pid=0,
+                    rect=(0, 0, 0, 0),
+                    is_sensitive=True,
+                    reason="No active foreground window (hwnd == 0 / locked / desktop switch)",
+                )
+            desk_hwnd = self._user32.GetDesktopWindow() if hasattr(self._user32, "GetDesktopWindow") else 0
+            rect_tuple = (0, 0, 1920, 1080)
+            if desk_hwnd and hasattr(self._user32, "GetWindowRect"):
+                rect = wintypes.RECT()
+                self._user32.GetWindowRect(desk_hwnd, ctypes.byref(rect))
+                rect_tuple = (rect.left, rect.top, rect.right, rect.bottom)
             return WindowInfo(
-                hwnd=0,
-                title="",
-                class_name="",
-                process_name="",
+                hwnd=desk_hwnd,
+                title="Desktop",
+                class_name="#32769",
+                process_name="explorer.exe",
                 process_path="",
                 pid=0,
-                rect=(0, 0, 0, 0),
-                is_sensitive=True,
-                reason="No active foreground window (hwnd == 0 / locked / desktop switch)",
+                rect=rect_tuple,
+                is_sensitive=False,
+                reason="Interactive desktop background (no window focused)",
             )
 
         # Extract Window Title

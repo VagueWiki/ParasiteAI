@@ -128,6 +128,8 @@ class CompanionDock(QWidget):
     sig_panic_triggered = pyqtSignal()                # ()
     sig_hud_toggled = pyqtSignal(bool)                # (show_hud: bool)
     sig_brain_mode_changed = pyqtSignal(str)          # (mode: str)
+    sig_minimize_requested = pyqtSignal()             # ()
+    sig_close_requested = pyqtSignal()                # ()
 
     def __init__(
         self,
@@ -144,6 +146,8 @@ class CompanionDock(QWidget):
         self._current_mood: str = "Curious"
         self._is_paused: bool = False
         self._is_masked: bool = False
+        self._is_minimized_compact: bool = False
+        self._expanded_size: QSize = QSize(self.config.width, self.config.height)
         self._is_dragging: bool = False
         self._drag_start_pos: QPoint = QPoint()
 
@@ -180,6 +184,7 @@ class CompanionDock(QWidget):
             flags |= Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
 
         self.setWindowFlags(flags)
+        self.setWindowTitle("ParasiteAI CompanionDock")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setWindowOpacity(self.config.opacity)
 
@@ -191,6 +196,7 @@ class CompanionDock(QWidget):
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(8, 8, 8, 8)
         root_layout.setSpacing(0)
+        self.root_layout = root_layout
 
         # Outer Main Container Card
         self.main_card = QFrame(self)
@@ -200,6 +206,7 @@ class CompanionDock(QWidget):
         card_layout = QVBoxLayout(self.main_card)
         card_layout.setContentsMargins(12, 12, 12, 12)
         card_layout.setSpacing(8)
+        self.card_layout = card_layout
 
         # -------------------------------------------------------------
         # 1. Header Drag Grip & State / Mood Bar
@@ -237,12 +244,45 @@ class CompanionDock(QWidget):
         header_layout.addWidget(self.mood_pill)
         header_layout.addStretch()
 
+        self.btn_minimize = QPushButton("—", self.header_frame)
+        self.btn_minimize.setObjectName("BtnMinimize")
+        self.btn_minimize.setFixedSize(22, 22)
+        self.btn_minimize.setToolTip("Minimize / Restore Companion Dock")
+        self.btn_minimize.setStyleSheet(
+            "QPushButton { background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155; "
+            "border-radius: 4px; font-weight: bold; font-size: 9pt; padding: 0px; } "
+            "QPushButton:hover { background-color: #334155; color: #f8fafc; }"
+        )
+        self.btn_minimize.clicked.connect(self.toggle_minimize_dock)
+
+        self.btn_close = QPushButton("✕", self.header_frame)
+        self.btn_close.setObjectName("BtnClose")
+        self.btn_close.setFixedSize(22, 22)
+        self.btn_close.setToolTip("Close ParasiteAI")
+        self.btn_close.setStyleSheet(
+            "QPushButton { background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155; "
+            "border-radius: 4px; font-weight: bold; font-size: 9pt; padding: 0px; } "
+            "QPushButton:hover { background-color: #dc2626; color: #ffffff; border: 1px solid #dc2626; }"
+        )
+        self.btn_close.clicked.connect(self.close_dock)
+
+        header_layout.addWidget(self.btn_minimize)
+        header_layout.addWidget(self.btn_close)
+
         card_layout.addWidget(self.header_frame)
+
+        # Collapsible Body Container holding all cards and controls below header_frame
+        self.body_container = QWidget(self.main_card)
+        self.body_container.setObjectName("BodyContainer")
+        body_layout = QVBoxLayout(self.body_container)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        self.body_layout = body_layout
 
         # -------------------------------------------------------------
         # 2. Character Speech Bubble (Dialogue Card)
         # -------------------------------------------------------------
-        self.speech_card = QFrame(self.main_card)
+        self.speech_card = QFrame(self.body_container)
         self.speech_card.setObjectName("SpeechCard")
         self.speech_card.setStyleSheet(
             "#SpeechCard { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 8px; }"
@@ -259,12 +299,12 @@ class CompanionDock(QWidget):
 
         speech_layout.addWidget(self.sender_label)
         speech_layout.addWidget(self.dialogue_label)
-        card_layout.addWidget(self.speech_card)
+        body_layout.addWidget(self.speech_card)
 
         # -------------------------------------------------------------
         # 3. Internal Thought Stream Card
         # -------------------------------------------------------------
-        self.thought_card = QFrame(self.main_card)
+        self.thought_card = QFrame(self.body_container)
         self.thought_card.setObjectName("ThoughtCard")
         self.thought_card.setStyleSheet(
             "#ThoughtCard { background-color: #090d16; border: 1px solid #1e293b; border-radius: 6px; padding: 6px; }"
@@ -278,6 +318,7 @@ class CompanionDock(QWidget):
         self.thought_text = QPlainTextEdit(self.thought_card)
         self.thought_text.setObjectName("ThoughtText")
         self.thought_text.setReadOnly(True)
+        self.thought_text.setMinimumHeight(40)
         self.thought_text.setMaximumHeight(70)
         self.thought_text.setStyleSheet(
             "color: #94a3b8; font-style: italic; font-family: 'Consolas', 'Segoe UI', monospace; "
@@ -293,12 +334,12 @@ class CompanionDock(QWidget):
 
         if not self.config.show_thought_stream:
             self.thought_card.hide()
-        card_layout.addWidget(self.thought_card)
+        body_layout.addWidget(self.thought_card)
 
         # -------------------------------------------------------------
         # 4. Action Telemetry Card
         # -------------------------------------------------------------
-        self.telemetry_card = QFrame(self.main_card)
+        self.telemetry_card = QFrame(self.body_container)
         self.telemetry_card.setObjectName("TelemetryCard")
         self.telemetry_card.setStyleSheet(
             "#TelemetryCard { background-color: #111827; border: 1px solid #1f2937; border-radius: 6px; padding: 6px; }"
@@ -327,12 +368,12 @@ class CompanionDock(QWidget):
 
         telemetry_layout.addWidget(self.telemetry_label)
         telemetry_layout.addLayout(progress_row)
-        card_layout.addWidget(self.telemetry_card)
+        body_layout.addWidget(self.telemetry_card)
 
         # -------------------------------------------------------------
         # 5. Live Perception Preview Card
         # -------------------------------------------------------------
-        self.perception_card = QFrame(self.main_card)
+        self.perception_card = QFrame(self.body_container)
         self.perception_card.setObjectName("PerceptionCard")
         self.perception_card.setStyleSheet(
             "#PerceptionCard { background-color: #0b1120; border: 1px solid #1e293b; border-radius: 6px; padding: 4px; }"
@@ -342,7 +383,8 @@ class CompanionDock(QWidget):
         perception_layout.setSpacing(2)
 
         self.thumbnail_view = QLabel(self.perception_card)
-        self.thumbnail_view.setFixedHeight(85)
+        self.thumbnail_view.setMinimumHeight(60)
+        self.thumbnail_view.setMaximumHeight(85)
         self.thumbnail_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumbnail_view.setStyleSheet("background-color: #020617; border-radius: 4px;")
         self.thumbnail_view.setText("Live Perception Feed")
@@ -355,7 +397,7 @@ class CompanionDock(QWidget):
 
         if not self.config.show_perception_preview:
             self.perception_card.hide()
-        card_layout.addWidget(self.perception_card)
+        body_layout.addWidget(self.perception_card)
 
         # -------------------------------------------------------------
         # 6. Interactive Controls Section
@@ -366,7 +408,7 @@ class CompanionDock(QWidget):
         # Goal Input Row
         goal_row = QHBoxLayout()
         goal_row.setSpacing(4)
-        self.goal_input = QLineEdit(self.main_card)
+        self.goal_input = QLineEdit(self.body_container)
         self.goal_input.setPlaceholderText("Give Parasite a task...")
         self.goal_input.setClearButtonEnabled(True)
         self.goal_input.setStyleSheet(
@@ -376,7 +418,7 @@ class CompanionDock(QWidget):
         )
         self.goal_input.returnPressed.connect(self._on_submit_goal)
 
-        self.btn_send = QPushButton("Send", self.main_card)
+        self.btn_send = QPushButton("Send", self.body_container)
         self.btn_send.setFixedWidth(54)
         self.btn_send.setStyleSheet(
             "QPushButton { background-color: #0284c7; color: white; border: none; "
@@ -394,7 +436,7 @@ class CompanionDock(QWidget):
         action_row = QHBoxLayout()
         action_row.setSpacing(6)
 
-        self.btn_pause = QPushButton("⏸ Pause Hands", self.main_card)
+        self.btn_pause = QPushButton("⏸ Pause Hands", self.body_container)
         self.btn_pause.setStyleSheet(
             "QPushButton { background-color: #334155; color: #f8fafc; border: 1px solid #475569; "
             "border-radius: 6px; padding: 6px; font-weight: bold; font-size: 8.5pt; } "
@@ -402,7 +444,7 @@ class CompanionDock(QWidget):
         )
         self.btn_pause.clicked.connect(self._on_toggle_pause)
 
-        self.btn_panic = QPushButton("⚠ PANIC ABORT", self.main_card)
+        self.btn_panic = QPushButton("⚠ PANIC ABORT", self.body_container)
         self.btn_panic.setStyleSheet(
             "QPushButton { background-color: #dc2626; color: white; border: none; "
             "border-radius: 6px; padding: 6px; font-weight: bold; font-size: 8.5pt; } "
@@ -419,12 +461,12 @@ class CompanionDock(QWidget):
         utility_row = QHBoxLayout()
         utility_row.setSpacing(6)
 
-        self.chk_hud = QCheckBox("Show HUD Tags", self.main_card)
+        self.chk_hud = QCheckBox("Show HUD Tags", self.body_container)
         self.chk_hud.setChecked(True)
         self.chk_hud.setStyleSheet("QCheckBox { color: #94a3b8; font-size: 8pt; }")
         self.chk_hud.toggled.connect(self._on_toggle_hud)
 
-        self.combo_brain_mode = QComboBox(self.main_card)
+        self.combo_brain_mode = QComboBox(self.body_container)
         self.combo_brain_mode.addItem("Browser Offload", "browser_offload")
         self.combo_brain_mode.addItem("Local GGUF", "local_llm")
         self.combo_brain_mode.addItem("Mock / Test", "mock")
@@ -439,7 +481,8 @@ class CompanionDock(QWidget):
         utility_row.addWidget(self.combo_brain_mode)
         controls_layout.addLayout(utility_row)
 
-        card_layout.addLayout(controls_layout)
+        body_layout.addLayout(controls_layout)
+        card_layout.addWidget(self.body_container)
         root_layout.addWidget(self.main_card)
 
     def _update_card_style(self, accent_color: str) -> None:
@@ -774,6 +817,155 @@ class CompanionDock(QWidget):
         """Emits HUD overlay visibility toggle."""
         self.sig_hud_toggled.emit(checked)
 
+    @pyqtSlot(int, int)
+    @pyqtSlot(int, int, int, int)
+    def evade_coordinates(self, x: int, y: int, pad: int = 24, restore_delay_ms: int = 0) -> bool:
+        """
+        Checks if screen coordinate (x, y) falls inside CompanionDock's current bounding rectangle.
+        If so, minimizes/collapses the dock and shifts it to an alternate corner so physical
+        mouse clicks/double-clicks hit the underlying desktop icon or window cleanly.
+        Returns True if evasion was triggered.
+        """
+        frame = self.frameGeometry()
+        expanded_rect = frame.adjusted(-pad, -pad, pad, pad)
+        if not expanded_rect.contains(QPoint(x, y)):
+            return False
+
+        logger.info(
+            "CompanionDock evading click target (%d, %d) overlapping dock rect [%d, %d, %d, %d]",
+            x,
+            y,
+            frame.left(),
+            frame.top(),
+            frame.right(),
+            frame.bottom(),
+        )
+        self.minimize_dock()
+
+        # Also relocate the compact header bar to the opposite screen corner if still overlapping
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            srect = screen.availableGeometry()
+            mx = self.config.margin_x
+            my = self.config.margin_y
+            new_x = srect.x() + mx if x > (srect.x() + srect.width() // 2) else srect.x() + srect.width() - self.width() - mx
+            new_y = srect.y() + my if y > (srect.y() + srect.height() // 2) else srect.y() + srect.height() - self.height() - my
+            self.move(new_x, new_y)
+            try:
+                if sys.platform == "win32" and self.isVisible() and self.winId():
+                    import ctypes
+                    ctypes.windll.user32.SetWindowPos(
+                        int(self.winId()),
+                        0,
+                        int(new_x),
+                        int(new_y),
+                        int(self.width()),
+                        56,
+                        0x0004 | 0x0010,  # SWP_NOZORDER | SWP_NOACTIVATE
+                    )
+            except Exception:
+                pass
+
+        if restore_delay_ms > 0:
+            QTimer.singleShot(restore_delay_ms, self.restore_dock)
+        return True
+
+    @pyqtSlot()
+    def minimize_dock(self) -> None:
+        """
+        Minimizes/collapses CompanionDock into a compact 56px header bar and/or taskbar state
+        so it does not obstruct desktop icons or underlying application controls.
+        """
+        if not self._is_minimized_compact:
+            self._expanded_size = self.size()
+            self._is_minimized_compact = True
+            self.body_container.hide()
+            self.speech_card.hide()
+            self.thought_card.hide()
+            self.telemetry_card.hide()
+            self.perception_card.hide()
+            self.goal_input.hide()
+            self.btn_send.hide()
+            self.btn_pause.hide()
+            self.btn_panic.hide()
+            self.chk_hud.hide()
+            self.combo_brain_mode.hide()
+            self.root_layout.setContentsMargins(8, 4, 8, 4)
+            self.card_layout.setContentsMargins(12, 4, 12, 4)
+            self.card_layout.setSpacing(0)
+            self.main_card.setFixedHeight(48)
+            self.card_layout.activate()
+            self.root_layout.activate()
+            self.setMinimumHeight(56)
+            self.setMaximumHeight(56)
+            self.resize(self._expanded_size.width(), 56)
+            try:
+                if sys.platform == "win32" and self.isVisible() and self.winId():
+                    import ctypes
+                    ctypes.windll.user32.SetWindowPos(
+                        int(self.winId()),
+                        0,
+                        int(self.x()),
+                        int(self.y()),
+                        int(self._expanded_size.width()),
+                        56,
+                        0x0002 | 0x0004 | 0x0010,  # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+                    )
+            except Exception:
+                pass
+            self.btn_minimize.setText("□")
+            self.btn_minimize.setToolTip("Restore Companion Dock")
+        self._restore_external_focus()
+        self.sig_minimize_requested.emit()
+
+    @pyqtSlot()
+    def restore_dock(self) -> None:
+        """Restores CompanionDock from compact/minimized state to full expanded layout."""
+        if self._is_minimized_compact:
+            self._is_minimized_compact = False
+            self.root_layout.setContentsMargins(8, 8, 8, 8)
+            self.card_layout.setContentsMargins(12, 12, 12, 12)
+            self.card_layout.setSpacing(8)
+            self.main_card.setMinimumHeight(0)
+            self.main_card.setMaximumHeight(16777215)
+            self.body_container.show()
+            self.speech_card.show()
+            if self.config.show_thought_stream:
+                self.thought_card.show()
+            self.telemetry_card.show()
+            if self.config.show_perception_preview:
+                self.perception_card.show()
+            self.goal_input.show()
+            self.btn_send.show()
+            self.btn_pause.show()
+            self.btn_panic.show()
+            self.chk_hud.show()
+            self.combo_brain_mode.show()
+            self.card_layout.activate()
+            self.root_layout.activate()
+            self.setMinimumSize(300, 480)
+            self.setMaximumHeight(16777215)
+            self.resize(self._expanded_size)
+            self.btn_minimize.setText("—")
+            self.btn_minimize.setToolTip("Minimize / Restore Companion Dock")
+            self.anchor_to_screen()
+        self.showNormal()
+
+    @pyqtSlot()
+    def toggle_minimize_dock(self) -> None:
+        """Toggles between compact minimized bar and full expanded CompanionDock."""
+        if self._is_minimized_compact or self.isMinimized():
+            self.restore_dock()
+        else:
+            self.minimize_dock()
+
+    @pyqtSlot()
+    def close_dock(self) -> None:
+        """Closes CompanionDock and emits close request to shut down ParasiteAI."""
+        logger.info("Close button clicked on CompanionDock.")
+        self.sig_close_requested.emit()
+        self.close()
+
     def _on_brain_mode_changed(self, index: int) -> None:
         """Emits brain mode selection."""
         mode_data = self.combo_brain_mode.itemData(index) or self.combo_brain_mode.currentText()
@@ -794,11 +986,19 @@ class CompanionDock(QWidget):
             except (KeyError, TypeError):
                 bridge.sig_telemetry_updated.connect(self.update_telemetry, Qt.ConnectionType.QueuedConnection)
             bridge.sig_perception_updated.connect(self.update_perception_preview, Qt.ConnectionType.QueuedConnection)
+            if hasattr(bridge, "sig_dock_minimize_requested"):
+                bridge.sig_dock_minimize_requested.connect(self.minimize_dock, Qt.ConnectionType.QueuedConnection)
+            if hasattr(bridge, "sig_dock_evade_requested"):
+                bridge.sig_dock_evade_requested.connect(self.evade_coordinates, Qt.ConnectionType.QueuedConnection)
+            if hasattr(bridge, "sig_dock_restore_requested"):
+                bridge.sig_dock_restore_requested.connect(self.restore_dock, Qt.ConnectionType.QueuedConnection)
 
             self.sig_goal_submitted.connect(bridge.sig_goal_submitted)
             self.sig_pause_toggled.connect(bridge.sig_pause_toggled)
             self.sig_panic_triggered.connect(bridge.sig_panic_triggered)
             self.sig_hud_toggled.connect(bridge.sig_hud_toggled)
             self.sig_brain_mode_changed.connect(bridge.sig_brain_mode_changed)
+            if hasattr(bridge, "sig_close_requested"):
+                self.sig_close_requested.connect(bridge.sig_close_requested)
         except Exception as e:
             logger.warning(f"Failed to wire bridge to CompanionDock: {e}")

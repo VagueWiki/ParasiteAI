@@ -8,18 +8,53 @@ adaptive rate limiting.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import io
 import logging
 import sys
 import time
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from parasite_ai.mind.memory import compute_dhash, hamming_distance
 from parasite_ai.vision.capture import ScreenCapture, get_virtual_screen_bounds
 
 logger = logging.getLogger(__name__)
+
+
+def encode_image_to_data_uri(
+    image: np.ndarray,
+    max_dim: int = 640,
+    quality: int = 80,
+) -> str:
+    """
+    Encodes a numpy RGB/BGR image into a base64 JPEG data URI suitable for
+    OpenAI-compatible multimodal chat completions and llama-cpp-python MTMD/Qwen25VL handlers.
+    Resizes preserving aspect ratio so the longest side is at most `max_dim` pixels.
+    """
+    if image is None or image.size == 0:
+        return ""
+    arr = np.asarray(image)
+    if arr.ndim == 2:
+        pil_img = Image.fromarray(arr).convert("RGB")
+    elif arr.shape[2] == 4:
+        pil_img = Image.fromarray(arr[:, :, :3].astype(np.uint8), mode="RGB")
+    else:
+        pil_img = Image.fromarray(arr[:, :, :3].astype(np.uint8), mode="RGB")
+
+    w, h = pil_img.size
+    if max_dim > 0 and max(w, h) > max_dim:
+        scale = max_dim / float(max(w, h))
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        pil_img = pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR)
+
+    buf = io.BytesIO()
+    pil_img.save(buf, format="JPEG", quality=quality, optimize=True)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
 
 
 @dataclass
@@ -191,6 +226,70 @@ class FoveatedVisionEngine:
         screen_rel_x = int(macro_x / max(1e-6, frame.macro_scale_x))
         screen_rel_y = int(macro_y / max(1e-6, frame.macro_scale_y))
         return (vx + screen_rel_x, vy + screen_rel_y)
+
+    def build_vlm_composite(
+        self,
+        frame: FoveatedFrame,
+        elements: Optional[List[Any]] = None,
+        use_fovea: bool = True,
+        max_dim: int = 640,
+        quality: int = 80,
+    ) -> str:
+        """
+        Builds a Set-of-Mark annotated image data URI from the FoveatedFrame for VLM inference.
+        Overlays [#ID] tags onto the foveal active-window crop (or macro desktop overview)
+        so the VLM can directly read custom-rendered/console text and visual UI controls.
+        """
+        base_img = frame.fovea_image if (use_fovea and frame.fovea_image is not None and frame.fovea_image.size > 0) else frame.macro_image
+        if base_img is None or base_img.size == 0:
+            return ""
+
+        arr = np.asarray(base_img)
+        if arr.ndim == 2:
+            pil_img = Image.fromarray(arr).convert("RGB")
+        else:
+            pil_img = Image.fromarray(arr[:, :, :3].astype(np.uint8), mode="RGB")
+
+        if elements:
+            draw = ImageDraw.Draw(pil_img)
+            fx, fy, fw, fh = frame.fovea_rect
+            vx, vy, _, _ = get_virtual_screen_bounds()
+            for elem in elements[:40]:
+                eid = getattr(elem, "id", None) if not isinstance(elem, dict) else elem.get("id")
+                ex = getattr(elem, "x", None) if not isinstance(elem, dict) else elem.get("x")
+                ey = getattr(elem, "y", None) if not isinstance(elem, dict) else elem.get("y")
+                ew = getattr(elem, "width", 0) if not isinstance(elem, dict) else elem.get("width", 0)
+                eh = getattr(elem, "height", 0) if not isinstance(elem, dict) else elem.get("height", 0)
+                if eid is None or ex is None or ey is None:
+                    continue
+                if use_fovea:
+                    rx = int(ex - fx)
+                    ry = int(ey - fy)
+                    rw = int(ew)
+                    rh = int(eh)
+                else:
+                    rx = int((ex - vx) * frame.macro_scale_x)
+                    ry = int((ey - vy) * frame.macro_scale_y)
+                    rw = int(ew * frame.macro_scale_x)
+                    rh = int(eh * frame.macro_scale_y)
+
+                if rx + rw < 0 or ry + rh < 0 or rx >= pil_img.width or ry >= pil_img.height:
+                    continue
+
+                x1 = max(0, min(rx, pil_img.width - 1))
+                y1 = max(0, min(ry, pil_img.height - 1))
+                x2 = max(x1 + 1, min(rx + max(4, rw), pil_img.width - 1))
+                y2 = max(y1 + 1, min(ry + max(4, rh), pil_img.height - 1))
+                draw.rectangle([x1, y1, x2, y2], outline=(0, 229, 255), width=1)
+                tag = f"#{eid}"
+                tw = max(14, len(tag) * 6 + 4)
+                th = 12
+                tx = max(0, min(x1, pil_img.width - tw))
+                ty = max(0, y1 - th if y1 >= th else y1)
+                draw.rectangle([tx, ty, tx + tw, ty + th], fill=(10, 14, 23), outline=(0, 229, 255))
+                draw.text((tx + 2, ty + 1), tag, fill=(0, 255, 200))
+
+        return encode_image_to_data_uri(np.array(pil_img), max_dim=max_dim, quality=quality)
 
     def reset_history(self) -> None:
         """Clears cached dHash and frame state."""

@@ -1,0 +1,326 @@
+version: "1.1"
+description: "ParasiteAI 20-Task Windows 10 Desktop Benchmark Suite + 3 Stretch Probes"
+target_hardware: "RTX 4060 8GB / Windows 10"
+
+tasks:
+  # -------------------------------------------------------------------------
+  # Level 1 (L1): Single-App Launch, Window Control & Basic Input (10 Tasks)
+  # -------------------------------------------------------------------------
+  - id: "L1-01"
+    tier: "Tier_A"
+    level: "L1"
+    name: "Launch Notepad"
+    prompt: "Open Notepad"
+    max_steps: 5
+    timeout_sec: 45
+    setup: "clean_workspace"
+    verifier: "verify_process_and_window"
+    params:
+      process_name: "notepad.exe"
+      window_title_keywords: ["Notepad"]
+
+  - id: "L1-02"
+    tier: "Tier_A"
+    level: "L1"
+    name: "Launch Calculator"
+    prompt: "Open Calculator"
+    max_steps: 5
+    timeout_sec: 45
+    setup: "clean_workspace"
+    verifier: "verify_process_and_window"
+    params:
+      process_name: "CalculatorApp.exe"
+      window_title_keywords: ["Calculator"]
+
+  - id: "L1-03"
+    tier: "Tier_A"
+    level: "L1"
+    name: "Launch Paint"
+    prompt: "Open Paint"
+    max_steps: 5
+    timeout_sec: 45
+    setup: "clean_workspace"
+    verifier: "verify_process_and_window"
+    params:
+      process_name: "mspaint.exe"
+      window_title_keywords: ["Paint"]
+
+  - id: "L1-04"
+    tier: "Tier_B"
+    level: "L1"
+    name: "Type Exact Token in Notepad"
+    prompt: "Open Notepad and type 'Benchmark Alpha Test 42'"
+    max_steps: 8
+    timeout_sec: 60
+    setup: "clean_workspace"
+    verifier: "verify_window_contains_text"
+    params:
+      process_name: "notepad.exe"
+      expected_text: "Benchmark Alpha Test 42"
+
+  - id: "L1-05"
+    tier: "Tier_B"
+    level: "L1"
+    name: "Compose Greeting in Notepad (No Goal Echo)"
+    prompt: "Open Notepad and write a short two-sentence greeting"
+    max_steps: 8
+    timeout_sec: 60
+    setup: "clean_workspace"
+    verifier: "verify_notepad_composed_text"
+    params:
+      min_chars: 25
+      forbid_substrings:
+        - "write a short two-sentence greeting"
+        - "open notepad and write"
+
+  - id: "L1-06"
+    tier: "Tier_B"
+    level: "L1"
+    name: "Close Pre-Opened Notepad"
+    prompt: "Close Notepad"
+    max_steps: 5
+    timeout_sec: 45
+    setup: "open_notepad"
+    verifier: "verify_process_terminated"
+    params:
+      process_name: "notepad.exe"
+
+  - id: "L1-07"
+    tier: "Tier_B"
+    level: "L1"
+    name: "Minimize Pre-Opened Notepad"
+    prompt: "Minimize Notepad"
+    max_steps: 5
+    timeout_sec: 45
+    setup: "open_notepad"
+    verifier: "verify_window_minimized"
+    params:
+      process_name: "notepad.exe"
+
+  - id: "L1-08"
+    tier: "Tier_B"
+    level: "L1"
+    name: "Compute Multiplication in Calculator"
+    prompt: "Open Calculator and compute 7 * 8"
+    max_steps: 8
+    timeout_sec: 60
+    setup: "clean_workspace"
+    verifier: "verify_calculator_result"
+    params:
+      expected_value: "56"
+
+  - id: "L1-09"
+    tier: "Tier_A"
+    level: "L1"
+    name: "Launch File Explorer"
+    prompt: "Open File Explorer"
+    max_steps: 5
+    timeout_sec: 45
+    setup: "clean_workspace"
+    verifier: "verify_explorer_window_open"
+    params: {}
+
+  - id: "L1-10"
+    tier: "Tier_B"
+    level: "L1"
+    name: "Type and Copy Text to Clipboard in Notepad"
+    prompt: "Open Notepad, type 'Draft', select all text, and copy it to the clipboard"
+    max_steps: 10
+    timeout_sec: 60
+    setup: "clean_workspace"
+    verifier: "verify_clipboard_contains"
+    params:
+      expected_text: "Draft"
+
+  # -------------------------------------------------------------------------
+  # Level 2 (L2): File Persistence, Cross-App & File Management (7 Tasks)
+  # -------------------------------------------------------------------------
+  - id: "L2-01"
+    tier: "Tier_C"
+    level: "L2"
+    name: "Save Notepad Document to Workspace File"
+    prompt: "Open Notepad, type 'Saved Note 101', and save it as C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt"
+    max_steps: 12
+    timeout_sec: 75
+    setup: "clean_workspace"
+    verifier: "verify_file_exists_and_content"
+    params:
+      file_path: "benchmarks/workspace/note101.txt"
+      expected_content: "Saved Note 101"
+
+  - id: "L2-02"
+    tier: "Tier_C"
+    level: "L2"
+    name: "Open Seed File and Append Text"
+    prompt: "Open C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt in Notepad and append ' - Approved' to the end"
+    max_steps: 12
+    timeout_sec: 75
+    setup: "seed_workspace_file"
+    setup_params:
+      filename: "seed.txt"
+      content: "Project Proposal v1"
+    verifier: "verify_window_or_file_contains"
+    params:
+      file_path: "benchmarks/workspace/seed.txt"
+      process_name: "notepad.exe"
+      expected_substrings:
+        - "Project Proposal v1"
+        - "- Approved"
+
+  - id: "L2-03"
+    tier: "Tier_C"
+    level: "L2"
+    name: "Cross-App Calculator Result to Notepad"
+    prompt: "Open Calculator, compute 144 / 12, and type the result into the open Notepad window"
+    max_steps: 12
+    timeout_sec: 75
+    setup: "open_notepad"
+    verifier: "verify_window_contains_text"
+    params:
+      process_name: "notepad.exe"
+      expected_text: "12"
+
+  - id: "L2-04"
+    tier: "Tier_C"
+    level: "L2"
+    name: "Rename File in Workspace"
+    prompt: "Open File Explorer to C:\\ParasiteAI\\benchmarks\\workspace and rename old_name.txt to new_name.txt"
+    max_steps: 12
+    timeout_sec: 75
+    setup: "seed_rename_file"
+    setup_params:
+      old_name: "old_name.txt"
+      content: "Rename target content"
+    verifier: "verify_file_renamed"
+    params:
+      old_path: "benchmarks/workspace/old_name.txt"
+      new_path: "benchmarks/workspace/new_name.txt"
+
+  - id: "L2-05"
+    tier: "Tier_C"
+    level: "L2"
+    name: "Create Directory in Workspace via File Explorer"
+    prompt: "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer"
+    max_steps: 12
+    timeout_sec: 75
+    setup: "clean_workspace"
+    verifier: "verify_directory_exists"
+    params:
+      dir_path: "benchmarks/workspace/Reports"
+
+  - id: "L2-06"
+    tier: "Tier_D"
+    level: "L2"
+    name: "Dismiss Modal Error Dialog and Open Notepad"
+    prompt: "Close the error dialog and then open Notepad"
+    max_steps: 8
+    timeout_sec: 60
+    setup: "spawn_modal_error_dialog"
+    setup_params:
+      dialog_title: "Benchmark System Error"
+    verifier: "verify_dialog_closed_and_window_open"
+    params:
+      dialog_title: "Benchmark System Error"
+      process_name: "notepad.exe"
+      window_title_keywords: ["Notepad"]
+
+  - id: "L2-07"
+    tier: "Tier_C"
+    level: "L2"
+    name: "Harvest Token from Open Notepad to Clipboard"
+    prompt: "Copy the token text from the open Notepad window to the clipboard"
+    max_steps: 8
+    timeout_sec: 60
+    setup: "open_notepad_with_seed_file"
+    setup_params:
+      filename: "source.txt"
+      content: "TOKEN_9941"
+    verifier: "verify_clipboard_contains"
+    params:
+      expected_text: "TOKEN_9941"
+
+  # -------------------------------------------------------------------------
+  # Level 3 (L3): Multi-Step Dialogs, Dirty State & Web Transfer (3 Tasks)
+  # -------------------------------------------------------------------------
+  - id: "L3-01"
+    tier: "Tier_D"
+    level: "L3"
+    name: "Close Dirty Notepad and Choose Don't Save"
+    prompt: "Close the open Notepad window and choose Don't Save on the prompt"
+    max_steps: 8
+    timeout_sec: 60
+    setup: "open_dirty_notepad"
+    setup_params:
+      initial_text: "Unsaved benchmark draft"
+    verifier: "verify_process_terminated"
+    params:
+      process_name: "notepad.exe"
+
+  - id: "L3-02"
+    tier: "Tier_D"
+    level: "L3"
+    name: "Compute in Calculator, Format & Save in Notepad"
+    prompt: "Compute 25 * 4 in Calculator, write 'Total: 100' in Notepad, and save to C:\\ParasiteAI\\benchmarks\\workspace\\total.txt"
+    max_steps: 15
+    timeout_sec: 90
+    setup: "clean_workspace"
+    verifier: "verify_file_exists_and_content"
+    params:
+      file_path: "benchmarks/workspace/total.txt"
+      expected_content: "Total: 100"
+
+  - id: "L3-03"
+    tier: "Tier_C"
+    level: "L3"
+    name: "Browser Navigation & Cross-App Note Recording"
+    prompt: "Open Chrome, go to https://example.com, and write the main heading text into Notepad"
+    max_steps: 15
+    timeout_sec: 90
+    setup: "clean_workspace"
+    verifier: "verify_window_contains_text"
+    params:
+      process_name: "notepad.exe"
+      expected_text: "Example Domain"
+
+# ---------------------------------------------------------------------------
+# Opt-in Live Stretch Probes (Games & Complex Launchers)
+# ---------------------------------------------------------------------------
+stretch_tasks:
+  - id: "S-01"
+    tier: "Stretch"
+    level: "Stretch"
+    name: "Launch Warsim: The Realm of Aslona"
+    prompt: "Launch Warsim The Realm of Aslona and start a new game"
+    max_steps: 15
+    timeout_sec: 90
+    setup: "clean_workspace"
+    verifier: "verify_process_and_window"
+    params:
+      process_name: "Warsim.exe"
+      window_title_keywords: ["Warsim"]
+
+  - id: "S-02"
+    tier: "Stretch"
+    level: "Stretch"
+    name: "Launch Rift Wizard 2"
+    prompt: "Launch Rift Wizard 2 and enter the first level"
+    max_steps: 15
+    timeout_sec: 90
+    setup: "clean_workspace"
+    verifier: "verify_process_and_window"
+    params:
+      process_name: "RiftWizard2.exe"
+      window_title_keywords: ["Rift Wizard"]
+
+  - id: "S-03"
+    tier: "Stretch"
+    level: "Stretch"
+    name: "Launch RimWorld"
+    prompt: "Launch RimWorld"
+    max_steps: 15
+    timeout_sec: 90
+    setup: "clean_workspace"
+    verifier: "verify_process_and_window"
+    params:
+      process_name: "RimWorldWin64.exe"
+      window_title_keywords: ["RimWorld"]

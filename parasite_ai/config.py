@@ -87,8 +87,13 @@ class PersonaConfig(BaseModel):
         default=(
             "You are Parasite, a desktop-native AI companion living on the user's screen.\n"
             "You have direct physical control of the mouse and keyboard when authorized.\n"
-            "Speak naturally, expressively, and vividly in character.\n"
-            "Always provide commentary on what you observe on screen before taking action."
+            "Before acting, always reason concisely using this structure:\n"
+            "<thought>\n"
+            "OBSERVATION: Identify the active window, any blocking error/modal dialogs, and relevant [#ID] elements on screen.\n"
+            "CRITIQUE: Did the last action achieve its goal, or did it hit an error / wrong control?\n"
+            "DECISION: State the exact next action (e.g. DOUBLE_CLICK [#ID], CLICK [#ID], MINIMIZE_WINDOW, CLOSE_WINDOW) to advance the user's goal. Never call a [#ID] element a hotkey.\n"
+            "</thought>\n"
+            "Followed by 1 short, expressive in-character sentence for the user."
         ),
         description="Pass 1 Persona monologue system instruction."
     )
@@ -99,12 +104,16 @@ class LocalModelConfig(BaseModel):
     model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
 
     model_id: str = Field(
-        default="Qwen/Qwen2.5-3B-Instruct-GGUF",
+        default="mradermacher/UI-TARS-1.5-7B-GGUF",
         description="HuggingFace model repository ID."
     )
     filename: str = Field(
-        default="qwen2.5-3b-instruct-q4_k_m.gguf",
+        default="UI-TARS-1.5-7B.IQ4_XS.gguf",
         description="Quantized GGUF filename within the repository."
+    )
+    mmproj_filename: Optional[str] = Field(
+        default="UI-TARS-1.5-7B.mmproj-Q8_0.gguf",
+        description="Optional multimodal vision projector (mmproj) GGUF filename."
     )
     context_size: int = Field(
         default=4096,
@@ -117,7 +126,7 @@ class LocalModelConfig(BaseModel):
         description="Number of layers offloaded to GPU (-1 = all available)."
     )
     vram_budget_mb: int = Field(
-        default=5500,
+        default=6500,
         ge=1024,
         le=32768,
         description="Safe maximum VRAM allocation ceiling in megabytes."
@@ -125,6 +134,46 @@ class LocalModelConfig(BaseModel):
     local_endpoint: str = Field(
         default="http://127.0.0.1:8080/v1",
         description="HTTP base endpoint for external llama-server or Ollama."
+    )
+    server_binary_path: Optional[str] = Field(
+        default="bin/llama-server/llama-server.exe",
+        description="Path to local llama-server executable."
+    )
+    server_host: str = Field(
+        default="127.0.0.1",
+        description="Host interface for llama-server daemon."
+    )
+    server_port: int = Field(
+        default=8080,
+        ge=1,
+        le=65535,
+        description="Port for llama-server daemon."
+    )
+    auto_start_server: bool = Field(
+        default=True,
+        description="Automatically start llama-server daemon if not already responding."
+    )
+    server_startup_timeout_sec: float = Field(
+        default=60.0,
+        ge=5.0,
+        le=300.0,
+        description="Seconds to await /health readiness when auto-starting llama-server."
+    )
+    server_parallel_slots: int = Field(
+        default=1,
+        ge=1,
+        le=16,
+        description="Number of parallel KV cache slots (-np). Set to 1 on 8GB VRAM to save ~1.2GB memory."
+    )
+    image_min_tokens: int = Field(
+        default=1024,
+        ge=256,
+        le=4096,
+        description="Minimum vision tokens allocated for Qwen2.5-VL / UI-TARS desktop grounding."
+    )
+    keep_server_alive_on_exit: bool = Field(
+        default=True,
+        description="Keep background llama-server alive on process exit so subsequent tasks attach at 0ms."
     )
     download_auto: bool = Field(
         default=False,
@@ -209,8 +258,8 @@ class SafetyConfig(BaseModel):
         description="Target maximum abort latency budget on physical touch."
     )
     override_pause_duration_sec: float = Field(
-        default=10.0,
-        ge=1.0,
+        default=2.5,
+        ge=0.5,
         le=300.0,
         description="Seconds to yield control to human user after a physical touch event."
     )
@@ -258,6 +307,39 @@ class SafetyConfig(BaseModel):
     mask_screen_on_sensitive: bool = Field(
         default=True,
         description="Replace perception screenshots with a blank frame when sensitive windows are active."
+    )
+
+
+class WindowRulesConfig(BaseModel):
+    """Configuration for window lifecycle disposition and intermediate launcher handling."""
+    model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
+
+    persistent_processes: List[str] = Field(
+        default_factory=lambda: [
+            "antigravity.exe", "code.exe", "cursor.exe", "devenv.exe",
+            "pycharm64.exe", "idea64.exe", "chrome.exe", "msedge.exe",
+            "firefox.exe", "opera.exe", "brave.exe", "discord.exe",
+            "slack.exe", "teams.exe", "steam.exe", "epicgameslauncher.exe",
+            "gog galaxy.exe", "battle.net.exe", "spotify.exe", "obs64.exe",
+            "conhost.exe", "windowsterminal.exe", "powershell.exe",
+            "pwsh.exe", "cmd.exe", "python.exe", "pythonw.exe",
+        ],
+        description="Processes that should be minimized rather than closed when obstructing targets."
+    )
+    ephemeral_processes: List[str] = Field(
+        default_factory=lambda: [
+            "notepad.exe", "calc.exe", "calculatorapp.exe",
+            "mspaint.exe", "snippingtool.exe", "wordpad.exe",
+        ],
+        description="Disposable utility processes that can be closed when unrelated to active goal."
+    )
+    intermediate_launcher_processes: List[str] = Field(
+        default_factory=lambda: [
+            "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe",
+            "riotclientservices.exe", "riotclientux.exe", "battle.net.exe",
+            "eadestkop.exe", "eaapp.exe", "ubisoftconnect.exe", "goggalaxy.exe",
+        ],
+        description="Game or platform launcher processes that show pre-launch modals."
     )
 
 
@@ -339,6 +421,12 @@ class VisionConfig(BaseModel):
     capture_backend: Literal["mss", "pillow", "win32"] = Field(
         default="mss",
         description="Fast screen buffer capture provider."
+    )
+    monitor_index: int = Field(
+        default=1,
+        ge=0,
+        le=8,
+        description="Target monitor index (0 = all monitors, 1 = primary/left monitor, 2 = secondary monitor)."
     )
     settling_diff_threshold: float = Field(
         default=0.003,
@@ -451,6 +539,7 @@ class AppConfig(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
     hands: HandsConfig = Field(default_factory=HandsConfig)
+    window_rules: WindowRulesConfig = Field(default_factory=WindowRulesConfig)
 
     @property
     def mind(self) -> BrainConfig:
@@ -520,7 +609,14 @@ def load_config(config_path: Path | str | None = None) -> AppConfig:
     If the file does not exist, automatically generates a documented default config.yaml
     and returns a valid default AppConfig (Zero-Config Principle).
     """
-    path = Path(config_path) if config_path else Path(DEFAULT_CONFIG_FILENAME)
+    if config_path:
+        path = Path(config_path)
+    elif Path(DEFAULT_CONFIG_FILENAME).is_file():
+        path = Path(DEFAULT_CONFIG_FILENAME)
+    elif Path("C:/ParasiteAI/config.yaml").is_file():
+        path = Path("C:/ParasiteAI/config.yaml")
+    else:
+        path = Path(DEFAULT_CONFIG_FILENAME)
 
     if not path.is_file():
         default_cfg = get_default_config()

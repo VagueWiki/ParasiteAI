@@ -1,0 +1,96 @@
+{
+  "goal": "Open Notepad and type 'Benchmark Alpha Test 42'",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 27.892,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    6.492,
+    4.805,
+    5.276,
+    5.412,
+    5.4
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Start menu",
+    "process_name": "explorer.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win",
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.18297260802469137,
+      "error_message": null,
+      "duration_sec": 6.492
+    },
+    {
+      "step_id": 2,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win",
+      "keys": [
+        "win"
+      ],
+      "success": true,
+      "screen_diff": 0.13669801311728394,
+      "error_message": null,
+      "duration_sec": 4.805
+    },
+    {
+      "step_id": 3,
+      "action_type": "CLOSE_WINDOW",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02855420524691358,
+      "error_message": null,
+      "duration_sec": 5.276
+    },
+    {
+      "step_id": 4,
+      "action_type": "CLOSE_WINDOW",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0026572145061728395,
+      "error_message": null,
+      "duration_sec": 5.412
+    },
+    {
+      "step_id": 5,
+      "action_type": "CLOSE_WINDOW",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0031510416666666666,
+      "error_message": null,
+      "duration_sec": 5.4
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048503.2761316
+}

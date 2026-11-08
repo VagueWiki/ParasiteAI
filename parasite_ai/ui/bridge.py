@@ -34,6 +34,9 @@ class UIBridge(QObject):
     sig_targets_cleared = pyqtSignal()                   # clear all HUD boxes
     sig_reticle_requested = pyqtSignal(int, int, int, int, str)  # (x, y, duration_ms, target_id, label)
     sig_reticle_cleared = pyqtSignal()                   # cancel reticle immediately (abort)
+    sig_dock_minimize_requested = pyqtSignal()           # minimize/collapse CompanionDock out of the way
+    sig_dock_restore_requested = pyqtSignal()            # restore CompanionDock to full view
+    sig_dock_evade_requested = pyqtSignal(int, int)      # evade (x, y) click target
 
     # --- GUI -> Background Worker Signals ---
     sig_goal_submitted = pyqtSignal(str)                 # user goal string
@@ -41,6 +44,7 @@ class UIBridge(QObject):
     sig_panic_triggered = pyqtSignal()                   # emergency abort requested
     sig_hud_toggled = pyqtSignal(bool)                   # show/hide HUD overlay
     sig_brain_mode_changed = pyqtSignal(str)             # "local_llm" | "browser_offload" | "mock"
+    sig_close_requested = pyqtSignal()                   # user clicked Close on CompanionDock
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
@@ -118,6 +122,18 @@ class UIBridge(QObject):
     def clear_reticle(self) -> None:
         """Immediately abort and remove the active reticle (e.g. on interrupt touch)."""
         self.sig_reticle_cleared.emit()
+
+    def minimize_dock(self) -> None:
+        """Request CompanionDock to minimize/collapse out of the way of desktop clicks."""
+        self.sig_dock_minimize_requested.emit()
+
+    def evade_dock(self, x: int, y: int) -> None:
+        """Request CompanionDock to collapse and relocate away from screen coordinate (x, y)."""
+        self.sig_dock_evade_requested.emit(int(x), int(y))
+
+    def restore_dock(self) -> None:
+        """Request CompanionDock to restore to its full geometry."""
+        self.sig_dock_restore_requested.emit()
 
     def get_next_goal(self, timeout_sec: Optional[float] = None) -> Optional[str]:
         """

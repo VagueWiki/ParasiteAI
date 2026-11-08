@@ -147,7 +147,7 @@ class InterruptGuard:
 
     def __init__(
         self,
-        cooldown_seconds: float = 10.0,
+        cooldown_seconds: float = 2.5,
         corner_panic_enabled: bool = True,
         corner_distance_px: int = 4,
         on_interrupt_callback: Optional[Callable[[str], None]] = None,
@@ -166,6 +166,7 @@ class InterruptGuard:
         self._lock = threading.Lock()
         self._cancellation_token = threading.Event()
         self._interrupted = False
+        self._interrupt_count = 0
         self._last_interrupt_time = 0.0
         self._rearm_timer: Optional[threading.Timer] = None
 
@@ -465,6 +466,7 @@ class InterruptGuard:
         now = time.monotonic()
         with self._lock:
             self._interrupted = True
+            self._interrupt_count += 1
             self._last_interrupt_time = now
 
             # Sliding cooldown: _on_rearm_timer_fired reschedules itself for the remaining time,
@@ -479,6 +481,17 @@ class InterruptGuard:
                 self._on_interrupt_callback(source_desc)
             except Exception:
                 pass
+
+    @property
+    def interrupt_count(self) -> int:
+        """Total number of physical hardware interrupts detected since last reset."""
+        with self._lock:
+            return self._interrupt_count
+
+    def reset_interrupt_counters(self) -> None:
+        """Resets the physical interrupt counter to zero for a new episode."""
+        with self._lock:
+            self._interrupt_count = 0
 
     def _on_rearm_timer_fired(self) -> None:
         """Fires when sliding cooldown expires with no subsequent physical touches."""

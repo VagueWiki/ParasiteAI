@@ -208,7 +208,7 @@ class Win32BrowserWindowBackend:
             path_obj = Path(executable_path)
             if not path_obj.exists():
                 return None
-            subprocess.Popen([str(path_obj), url])
+            subprocess.Popen([str(path_obj), "--force-renderer-accessibility", url])
             # Poll for window up to 4.0s
             deadline = time.time() + 4.0
             while time.time() < deadline:
@@ -220,6 +220,19 @@ class Win32BrowserWindowBackend:
         except Exception as exc:
             logger.error("Failed to launch browser %s: %s", executable_path, exc)
             return None
+
+    def get_window_title(self, hwnd: int) -> str:
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buf = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buf, length + 1)
+                return buf.value
+        except Exception:
+            pass
+        return ""
 
     def get_window_rect(self, hwnd: int) -> Tuple[int, int, int, int]:
         try:
@@ -420,32 +433,91 @@ class BrowserOffloader:
     def _find_prompt_target(self, hwnd: int) -> Tuple[int, int]:
         """
         Attempts to locate Chrome's web AI prompt input box via ScreenGrounder.
-        Falls back to relative window center-bottom coordinate heuristic.
+        Strictly filters out starter suggestion chips / demo question buttons (e.g. role == 'button',
+        narrow chip widths, or long sentence labels).
+        Falls back to relative window bottom-bar coordinate heuristic below the suggestion chip zone.
         """
+        rect = self.window_backend.get_window_rect(hwnd)
+        win_w = max(100, rect[2] - rect[0])
+        win_h = max(100, rect[3] - rect[1])
+        min_input_y = rect[1] + int(win_h * 0.45)
+
         if self.grounder:
             try:
                 elements = self.grounder.ground(window_filter=hwnd)
-                candidates: List[Any] = []
+                # If UIA returned very few elements for Chrome, run with force_ocr=True to catch placeholder labels
+                if len(elements) < 3:
+                    try:
+                        elements = self.grounder.ground(window_filter=hwnd, force_ocr=True)
+                    except TypeError:
+                        pass
+
+                edit_candidates: List[Any] = []
+                label_candidates: List[Any] = []
                 for elem in elements:
                     role = getattr(elem, "role", "").lower()
-                    label = getattr(elem, "label", "").lower()
-                    if role in ("edit", "document"):
-                        candidates.append(elem)
-                    elif any(kw in label for kw in ("prompt", "ask", "message", "chat", "type", "search")):
-                        candidates.append(elem)
+                    label = (getattr(elem, "label", "") or "").strip()
+                    label_lower = label.lower()
+                    ew = getattr(elem, "width", 0)
+                    eh = getattr(elem, "height", 0)
+                    cy = getattr(elem, "center_y", 0)
 
-                if candidates:
+                    # Reject page containers / massive viewport wrappers (e.g. view_1034 at dead center)
+                    if ew > win_w * 0.85 and eh > win_h * 0.35:
+                        continue
+                    if eh > 300:
+                        continue
+
+                    # NEVER select Buttons, Hyperlinks, ListItems, MenuItems, or TabItems as a prompt input box!
+                    # Gemini starter/demo question cards are exposed as Button or ListItem controls.
+                    if role in ("button", "hyperlink", "listitem", "menuitem", "tabitem", "image"):
+                        continue
+
+                    # Tier A: Genuine editable text box in the lower portion of the browser window
+                    if role in ("edit", "document", "combobox") and cy >= min_input_y and ew >= 120:
+                        edit_candidates.append(elem)
+                        continue
+
+                    # Tier B: Placeholder text or container explicitly matching prompt placeholder phrases
+                    # Must be short placeholder text (<= 40 chars) so long demo question sentences are rejected
+                    if (
+                        cy >= rect[1] + int(win_h * 0.65)
+                        and len(label_lower) <= 40
+                        and "?" not in label_lower
+                        and any(
+                            kw in label_lower
+                            for kw in (
+                                "enter a prompt",
+                                "ask gemini",
+                                "type a message",
+                                "message ",
+                                "prompt here",
+                                "ask anything",
+                            )
+                        )
+                    ):
+                        label_candidates.append(elem)
+
+                chosen_pool = edit_candidates if edit_candidates else label_candidates
+                if chosen_pool:
                     # Select the bottom-most prompt input (highest center_y)
-                    best_elem = max(candidates, key=lambda e: getattr(e, "center_y", 0))
-                    logger.debug("Grounded prompt box: '%s' at (%d, %d)", getattr(best_elem, "label", ""), best_elem.center_x, best_elem.center_y)
+                    best_elem = max(chosen_pool, key=lambda e: getattr(e, "center_y", 0))
+                    logger.debug(
+                        "Grounded prompt box: '%s' (role=%s) at (%d, %d)",
+                        getattr(best_elem, "label", ""),
+                        getattr(best_elem, "role", ""),
+                        best_elem.center_x,
+                        best_elem.center_y,
+                    )
                     return (best_elem.center_x, best_elem.center_y)
             except Exception as exc:
                 logger.debug("ScreenGrounder prompt localization error: %s", exc)
 
-        # Fallback heuristic: center-bottom of window
-        rect = self.window_backend.get_window_rect(hwnd)
-        prompt_x = rect[0] + (rect[2] - rect[0]) // 2
-        prompt_y = rect[3] - 120
+        # Fallback heuristic: bottom input bar of browser window (rect[3] - 68),
+        # safely below Gemini's center-screen suggestion chips (which sit around rect[3] - 150..350)
+        prompt_x = rect[0] + win_w // 2
+        prompt_y = rect[3] - 68
+        logger.debug("Using fallback bottom-bar prompt target at (%d, %d)", prompt_x, prompt_y)
         return (prompt_x, prompt_y)
 
     def _find_copy_button(self, hwnd: int) -> Optional[Tuple[int, int]]:
@@ -462,6 +534,8 @@ class BrowserOffloader:
             for elem in elements:
                 role = getattr(elem, "role", "").lower()
                 label = getattr(elem, "label", "").lower()
+                if role in ("edit", "document"):
+                    continue
                 if "copy" in label or label in ("salin", "copier", "kopieren"):
                     candidates.append(elem)
                 elif role == "button" and ("copy" in label or "clipboard" in label):
@@ -522,21 +596,37 @@ class BrowserOffloader:
             if cancellation_token and cancellation_token.is_set():
                 raise OffloadHarvestError("Offload cancelled before navigation")
 
-            # 3. Navigate URL (Ctrl+L -> URL -> Enter)
-            self._update_state(OffloaderState.NAVIGATING_URL)
-            if self.keyboard_driver:
-                self.keyboard_driver.hotkey("ctrl", "l", cancellation_token=cancellation_token)
-                time.sleep(0.05)
-                self.keyboard_driver.type_text(target_url, submit=True, cancellation_token=cancellation_token)
+            # 3. Navigate URL (Ctrl+L -> URL -> Enter) unless already on the target web AI tab
+            win_title = ""
+            if hasattr(self.window_backend, "get_window_title"):
+                try:
+                    win_title = (self.window_backend.get_window_title(hwnd) or "").lower()
+                except Exception:
+                    win_title = ""
 
-            # Wait for page readiness
-            self._update_state(OffloaderState.WAITING_PAGE_READY)
-            settle_s = max(0.1, self.config.stream_stability_ms / 1000.0)
-            if cancellation_token:
-                if cancellation_token.wait(timeout=settle_s):
-                    raise OffloadHarvestError("Offload cancelled during page wait")
+            already_on_target = bool(
+                ("gemini" in target_url.lower() and "gemini" in win_title)
+                or ("chatgpt" in target_url.lower() and "chatgpt" in win_title)
+                or ("claude" in target_url.lower() and "claude" in win_title)
+            )
+
+            if not already_on_target:
+                self._update_state(OffloaderState.NAVIGATING_URL)
+                if self.keyboard_driver:
+                    self.keyboard_driver.hotkey("ctrl", "l", cancellation_token=cancellation_token)
+                    time.sleep(0.05)
+                    self.keyboard_driver.type_text(target_url, submit=True, cancellation_token=cancellation_token)
+
+                # Wait for page readiness
+                self._update_state(OffloaderState.WAITING_PAGE_READY)
+                settle_s = max(0.1, self.config.stream_stability_ms / 1000.0)
+                if cancellation_token:
+                    if cancellation_token.wait(timeout=settle_s):
+                        raise OffloadHarvestError("Offload cancelled during page wait")
+                else:
+                    time.sleep(settle_s)
             else:
-                time.sleep(settle_s)
+                logger.debug("Browser window (HWND %s) is already on '%s'; skipping redundant URL navigation.", hwnd, win_title)
 
             # 4. Focus Prompt & Deliver Text via High-Speed Clipboard Paste (<100ms)
             self._update_state(OffloaderState.FOCUSING_PROMPT)
@@ -554,12 +644,12 @@ class BrowserOffloader:
 
             try:
                 self.clipboard_backend.set_text(prompt)
-                time.sleep(0.01)
+                time.sleep(0.05)
                 if self.keyboard_driver:
                     pasted = self.keyboard_driver.hotkey("ctrl", "v", cancellation_token=cancellation_token)
                     if not pasted:
                         raise OffloadHarvestError("Paste was aborted or interrupted by user")
-                    time.sleep(0.02)
+                    time.sleep(0.15)
                     submitted = self.keyboard_driver.hotkey("enter", cancellation_token=cancellation_token)
                     if not submitted:
                         raise OffloadHarvestError("Submit was aborted or interrupted by user")
@@ -579,24 +669,24 @@ class BrowserOffloader:
                 if cancellation_token and cancellation_token.is_set():
                     return False
 
-                # Tier 1: Grounded Copy button click
+                # Tier 1: Grounded Copy button click ONLY (never blindly click the center of the screen!)
                 copy_coords = self._find_copy_button(hwnd)
                 if copy_coords and self.mouse_driver:
                     return self.mouse_driver.click(
                         copy_coords[0], copy_coords[1], button="left", cancellation_token=cancellation_token
                     )
 
-                # Tier 2: Fallback heuristic (click response canvas + Ctrl+C)
-                if self.mouse_driver:
-                    self.mouse_driver.click(prompt_x, prompt_y - 200, button="left", cancellation_token=cancellation_token)
-                if self.keyboard_driver:
+                # If no Copy button is grounded yet (e.g. response is still streaming or nogrounder in mock test),
+                # do NOT click (prompt_x, prompt_y - 200) in the middle of the viewport!
+                if self.grounder is None and self.keyboard_driver:
                     return self.keyboard_driver.hotkey("ctrl", "c", cancellation_token=cancellation_token)
-                return True
+                return False
 
             harvested = self.verifier.execute_harvest(
                 trigger_copy_action=trigger_copy,
                 timeout_s=float(self.config.stream_timeout_sec),
                 cancellation_token=cancellation_token,
+                retrigger_interval_s=1.0,
             )
 
             if not harvested:

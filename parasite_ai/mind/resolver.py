@@ -41,6 +41,14 @@ class PrecisionAppMatcher:
         if not l_norm or not t_norm:
             return 0.0
 
+        # Strip Windows Taskbar running-window suffixes (e.g. "App.exe - 1 running window")
+        l_norm = re.sub(r"(?:\.exe)?\s*-\s*\d+\s+running\s+windows?$", "", l_norm)
+        t_norm = re.sub(r"(?:\.exe)?\s*-\s*\d+\s+running\s+windows?$", "", t_norm)
+
+        # Strip common Windows file extensions from shortcuts/executables
+        l_norm = re.sub(r"\.(url|lnk|exe)$", "", l_norm)
+        t_norm = re.sub(r"\.(url|lnk|exe)$", "", t_norm)
+
         # Level 1: Exact match (highest confidence)
         if l_norm == t_norm:
             return 1.0
@@ -54,7 +62,7 @@ class PrecisionAppMatcher:
         if any(v in words or v in tokens for v in cls.NEGATIVE_VERBS):
             return 0.0
 
-        # Level 2: Exact prefix match with token boundary
+        # Level 2: Exact prefix match with token boundary (e.g. label="app title 2", target="app title")
         if (
             l_norm.startswith(t_norm + " ")
             or l_norm.startswith(t_norm + " -")
@@ -62,10 +70,47 @@ class PrecisionAppMatcher:
         ):
             return 0.95
 
-        # Level 3: Word boundary regex match (\b)
+        # Level 2b: Target prefix match with token boundary (e.g. target="app title 2", label="app title")
+        if (
+            t_norm.startswith(l_norm + " ")
+            or t_norm.startswith(l_norm + " -")
+            or t_norm.startswith(l_norm + ":")
+        ):
+            return 0.90
+
+        # Level 2c: Normalized base match stripping numeric/version suffixes (e.g. "app title 2" vs "app title")
+        l_base = re.sub(r"\s+\d+(\.\d+)*$", "", l_norm)
+        t_base = re.sub(r"\s+\d+(\.\d+)*$", "", t_norm)
+        if l_base and t_base and l_base == t_base:
+            return 0.92
+
+        # Level 2d: Spaceless / compound-word match (e.g. "compoundapp" vs "compound app 2", "editor++" vs "editor ++")
+        l_compact = re.sub(r"[^a-z0-9\+#]", "", l_norm)
+        t_compact = re.sub(r"[^a-z0-9\+#]", "", t_norm)
+        l_base_compact = re.sub(r"[^a-z0-9\+#]", "", l_base)
+        t_base_compact = re.sub(r"[^a-z0-9\+#]", "", t_base)
+        if len(t_compact) >= 4 and len(l_compact) >= 4:
+            if l_compact == t_compact or (l_base_compact and t_base_compact and l_base_compact == t_base_compact):
+                return 0.90
+            # Compound prefix match where target is at least 70% of the base label (e.g. "compoundapp" in "compoundapp2")
+            # Invariant: Disallow prefix match if trailing remainder contains identifier symbols (+, #)
+            # or domain extension suffixes (.net, net, io) that the target does not have
+            if l_compact.startswith(t_compact) and len(t_compact) >= int(len(l_base_compact or l_compact) * 0.75):
+                trailing_rem = l_compact[len(t_compact):]
+                has_symbol_or_domain = any(c in trailing_rem for c in ("+", "#")) or trailing_rem in ("net", "dotnet", "io")
+                if not has_symbol_or_domain:
+                    return 0.88
+            if t_compact.startswith(l_compact) and len(l_compact) >= int(len(t_base_compact or t_compact) * 0.75):
+                trailing_rem = t_compact[len(l_compact):]
+                has_symbol_or_domain = any(c in trailing_rem for c in ("+", "#")) or trailing_rem in ("net", "dotnet", "io")
+                if not has_symbol_or_domain:
+                    return 0.85
+
+        # Level 3: Word boundary regex match (\b) with identifier suffix awareness
         lead_bound = r"\b" if re.match(r"^\w", t_norm) else r"(?<!\w)"
         if re.search(r"\w$", t_norm):
-            trail_bound = r"\b"
+            # Invariant: word boundary cannot be immediately followed by '+', '#', or a period followed by alpha (e.g. .net)
+            trail_bound = r"(?!\s*[\+\#]|\.[a-zA-Z]|\w)"
         else:
             # Trailing non-word characters (e.g. '+', '#'): standard \b fails because adjacent space/punct is non-word.
             # Require boundary not immediately followed by identical symbol or word character.
@@ -77,6 +122,14 @@ class PrecisionAppMatcher:
             idx = l_norm.find(t_norm)
             pos_ratio = max(0.0, 1.0 - (idx / max(1, len(l_norm))))
             return 0.80 + (0.10 * pos_ratio)
+
+        # Level 3b: Multi-word token subset match ignoring filler articles (e.g. target="visual studio" vs label="Microsoft Visual Studio Code")
+        stopwords = {"the", "of", "and", "in", "to", "a", "an", "for", "on", "at"}
+        t_words = [w for w in re.findall(r"[a-z0-9\+#]+", t_norm) if w not in stopwords]
+        l_words = [w for w in re.findall(r"[a-z0-9\+#]+", l_norm) if w not in stopwords]
+        if len(t_words) >= 2 and len(l_words) >= 2 and l_words[0] == t_words[0] and len(t_words[0]) >= 4:
+            if all(tw in l_words for tw in t_words):
+                return 0.88
 
         # Rejection: Arbitrary substrings without word boundaries (e.g. 'art' in 'SmartScreen') score 0.0
         return 0.0
@@ -143,36 +196,69 @@ class UniversalAppResolver:
         time.sleep(self.cadence_buffer_s)
         return False
 
-    @staticmethod
-    def extract_target_app(goal_or_intent: str) -> Optional[str]:
+    GENERIC_NON_APP_WORDS = {
+        "it", "this", "that", "something", "window", "windows", "file", "folder", "menu",
+        "game", "games", "app", "apps", "application", "applications",
+        "program", "programs", "tool", "tools", "active", "active window",
+        "with", "from", "all", "everything", "first", "here", "there", "again",
+    }
+
+    @classmethod
+    def extract_target_app(cls, goal_or_intent: str) -> Optional[str]:
         """
         Extracts application name generically from natural language strings.
         Handles patterns like:
-          - "open discord" -> "discord"
+          - "open browser" -> "browser"
+          - "play some game title" -> "game title"
+          - "play game title 2" -> "game title 2"
           - "launch visual studio code and create a file" -> "visual studio code"
-          - "start spotify" -> "spotify"
+          - "start editor" -> "editor"
           - "run powershell" -> "powershell"
-          - "open up obsidian" -> "obsidian"
-          - "switch to notepad" -> "notepad"
+          - "open up notes" -> "notes"
+          - "switch to terminal" -> "terminal"
         """
         if not goal_or_intent:
             return None
 
         text = goal_or_intent.strip()
-        
+
+        # Do not extract a launch target if the user goal is explicitly about closing or minimizing windows
+        if re.match(r"(?i)^\s*(?:please\s+)?(?:close|minimize|minimise|hide|dismiss|exit|quit)\b", text):
+            return None
+
         # Regex capturing generic verbs followed by target app name
         # Handles attached punctuation delimiters (e.g. "open visual studio code, then write code")
+        # Supports "play", "play some", "play the game", etc.
+        # Disallows conversational prepositions right after the verb (e.g. "start with ...", "start by ...")
         pattern = (
-            r"(?i)\b(?:open|launch|start|run|switch\s+to|bring\s+up)\s+(?:up\s+)?"
-            r"(?:the\s+|a\s+|an\s+)?(?:app(?:lication)?\s+)?"
+            r"(?i)\b(?:open|launch|start|run|play|switch\s+to|bring\s+up)\s+(?:up\s+)?"
+            r"(?!(?:with|by|from|in|on|at|to|over|again)\b)"
+            r"(?:(?:yourself|myself|himself|herself|ourselves|me|us)\s+)?"
+            r"(?:some\s+)?"
+            r"(?:the\s+|a\s+|an\s+)?(?:app(?:lication)?\s+|game\s+)?"
             r"([a-zA-Z0-9_\-\.\s\+#]+?)"
-            r"(?:\s*(?:[,\.;:!?]+\s*|\s+)(?:and|then|to|with|in|for|please|$)|[,\.;:!?]+(?:\s+|$)|$)"
+            r"(?:\s*(?:[,\.;:!?]+\s*|\s+)\b(?:and|then|to|with|without|in|for|please|on\s+your\s+own|by\s+yourself|autonomously|alone)\b|[,\.;:!?]+(?:\s+|$)|$)"
         )
         match = re.search(pattern, text)
         if match:
             app_candidate = match.group(1).strip(" ,.;:!?\t\n")
-            # Filter out generic non-app words
-            if app_candidate.lower() not in {"it", "this", "that", "something", "window", "file", "folder", "menu"}:
+            # Strip any residual leading reflexive pronouns/quantifiers or trailing conversational/wildcard modifiers
+            app_candidate = re.sub(
+                r"(?i)^(?:(?:yourself|myself|himself|herself|ourselves|me|us|some|the|a|an)\s+)+",
+                "",
+                app_candidate,
+            ).strip(" ,.;:!?\t\n")
+            app_candidate = re.sub(
+                r"(?i)\s+\b(?:on\s+your\s+own|by\s+yourself|without\s+(?:my|user|human|any)(?:\s+input)?|autonomously|alone|for\s+me|right\s+now|(?:or|of)\s+whatever|whatever|or\s+something(?:\s+like\s+that)?|and\s+stuff)\b.*$",
+                "",
+                app_candidate,
+            ).strip(" ,.;:!?\t\n")
+            cand_lower = app_candidate.lower()
+            # Filter out generic non-app words or conversational clauses
+            if (
+                cand_lower not in cls.GENERIC_NON_APP_WORDS
+                and not any(cand_lower.startswith(p) for p in ("with ", "by ", "from ", "active ", "all "))
+            ):
                 return app_candidate
 
         return None
@@ -203,17 +289,54 @@ class UniversalAppResolver:
         self._target_app = target_clean
 
         # ------------------------------------------------------------------
+        # Tier 0: If an open window matching target_app already exists on screen,
+        # focus that open window instead of re-double-clicking a desktop shortcut!
+        # ------------------------------------------------------------------
+        open_win_elem = next(
+            (
+                e for e in elements
+                if (e.window_title or "").strip().lower() not in ("program manager", "workerw", "desktop", "taskbar", "running applications", "")
+                and (e.process_name or "").strip().lower() != "explorer.exe"
+                and PrecisionAppMatcher.score_match(e.window_title or "", target_clean) >= 0.80
+                and (e.label or "").strip().lower() not in ("close", "minimize", "minimise", "maximize", "maximise", "restore", "system")
+            ),
+            None,
+        )
+        if open_win_elem is not None:
+            self.reset()
+            return ActionPlan(
+                action=ActionType.CLICK,
+                target_id=open_win_elem.id,
+                coordinates=(open_win_elem.center_x, open_win_elem.center_y),
+                reasoning=f"Target window '{open_win_elem.window_title}' is already open on screen; focusing window instead of re-launching desktop shortcut",
+            )
+
+        # ------------------------------------------------------------------
         # Tier 1: Check Visible SOM Elements (Desktop icons, Taskbar, Open Windows)
         # ------------------------------------------------------------------
         best_match = PrecisionAppMatcher.find_best_element(target_clean, elements, threshold=0.80)
         if best_match:
             elem, score = best_match
             self.reset()
+            w_norm = (elem.window_title or "").strip().lower()
+            is_taskbar = w_norm in ("taskbar", "running applications") or "running window" in (elem.label or "").lower()
+            # If element is a desktop icon (process_name is explorer.exe or role is ListItem on desktop), use DOUBLE_CLICK
+            is_desktop_item = (
+                not is_taskbar
+                and (
+                    elem.role == "ListItem"
+                    or (
+                        (elem.process_name or "").lower() == "explorer.exe"
+                        and w_norm in ("program manager", "workerw", "desktop", "")
+                    )
+                )
+            )
+            action = ActionType.DOUBLE_CLICK if is_desktop_item else ActionType.CLICK
             return ActionPlan(
-                action=ActionType.CLICK,
+                action=action,
                 target_id=elem.id,
                 coordinates=(elem.center_x, elem.center_y),
-                reasoning=f"Found visible '{elem.label}' ({elem.role}) matching '{target_app}'; clicking directly",
+                reasoning=f"Found visible '{elem.label}' ({elem.role}) matching '{target_app}'; {'double-clicking desktop icon' if is_desktop_item else 'clicking directly'}",
             )
 
         # ------------------------------------------------------------------
@@ -230,6 +353,15 @@ class UniversalAppResolver:
             None,
         )
         if run_edit:
+            if " " in target_clean or self._run_dialog_attempts >= 1:
+                # Windows Run dialog cannot execute multi-word targets without registered alias, or already failed
+                self._run_opened = False
+                self._run_dialog_attempts = 1
+                return ActionPlan(
+                    action=ActionType.HOTKEY,
+                    keys=["esc"],
+                    reasoning=f"Run dialog does not support multi-word target '{target_app}'; dismissing and falling back to Start Search",
+                )
             self._run_opened = False
             self._run_dialog_attempts = 1
             return ActionPlan(
@@ -243,6 +375,7 @@ class UniversalAppResolver:
         # ------------------------------------------------------------------
         # Check if Start Menu search box is currently open and focused
         # ------------------------------------------------------------------
+        # Start search box belongs to Windows Search / Taskbar, NOT File Explorer browsing folders
         search_edit = next(
             (
                 e for e in elements
@@ -250,6 +383,14 @@ class UniversalAppResolver:
                 and any(
                     kw in (e.label or "").lower()
                     for kw in ("search", "type here to search", "search box")
+                )
+                and (
+                    not e.process_name
+                    or (e.process_name or "").lower() in ("searchapp.exe", "searchhost.exe", "startmenuexperiencehost.exe")
+                    or (
+                        (e.process_name or "").lower() == "explorer.exe"
+                        and (e.window_title or "").lower() in ("search", "start", "", "taskbar", "cortana")
+                    )
                 )
             ),
             None,

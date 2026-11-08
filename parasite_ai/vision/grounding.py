@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from parasite_ai.config import VisionConfig
 from parasite_ai.ui.types import UIElement
-from parasite_ai.vision.capture import ScreenCapture
+from parasite_ai.vision.capture import ScreenCapture, get_monitor_bounds
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,15 @@ class ScreenGrounder:
     IOU_THRESHOLD = 0.35
     CONTAINMENT_THRESHOLD = 0.70
 
+    SCROLLBAR_BUTTON_LABELS = {
+        "page up", "page down", "line up", "line down",
+        "column left", "column right", "page left", "page right",
+    }
+    WINDOW_CHROME_LABELS = SCROLLBAR_BUTTON_LABELS | {
+        "minimize", "minimise", "maximize", "maximise", "restore",
+        "close", "system", "text area", "editor canvas",
+    }
+
     def __init__(
         self,
         config: Optional[VisionConfig] = None,
@@ -123,11 +134,26 @@ class ScreenGrounder:
         ocr_engine: Optional[Any] = None,
     ) -> None:
         self.config = config or VisionConfig()
-        self.capturer = capturer or ScreenCapture(backend=self.config.capture_backend)
+        mon_idx = getattr(self.config, "monitor_index", 1)
+        self.capturer = capturer or ScreenCapture(
+            backend=self.config.capture_backend,
+            monitor_index=mon_idx,
+        )
         self._ocr_engine = ocr_engine
         self._depth_limit: int = 5
         self._min_uia_threshold: int = 6
         self._lock = __import__("threading").RLock()
+
+    def _get_target_monitor_rect(self) -> Optional[Tuple[int, int, int, int]]:
+        """
+        Returns (left, top, right, bottom) of the configured target monitor when monitor_index >= 1,
+        or None if monitor_index == 0 (all monitors).
+        """
+        mon_idx = getattr(self.config, "monitor_index", 1)
+        if not mon_idx or mon_idx <= 0:
+            return None
+        ml, mt, mw, mh = get_monitor_bounds(int(mon_idx))
+        return (ml, mt, ml + mw, mt + mh)
 
     def _get_ocr_engine(self) -> Optional[Any]:
         """Lazy initializer for RapidOCR ONNX model."""
@@ -145,6 +171,8 @@ class ScreenGrounder:
         window_filter: Optional[int] = None,
         force_ocr: bool = False,
         image_override: Optional[np.ndarray] = None,
+        goal_keywords: Optional[List[str]] = None,
+        offset: int = 0,
     ) -> List[UIElement]:
         """
         Executes hybrid grounding pipeline:
@@ -152,7 +180,7 @@ class ScreenGrounder:
         2. Evaluates if OCR fallback is needed (< 6 UIA controls, or force_ocr=True, or ocr_only).
         3. Invokes scoped RapidOCR on active window bounds if needed.
         4. Performs spatial IoU and containment deduplication and label merging.
-        5. Normalizes, filters degenerate elements, caps to max_som_elements, and assigns 1-based IDs.
+        5. Normalizes, filters degenerate elements, prioritizes goal matches, caps to max_som_elements, and assigns 1-based IDs.
         """
         with self._lock:
             uia_raw_elements: List[RawElement] = []
@@ -160,13 +188,23 @@ class ScreenGrounder:
 
             # 1. Tier 1: Win32 UI Automation tree walk
             if self.config.grounding_mode != "ocr_only":
-                uia_raw_elements, active_window_rect = self._walk_uia_tree(window_filter=window_filter)
+                uia_raw_elements, active_window_rect = self._walk_uia_tree(
+                    window_filter=window_filter,
+                    goal_keywords=goal_keywords,
+                )
 
             # 2. Check if Tier 2: OCR fallback is needed
+            # Evaluate foreground/active window UIA control count separately from background desktop icons
+            # and exclude standard OS window chrome / scrollbar buttons so console (conhost.exe),
+            # Steam launch modals, and custom-rendered game windows always trigger scoped OCR.
+            active_uia_count = sum(
+                1 for e in uia_raw_elements
+                if e.is_active_window and (e.label or "").strip().lower() not in self.WINDOW_CHROME_LABELS
+            )
             run_ocr = False
             if self.config.grounding_mode == "ocr_only" or force_ocr:
                 run_ocr = True
-            elif self.config.grounding_mode == "hybrid" and len(uia_raw_elements) < self._min_uia_threshold:
+            elif self.config.grounding_mode == "hybrid" and active_uia_count < self._min_uia_threshold:
                 run_ocr = True
 
             ocr_raw_elements: List[RawElement] = []
@@ -183,12 +221,17 @@ class ScreenGrounder:
             )
 
             # 4. Normalization, filtering & 1-based Set-of-Mark assignment
-            normalized_som = self._normalize_elements(deduplicated_elements)
+            normalized_som = self._normalize_elements(
+                deduplicated_elements,
+                goal_keywords=goal_keywords,
+                offset=offset,
+            )
             return normalized_som
 
     def _walk_uia_tree(
         self,
         window_filter: Optional[int] = None,
+        goal_keywords: Optional[List[str]] = None,
     ) -> Tuple[List[RawElement], Optional[Tuple[int, int, int, int]]]:
         """Traverses Win32 UI Automation accessibility tree."""
         try:
@@ -205,9 +248,9 @@ class ScreenGrounder:
         )
         try:
             with com_ctx:
-                return self._walk_uia_tree_inner(auto, window_filter)
+                return self._walk_uia_tree_inner(auto, window_filter, goal_keywords)
         except Exception:
-            return self._walk_uia_tree_inner(auto, window_filter)
+            return self._walk_uia_tree_inner(auto, window_filter, goal_keywords)
 
     @staticmethod
     def _is_hwnd_visible_and_uncloaked(hwnd: int) -> bool:
@@ -237,6 +280,12 @@ class ScreenGrounder:
     @staticmethod
     def _resolve_process_name(hwnd: int = 0, pid: int = 0) -> str:
         """Resolves process executable name for a given HWND or PID using Win32 API."""
+        if not isinstance(hwnd, int):
+            hwnd = 0
+        if not isinstance(pid, int):
+            pid = 0
+        if not hwnd and not pid:
+            return ""
         try:
             import ctypes
             from ctypes import wintypes
@@ -268,14 +317,18 @@ class ScreenGrounder:
         self,
         auto: Any,
         window_filter: Optional[int] = None,
+        goal_keywords: Optional[List[str]] = None,
     ) -> Tuple[List[RawElement], Optional[Tuple[int, int, int, int]]]:
         root_control = None
         excluded_rect: Optional[Tuple[int, int, int, int]] = None
         roots_to_walk: List[Tuple[Any, bool]] = []  # (control, is_active_window)
+        mon_rect = self._get_target_monitor_rect()
         try:
             if window_filter is not None and window_filter != 0:
                 root_control = auto.ControlFromHandle(window_filter)
                 if root_control is not None:
+                    if getattr(root_control, "ProcessId", 0) == os.getpid():
+                        return [], None
                     roots_to_walk = [(root_control, True)]
             else:
                 fg_control = auto.GetForegroundControl()
@@ -289,15 +342,23 @@ class ScreenGrounder:
                 )
 
                 if isinstance(children, (list, tuple)) and len(children) > 0:
+                    valid_children: List[Tuple[Any, int]] = []
+                    current_pid = os.getpid()
                     for child in children:
+                        c_pid = getattr(child, "ProcessId", 0)
                         cls_name = getattr(child, "ClassName", "")
-                        if cls_name == "GhostHUD":
-                            continue
-                        if cls_name == "CompanionDock":
+                        c_title = str(getattr(child, "Name", "") or "")
+                        # Exclude ParasiteAI's own UI overlays (CompanionDock, GhostHUD) or self-process
+                        if (
+                            (c_pid and c_pid == current_pid)
+                            or cls_name in ("GhostHUD", "CompanionDock")
+                            or "CompanionDock" in cls_name
+                        ):
                             try:
                                 cb = child.BoundingRectangle
-                                if cb:
+                                if cb and (cls_name in ("GhostHUD", "CompanionDock") or "CompanionDock" in cls_name):
                                     excluded_rect = (cb.left, cb.top, cb.right, cb.bottom)
+                                    self._last_excluded_rect = excluded_rect
                             except Exception:
                                 pass
                             continue
@@ -313,11 +374,64 @@ class ScreenGrounder:
                             ch = cb.height() if callable(cb.height) else cb.height
                             if cw < 20 or ch < 20 or cb.left <= -25000 or cb.top <= -25000:
                                 continue
+                            # Filter out top-level application windows on other monitors (e.g. Right Monitor x >= 1920)
+                            if mon_rect is not None:
+                                ml, mt, mr, mb = mon_rect
+                                c_name_low = str(getattr(child, "Name", "") or "").strip().lower()
+                                is_desktop_or_shell = (
+                                    cls_name in ("Progman", "WorkerW", "Shell_TrayWnd")
+                                    or c_name_low in ("program manager", "workerw", "desktop", "taskbar")
+                                )
+                                if not is_desktop_or_shell:
+                                    c_right = getattr(cb, "right", cb.left + cw)
+                                    c_bottom = getattr(cb, "bottom", cb.top + ch)
+                                    win_cx = (cb.left + c_right) // 2
+                                    win_cy = (cb.top + c_bottom) // 2
+                                    if not (ml <= win_cx < mr and mt <= win_cy < mb):
+                                        continue
                         except Exception:
                             continue
-                        is_active = bool(fg_hwnd and c_hwnd == fg_hwnd) or (len(roots_to_walk) == 0)
+                        valid_children.append((child, c_hwnd if isinstance(c_hwnd, int) else 0))
+
+                    effective_fg_hwnd = fg_hwnd
+                    fg_child = next((c for c, ch in valid_children if fg_hwnd and ch == fg_hwnd), None)
+                    fg_cls = getattr(fg_child, "ClassName", "") if fg_child is not None else ""
+                    fg_name_low = str(getattr(fg_child, "Name", "") or "").strip().lower() if fg_child is not None else ""
+                    fg_is_shell_or_launcher = (
+                        fg_child is None
+                        or fg_cls in ("Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd")
+                        or fg_name_low in ("program manager", "workerw", "desktop", "taskbar", "parasiteai launcher")
+                        or "parasiteai launcher" in fg_name_low
+                    )
+                    if fg_is_shell_or_launcher and goal_keywords:
+                        g_kws = [kw.lower() for kw in goal_keywords if len(kw) >= 3]
+                        g_ckws = [re.sub(r"[^a-z0-9\+#]", "", kw) for kw in g_kws if len(re.sub(r"[^a-z0-9\+#]", "", kw)) >= 3]
+                        for child, c_hwnd in valid_children:
+                            if not c_hwnd:
+                                continue
+                            c_cls = getattr(child, "ClassName", "")
+                            c_title = str(getattr(child, "Name", "") or "").strip().lower()
+                            if (
+                                c_cls in ("Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd")
+                                or c_title in ("program manager", "workerw", "desktop", "taskbar", "parasiteai launcher")
+                                or "parasiteai launcher" in c_title
+                            ):
+                                continue
+                            c_compact = re.sub(r"[^a-z0-9\+#]", "", c_title)
+                            if (
+                                any(kw in c_title for kw in g_kws)
+                                or (c_compact and any(ckw in c_compact or c_compact in ckw for ckw in g_ckws))
+                            ):
+                                effective_fg_hwnd = c_hwnd
+                                break
+
+                    has_fg_match = bool(effective_fg_hwnd and any(c_hwnd == effective_fg_hwnd for _, c_hwnd in valid_children))
+                    for idx, (child, c_hwnd) in enumerate(valid_children):
+                        is_active = (c_hwnd == effective_fg_hwnd) if has_fg_match else (idx == 0)
                         roots_to_walk.append((child, is_active))
-                    if roots_to_walk:
+                        if is_active and root_control is None:
+                            root_control = child
+                    if roots_to_walk and root_control is None:
                         root_control = roots_to_walk[0][0]
                 else:
                     # Unit test mock or fallback path
@@ -326,6 +440,33 @@ class ScreenGrounder:
                         roots_to_walk = [(root_control, True)]
 
             self._last_excluded_rect = excluded_rect
+            if root_control is not None:
+                rc_hwnd = getattr(root_control, "NativeWindowHandle", 0)
+                rc_pid = getattr(root_control, "ProcessId", 0)
+                self._last_active_win_title = str(getattr(root_control, "Name", "") or "").strip()
+                self._last_active_proc_name = self._resolve_process_name(
+                    hwnd=rc_hwnd if isinstance(rc_hwnd, int) else 0,
+                    pid=rc_pid if isinstance(rc_pid, int) else 0,
+                )
+                try:
+                    rb = root_control.BoundingRectangle
+                    if rb:
+                        rw = rb.width() if callable(rb.width) else rb.width
+                        rh = rb.height() if callable(rb.height) else rb.height
+                        self._last_active_win_rect = (
+                            rb.left,
+                            rb.top,
+                            getattr(rb, "right", rb.left + rw),
+                            getattr(rb, "bottom", rb.top + rh),
+                        )
+                    else:
+                        self._last_active_win_rect = None
+                except Exception:
+                    self._last_active_win_rect = None
+            else:
+                self._last_active_win_title = ""
+                self._last_active_proc_name = ""
+                self._last_active_win_rect = None
         except Exception as exc:
             logger.debug("Failed to acquire UIA root control: %s", exc)
             return [], None
@@ -343,30 +484,78 @@ class ScreenGrounder:
         except Exception:
             pass
 
+        clean_kws = [kw.lower() for kw in (goal_keywords or []) if len(kw) >= 2]
+        compact_kws = [re.sub(r"[^a-z0-9\+#]", "", kw) for kw in clean_kws if len(re.sub(r"[^a-z0-9\+#]", "", kw)) >= 3]
         raw_elements: List[RawElement] = []
         occluder_rects: List[Tuple[int, int, int, int]] = []
         if excluded_rect is not None:
             occluder_rects.append(excluded_rect)
 
         walk_depth = self._depth_limit if len(roots_to_walk) == 1 and type(auto).__name__ == "MagicMock" else max(self._depth_limit, 10)
+        current_pid = os.getpid()
 
         for win_ctl, is_active_win in roots_to_walk:
-            if len(raw_elements) >= 300:
+            if len(raw_elements) >= 400:
                 break
+            win_pid = getattr(win_ctl, "ProcessId", 0)
+            if win_pid and win_pid == current_pid:
+                continue
             window_start_count = len(raw_elements)
             win_title = str(getattr(win_ctl, "Name", "") or "").strip()
             win_hwnd = getattr(win_ctl, "NativeWindowHandle", 0)
-            win_pid = getattr(win_ctl, "ProcessId", 0)
             proc_name = self._resolve_process_name(hwnd=win_hwnd, pid=win_pid)
+
+            win_title_lower = win_title.lower()
+            is_desktop_win = (
+                proc_name.lower() == "explorer.exe"
+                and any(d in win_title_lower for d in ("program manager", "workerw", "desktop", ""))
+            )
+            # Desktop window holds all desktop shortcuts (e.g. 150+ icons); use higher element cap
+            max_win_elements = 250 if is_desktop_win else 120
+            last_listitem_name: Optional[str] = None
+            scan_after_cap_steps = 0
+            total_nodes_scanned = 0
+
             try:
                 for control, depth in auto.WalkControl(win_ctl, includeTop=False, maxDepth=walk_depth):
-                    # Per-window cap (120) and overall cap (300) bound runaway trees
-                    if len(raw_elements) >= 300 or (len(raw_elements) - window_start_count) >= 120:
+                    total_nodes_scanned += 1
+                    if total_nodes_scanned >= 2000:
                         break
+                    ctl_pid = getattr(control, "ProcessId", 0)
+                    if ctl_pid and ctl_pid == current_pid:
+                        continue
+                    # Check goal match early so target elements are not dropped by the cap
+                    ctl_name_raw = getattr(control, "Name", None) or getattr(control, "HelpText", None) or ""
+                    ctl_name_lower = str(ctl_name_raw).strip().lower()
+                    ctl_name_compact = re.sub(r"[^a-z0-9\+#]", "", ctl_name_lower)
+                    ctl_type = getattr(control, "ControlTypeName", "")
+
+                    is_goal_match = bool(
+                        (clean_kws and any(kw in ctl_name_lower for kw in clean_kws))
+                        or (compact_kws and ctl_name_compact and any(ckw in ctl_name_compact or ctl_name_compact in ckw for ckw in compact_kws if len(ctl_name_compact) >= 3))
+                    )
+
+                    # Per-window cap and overall cap bound runaway trees, but allow goal matches up to 400
+                    elements_in_win = len(raw_elements) - window_start_count
+                    if len(raw_elements) >= 400:
+                        break
+                    if elements_in_win >= max_win_elements and not is_goal_match:
+                        # Allow up to 500 extra scan iterations looking for goal matches after cap
+                        scan_after_cap_steps += 1
+                        if scan_after_cap_steps >= 500:
+                            break
+                        continue
+
+                    # On desktop / list views, skip child text/image elements whose label matches enclosing list item
+                    if ctl_type == "ListItemControl":
+                        last_listitem_name = ctl_name_lower
+                    elif ctl_type in ("TextControl", "ImageControl") and is_desktop_win:
+                        if last_listitem_name and (ctl_name_lower == last_listitem_name or not ctl_name_lower):
+                            continue
 
                     try:
-                        # Offscreen check
-                        if getattr(control, "IsOffscreen", False):
+                        # Offscreen check: do not skip if element matches goal keywords
+                        if getattr(control, "IsOffscreen", False) and not is_goal_match:
                             continue
 
                         ctl_hwnd = getattr(control, "NativeWindowHandle", 0)
@@ -379,8 +568,8 @@ class ScreenGrounder:
                         if not rect:
                             continue
 
-                        w = rect.width() if callable(rect.width) else rect.width
-                        h = rect.height() if callable(rect.height) else rect.height
+                        w = rect.width() if callable(getattr(rect, "width", None)) else rect.width
+                        h = rect.height() if callable(getattr(rect, "height", None)) else rect.height
 
                         # Skip degenerate or invisible spacer nodes
                         if w < 8 or h < 8:
@@ -391,7 +580,15 @@ class ScreenGrounder:
                             continue
 
                         ctl_type = getattr(control, "ControlTypeName", "")
-                        if ctl_type not in INTERACTIVE_ROLES:
+                        cls_name = str(getattr(control, "ClassName", "") or "").strip()
+                        is_editor_pane = (
+                            ctl_type in ("PaneControl", "CustomControl", "DocumentControl")
+                            and any(
+                                ed in cls_name.lower()
+                                for ed in ("scintilla", "richedit", "edit", "editor")
+                            )
+                        )
+                        if ctl_type not in INTERACTIVE_ROLES and not is_editor_pane:
                             # Allow PaneControl or ImageControl only if it has an explicit accessible name and button-like bounds
                             if ctl_type in ("PaneControl", "ImageControl"):
                                 name = getattr(control, "Name", "")
@@ -400,31 +597,46 @@ class ScreenGrounder:
                             else:
                                 continue
 
-                        role = INTERACTIVE_ROLES.get(ctl_type, "Button")
+                        if is_editor_pane:
+                            role = "Document"
+                        else:
+                            role = INTERACTIVE_ROLES.get(ctl_type, "Button")
+
                         name = (
                             getattr(control, "Name", None)
                             or getattr(control, "HelpText", None)
                             or ""
                         )
-                        if not name:
+                        if not name and is_editor_pane:
+                            name = "Editor Canvas"
+                        elif not name:
                             auto_id = getattr(control, "AutomationId", "") or ""
                             if not auto_id.startswith("auto_"):
                                 name = auto_id
                         label = str(name).strip()[:80]
+                        if role == "Button" and label.lower() in self.SCROLLBAR_BUTTON_LABELS:
+                            continue
 
-                        cx = rect.xcenter() if callable(rect.xcenter) else (rect.left + w // 2)
-                        cy = rect.ycenter() if callable(rect.ycenter) else (rect.top + h // 2)
+                        cx = rect.xcenter() if callable(getattr(rect, "xcenter", None)) else (rect.left + w // 2)
+                        cy = rect.ycenter() if callable(getattr(rect, "ycenter", None)) else (rect.top + h // 2)
+
+                        # Filter out controls located outside the configured target monitor (e.g. Right Monitor x >= 1920)
+                        if mon_rect is not None:
+                            ml, mt, mr, mb = mon_rect
+                            if not (ml <= cx < mr and mt <= cy < mb):
+                                continue
 
                         if getattr(control, "ClassName", "") in ("CompanionDock", "GhostHUD"):
                             continue
 
                         # Skip if occluded by CompanionDock or any window in front of win_ctl in Z-order
+                        # Target elements matching user goal keywords are never dropped by occlusion
                         is_occluded = False
                         for ol, ot, oright, obot in occluder_rects:
                             if ol <= cx <= oright and ot <= cy <= obot:
                                 is_occluded = True
                                 break
-                        if is_occluded:
+                        if is_occluded and not is_goal_match:
                             continue
 
                         raw_elements.append(
@@ -546,6 +758,11 @@ class ScreenGrounder:
                 abs_y = offset_y + min_y
                 cx_ocr = abs_x + bw // 2
                 cy_ocr = abs_y + bh // 2
+                mon_rect = self._get_target_monitor_rect()
+                if mon_rect is not None:
+                    ml, mt, mr, mb = mon_rect
+                    if not (ml <= cx_ocr < mr and mt <= cy_ocr < mb):
+                        continue
                 excl = getattr(self, "_last_excluded_rect", None)
                 if excl is not None:
                     el, et, er, eb = excl
@@ -564,6 +781,8 @@ class ScreenGrounder:
                         source="ocr",
                         confidence=float(conf),
                         is_active_window=True,
+                        process_name=getattr(self, "_last_active_proc_name", ""),
+                        window_title=getattr(self, "_last_active_win_title", ""),
                     )
                 )
             except Exception as exc:
@@ -585,9 +804,17 @@ class ScreenGrounder:
 
         for ocr in ocr_elements:
             matched_uia = False
+            ocr_area = max(1, ocr.width * ocr.height)
             for uia in uia_elements:
+                uia_area = max(1, uia.width * uia.height)
+                # Large container/canvas elements (e.g. console Document "Text Area" or full-window Pane)
+                # must not swallow inner OCR text lines via containment.
+                is_large_container = (
+                    uia.role in ("Document", "Pane", "Window")
+                    or uia_area > 6 * ocr_area
+                )
                 iou = compute_iou(ocr.bbox, uia.bbox)
-                containment = compute_containment(ocr.bbox, uia.bbox)
+                containment = 0.0 if is_large_container else compute_containment(ocr.bbox, uia.bbox)
 
                 if iou >= self.IOU_THRESHOLD or containment >= self.CONTAINMENT_THRESHOLD:
                     matched_uia = True
@@ -603,9 +830,15 @@ class ScreenGrounder:
 
         return uia_elements + surviving_ocr
 
-    def _normalize_elements(self, raw_elements: List[RawElement]) -> List[UIElement]:
+    def _normalize_elements(
+        self,
+        raw_elements: List[RawElement],
+        goal_keywords: Optional[List[str]] = None,
+        offset: int = 0,
+    ) -> List[UIElement]:
         """
-        Sorts, filters degenerate boxes, caps length, and assigns 1-based Set-of-Mark IDs.
+        Sorts, filters degenerate boxes, prioritizes goal-relevant targets, caps length,
+        and assigns 1-based Set-of-Mark IDs. Supports offset for element cycling/paging.
         """
         valid: List[RawElement] = []
         for elem in raw_elements:
@@ -615,14 +848,48 @@ class ScreenGrounder:
                 continue
             valid.append(elem)
 
-        # Sort: active window first; if overcrowded, prioritize interactive controls over passive Text labels
-        if len(valid) > self.config.max_som_elements:
-            valid.sort(key=lambda e: (not e.is_active_window, e.role == "Text", e.y, e.x))
-        else:
-            valid.sort(key=lambda e: (not e.is_active_window, e.y, e.x))
+        # Clean keywords for goal matching (including spaceless/compound normalizations)
+        clean_kws = [kw.lower() for kw in (goal_keywords or []) if len(kw) >= 2]
+        compact_kws = [re.sub(r"[^a-z0-9\+#]", "", kw) for kw in clean_kws if len(re.sub(r"[^a-z0-9\+#]", "", kw)) >= 3]
 
-        # Cap to max elements
-        capped = valid[: self.config.max_som_elements]
+        def _goal_relevance_key(e: RawElement) -> int:
+            if not clean_kws:
+                return 1
+            lbl = (e.label or "").lower()
+            if any(kw in lbl for kw in clean_kws):
+                return 0
+            lbl_compact = re.sub(r"[^a-z0-9\+#]", "", lbl)
+            if compact_kws and len(lbl_compact) >= 3 and any(ckw in lbl_compact or lbl_compact in ckw for ckw in compact_kws):
+                return 0
+            return 1
+
+        def _is_chrome_key(e: RawElement) -> int:
+            return 1 if (e.label or "").strip().lower() in self.WINDOW_CHROME_LABELS else 0
+
+        active_win_title_low = str(getattr(self, "_last_active_win_title", "") or "").strip().lower()
+        active_win_compact = re.sub(r"[^a-z0-9\+#]", "", active_win_title_low)
+        active_win_matches_goal = bool(
+            clean_kws
+            and active_win_title_low
+            and active_win_title_low not in ("program manager", "workerw", "desktop", "taskbar", "parasiteai launcher")
+            and (
+                any(kw in active_win_title_low for kw in clean_kws)
+                or (compact_kws and len(active_win_compact) >= 3 and any(ckw in active_win_compact or active_win_compact in ckw for ckw in compact_kws))
+            )
+        )
+
+        # When the active window itself is the goal application, prioritize its in-window controls
+        # ahead of background desktop shortcuts, and put client-area controls ahead of window chrome.
+        if active_win_matches_goal:
+            valid.sort(key=lambda e: (not e.is_active_window, _is_chrome_key(e), _goal_relevance_key(e), e.y, e.x))
+        elif len(valid) > self.config.max_som_elements:
+            valid.sort(key=lambda e: (_goal_relevance_key(e), not e.is_active_window, _is_chrome_key(e), e.role == "Text", e.y, e.x))
+        else:
+            valid.sort(key=lambda e: (_goal_relevance_key(e), not e.is_active_window, _is_chrome_key(e), e.y, e.x))
+
+        # Apply offset for element cycling/paging
+        paged = valid[offset:] if offset > 0 else valid
+        capped = paged[: self.config.max_som_elements]
 
         output: List[UIElement] = []
         for idx, elem in enumerate(capped, start=1):
@@ -668,4 +935,48 @@ class ScreenGrounder:
                 f"[#{elem.id}] {elem.role} {label_part} at ({elem.center_x}, {elem.center_y}) "
                 f"[{elem.width}x{elem.height}]{extra_part} (source: {elem.source})"
             )
+        return "\n".join(lines)
+
+    def format_concise_scene_summary(self, elements: List[UIElement], max_controls: int = 8) -> str:
+        """
+        Formats a high-level, token-efficient visual scene summary for Pass 1 (Persona Engine).
+        Includes active window controls, open background windows, and top desktop/background targets
+        so Pass 1 can reason about the actual `[#ID]`s on screen before forming an intent.
+        """
+        if not elements:
+            return "Visual scene: Desktop is empty or no interactive elements detected."
+
+        active_elements = [e for e in elements if e.is_active_window]
+        bg_elements = [e for e in elements if not e.is_active_window]
+
+        lines = []
+        if active_elements:
+            first = active_elements[0]
+            win_title = first.window_title or "(Untitled Window)"
+            app = first.process_name or "unknown"
+            lines.append(f'Active Window: "{win_title[:50]}" (app: {app})')
+        else:
+            lines.append("Active Window: Desktop / Program Manager")
+
+        apps = set(e.process_name for e in elements if e.process_name)
+        if apps:
+            lines.append(f"Visible Applications: {', '.join(sorted(apps)[:5])}")
+
+        controls_to_show = active_elements[:max_controls] if active_elements else elements[:max_controls]
+        control_descs = []
+        for elem in controls_to_show:
+            lbl = f'"{elem.label[:30]}"' if elem.label else "(unlabeled)"
+            control_descs.append(f"[#{elem.id}] {elem.role} {lbl}")
+        if control_descs:
+            lines.append(f"Key Controls: {', '.join(control_descs)}")
+
+        if bg_elements:
+            bg_preview = []
+            for elem in bg_elements[:max_controls]:
+                lbl = f'"{elem.label[:28]}"' if elem.label else "(unlabeled)"
+                win_hint = f" ({elem.window_title[:20]})" if elem.window_title and elem.window_title.lower() not in ("program manager", "desktop", "taskbar", "") else ""
+                bg_preview.append(f"[#{elem.id}] {elem.role} {lbl}{win_hint}")
+            preview_str = f" -> {', '.join(bg_preview)}" if bg_preview else ""
+            lines.append(f"Background/Desktop Targets: {len(bg_elements)} other items detected (total: {len(elements)}){preview_str}")
+
         return "\n".join(lines)

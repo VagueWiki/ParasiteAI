@@ -1,0 +1,87 @@
+{
+  "goal": "Copy the token text from the open Notepad window to the clipboard",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 4,
+  "max_steps": 5,
+  "duration_sec": 32.596,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    10.175,
+    8.352,
+    7.449,
+    6.309
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "source.txt - Notepad",
+    "process_name": "notepad.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "CLICK",
+      "target_id": 99,
+      "target_label": "Notepad - 1 running window",
+      "coordinates": [
+        852,
+        1060
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.8359550561797753,
+      "error_message": null,
+      "duration_sec": 10.175
+    },
+    {
+      "step_id": 2,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "Text Editor",
+      "coordinates": [
+        747,
+        497
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.4999476354801041,
+      "error_message": null,
+      "duration_sec": 8.352
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "Text Editor",
+      "coordinates": [
+        747,
+        497
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.00020073065960094744,
+      "error_message": null,
+      "duration_sec": 7.449
+    },
+    {
+      "step_id": 4,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 6.309
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048987.5729306
+}

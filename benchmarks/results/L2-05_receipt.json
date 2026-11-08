@@ -1,0 +1,104 @@
+{
+  "goal": "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 37.935,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    8.108,
+    7.763,
+    7.446,
+    7.331,
+    6.873
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "*new 7 - Notepad++",
+    "process_name": "notepad++.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 3,
+      "target_label": "New folder",
+      "coordinates": [
+        202,
+        340
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.870213963963964,
+      "error_message": null,
+      "duration_sec": 8.108
+    },
+    {
+      "step_id": 2,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 10,
+      "target_label": "Normal text file",
+      "coordinates": [
+        580,
+        1029
+      ],
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.42646568491247566,
+      "error_message": null,
+      "duration_sec": 7.763
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 10,
+      "target_label": "Normal text file",
+      "coordinates": [
+        580,
+        1029
+      ],
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.10883578771881078,
+      "error_message": null,
+      "duration_sec": 7.446
+    },
+    {
+      "step_id": 4,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 10,
+      "target_label": "Normal text file",
+      "coordinates": [
+        241,
+        81
+      ],
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.11296193387051959,
+      "error_message": null,
+      "duration_sec": 7.331
+    },
+    {
+      "step_id": 5,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 6.873
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048901.0222101
+}

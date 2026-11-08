@@ -24,7 +24,7 @@ from parasite_ai.hands.keyboard import KeyboardDriver, MockInputBackend
 from parasite_ai.hands.mouse import MouseDriver
 from parasite_ai.mind.brain_manager import BrainMode, LocalBrainManager
 from parasite_ai.mind.dual_mind import DualMindPipeline
-from parasite_ai.mind.memory import ActionPlan, ActionType, EpisodicMemory, StepRecord
+from parasite_ai.mind.memory import ActionPlan, ActionType, CadenceTier, EpisodicMemory, EpisodeReceipt, StepRecord, StepRecordSummary
 from parasite_ai.mind.offloader import BrowserOffloader
 from parasite_ai.safety.interrupt_guard import InterruptGuard
 from parasite_ai.safety.window_guard import WindowGuard
@@ -51,12 +51,17 @@ class RuntimeOrchestrator(QObject):
         simulation_mode: bool = False,
         headless: bool = False,
         parent: Optional[QObject] = None,
+        episode_report_path: Optional[str] = None,
     ) -> None:
         super().__init__(parent)
         self.config = config or AppConfig()
         self.bridge = bridge or UIBridge()
         self.simulation_mode = simulation_mode
         self.headless = headless
+        self.auto_exit_on_complete: bool = False
+        self.default_max_steps: int = 15
+        self.episode_report_path: Optional[str] = episode_report_path
+        self.last_episode_receipt: Optional[EpisodeReceipt] = None
 
         # Operational Flags
         self._is_running: bool = False
@@ -89,7 +94,10 @@ class RuntimeOrchestrator(QObject):
         )
 
         # 3. Instantiate Perception Subsystems
-        self.screen_capture = ScreenCapture(backend=self.config.vision.capture_backend)
+        self.screen_capture = ScreenCapture(
+            backend=self.config.vision.capture_backend,
+            monitor_index=getattr(self.config.vision, "monitor_index", 1),
+        )
         self.screen_grounder = ScreenGrounder(
             config=self.config.vision,
             capturer=self.screen_capture,
@@ -251,7 +259,7 @@ class RuntimeOrchestrator(QObject):
 
             try:
                 self.memory.reset_loop_detector(reset_escalation=True)
-                self._execute_goal_episode(goal)
+                self._execute_goal_episode(goal, max_steps=self.default_max_steps)
             except Exception as exc:
                 logger.critical(
                     f"Unhandled exception during goal episode '{goal}': {exc}",
@@ -263,6 +271,11 @@ class RuntimeOrchestrator(QObject):
                 self.bridge.notify_speech(f"An internal error occurred: {exc}")
                 self.bridge.notify_state("WATCHING", "Curious")
                 self.bridge.notify_telemetry(f"Episode aborted due to internal error: {exc}")
+            finally:
+                if self.auto_exit_on_complete:
+                    logger.info("auto_exit_on_complete enabled; requesting application close after episode.")
+                    self.bridge.sig_close_requested.emit()
+                    break
 
         logger.info("Cognitive worker loop terminated.")
 
@@ -275,12 +288,21 @@ class RuntimeOrchestrator(QObject):
             logger.info("New goal received post-panic; auto re-arming system.")
             self.reset_panic()
 
+        if hasattr(self.interrupt_guard, "reset_interrupt_counters"):
+            self.interrupt_guard.reset_interrupt_counters()
+
         self.bridge.notify_state("THINKING", "Focused")
         self.bridge.notify_telemetry(f"Starting goal: {goal}", 0, max_steps)
         was_panic_or_loop = False
+        start_time = time.time()
+        step_summaries: List[StepRecordSummary] = []
+        exit_reason = "MAX_STEPS"
+        episode_success = False
+        episode_error: Optional[str] = None
 
         for step_idx in range(1, max_steps + 1):
             if self._stop_event.is_set():
+                exit_reason = "STOPPED"
                 break
 
             # 1. Handle Paused State
@@ -289,6 +311,7 @@ class RuntimeOrchestrator(QObject):
                 time.sleep(0.2)
 
             if self._stop_event.is_set():
+                exit_reason = "STOPPED"
                 break
 
             # 2. Handle Hardware Override State
@@ -298,27 +321,34 @@ class RuntimeOrchestrator(QObject):
                 while self.interrupt_guard.is_interrupted() and not self._stop_event.is_set():
                     time.sleep(0.2)
                 if self._stop_event.is_set():
+                    exit_reason = "STOPPED"
                     break
                 self.bridge.notify_state("THINKING", "Focused")
 
-            # 3. Handle Sensitive Window Protection
-            if not self.window_guard.is_safe_to_operate():
+            # 3. Handle Sensitive Window Protection (bypassed in headless simulation/test mode)
+            if not self.headless and not self.window_guard.is_safe_to_operate():
                 logger.warning("Active window is sensitive/protected. Pausing observation.")
                 self.bridge.notify_state("PROTECTED", "Cautious")
                 self.bridge.clear_hud_targets()
                 while not self.window_guard.is_safe_to_operate() and not self._stop_event.is_set():
                     time.sleep(0.5)
                 if self._stop_event.is_set():
+                    exit_reason = "STOPPED"
                     break
                 self.bridge.notify_state("THINKING", "Focused")
 
             # 4. Execute Atomic Cognitive Step with Error Boundary
             self.bridge.notify_telemetry(f"Step {step_idx}/{max_steps}: Perceiving & Reasoning", step_idx, max_steps)
             self._is_in_cognitive_step = True
+            t_step_start = time.time()
             try:
                 step_record = self.pipeline.step(user_goal=goal)
+                step_dur = time.time() - t_step_start
+                step_summaries.append(step_record.to_summary(duration_sec=round(step_dur, 3)))
             except Exception as exc:
                 logger.error(f"Step {step_idx} failed with unhandled exception: {exc}", exc_info=True)
+                episode_error = str(exc)
+                exit_reason = "ERROR"
                 self.bridge.notify_speech(f"An internal error occurred: {exc}")
                 self.bridge.notify_state("WATCHING", "Curious")
                 self.bridge.notify_telemetry(f"Step error: {exc}", step_idx, max_steps)
@@ -332,6 +362,8 @@ class RuntimeOrchestrator(QObject):
             # Terminal / Special States:
             # Done Condition
             if action_type == ActionType.DONE:
+                exit_reason = "DONE"
+                episode_success = True
                 self.bridge.notify_speech("I've completed your goal!")
                 self.bridge.notify_state("WATCHING", "Amused")
                 self.bridge.notify_telemetry("Goal completed successfully!", max_steps, max_steps)
@@ -340,6 +372,7 @@ class RuntimeOrchestrator(QObject):
             # Panic Condition
             if action_type == ActionType.PANIC or self.interrupt_guard.is_panic():
                 was_panic_or_loop = True
+                exit_reason = "PANIC"
                 self.bridge.notify_speech("Emergency abort triggered! Backing off.")
                 self.bridge.notify_state("WATCHING", "Panic-Averted")
                 self.bridge.notify_telemetry("Goal aborted by emergency panic", step_idx, max_steps)
@@ -348,6 +381,7 @@ class RuntimeOrchestrator(QObject):
             # Cognitive Loop Detection (3-strike failure loop)
             if self.memory.is_in_loop():
                 was_panic_or_loop = True
+                exit_reason = "LOOP_STAGNATION"
                 self.bridge.notify_speech("I noticed we're repeating actions without screen change. Pausing.")
                 self.bridge.notify_state("WATCHING", "Panic-Averted")
                 self.bridge.notify_telemetry("Paused: 3 consecutive failure strikes detected", step_idx, max_steps)
@@ -355,6 +389,54 @@ class RuntimeOrchestrator(QObject):
 
             # Settle delay between steps
             time.sleep(0.1)
+
+        total_dur = time.time() - start_time
+        active_window_info = None
+        if hasattr(self, "window_guard") and self.window_guard:
+            try:
+                winfo = self.window_guard.get_active_window_info()
+                active_window_info = {
+                    "title": getattr(winfo, "title", ""),
+                    "process_name": getattr(winfo, "process_name", ""),
+                }
+            except Exception:
+                pass
+
+        step_latencies = [s.duration_sec for s in step_summaries]
+        interrupt_count = getattr(self.interrupt_guard, "interrupt_count", 0)
+        total_strikes = getattr(self.memory, "consecutive_strikes", 0)
+
+        highest_tier = "TIER_1_LOCAL"
+        if hasattr(self.memory, "history") and self.memory.history:
+            try:
+                tier_vals = [getattr(r, "tier_level", CadenceTier.TIER_1_LOCAL) for r in self.memory.history]
+                highest_tier = str(max(tier_vals, key=lambda t: getattr(t, "value", str(t))).value if hasattr(max(tier_vals), "value") else str(max(tier_vals)))
+            except Exception:
+                pass
+
+        receipt = EpisodeReceipt(
+            goal=goal,
+            success=episode_success,
+            claimed_done=(exit_reason == "DONE"),
+            total_steps=len(step_summaries),
+            max_steps=max_steps,
+            duration_sec=round(total_dur, 3),
+            exit_reason=exit_reason,
+            step_latencies_sec=step_latencies,
+            total_strikes=total_strikes,
+            highest_tier_reached=str(highest_tier),
+            hardware_interrupt_count=interrupt_count,
+            final_active_window=active_window_info,
+            steps=step_summaries,
+            error=episode_error,
+        )
+        self.last_episode_receipt = receipt
+        if self.episode_report_path:
+            try:
+                receipt.save(self.episode_report_path)
+                logger.info("Saved episode receipt to %s", self.episode_report_path)
+            except Exception as save_err:
+                logger.error("Failed to save episode receipt to %s: %s", self.episode_report_path, save_err)
 
         # Episode Teardown & Reset Loop Detector
         self.memory.reset_loop_detector(reset_escalation=True)

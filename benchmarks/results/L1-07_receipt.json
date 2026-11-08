@@ -1,0 +1,50 @@
+{
+  "goal": "Minimize Notepad",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 2,
+  "max_steps": 5,
+  "duration_sec": 11.686,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    7.072,
+    4.505
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Google Gemini - Google Chrome",
+    "process_name": "chrome.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "MINIMIZE_WINDOW",
+      "target_id": 1,
+      "target_label": "File",
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.8469868173258004,
+      "error_message": null,
+      "duration_sec": 7.072
+    },
+    {
+      "step_id": 2,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.505
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048629.8316627
+}

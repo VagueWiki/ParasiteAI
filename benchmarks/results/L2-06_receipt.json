@@ -1,0 +1,104 @@
+{
+  "goal": "Close the error dialog and then open Notepad",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 42.065,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    10.282,
+    8.416,
+    8.166,
+    7.668,
+    7.122
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Save",
+    "process_name": "notepad++.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "File",
+      "coordinates": [
+        16,
+        32
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.7689048239895697,
+      "error_message": null,
+      "duration_sec": 10.282
+    },
+    {
+      "step_id": 2,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 44,
+      "target_label": "Notepad++",
+      "coordinates": [
+        530,
+        32
+      ],
+      "text": "Notepad",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.5213880401571366,
+      "error_message": null,
+      "duration_sec": 8.416
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "File",
+      "coordinates": [
+        16,
+        32
+      ],
+      "text": "Notepad",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.6965449804432855,
+      "error_message": null,
+      "duration_sec": 8.166
+    },
+    {
+      "step_id": 4,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "Close\tCtrl+W",
+      "coordinates": [
+        337,
+        298
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.9797395079594791,
+      "error_message": null,
+      "duration_sec": 7.668
+    },
+    {
+      "step_id": 5,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 7.122
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048948.8212237
+}

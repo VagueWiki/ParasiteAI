@@ -1,0 +1,100 @@
+{
+  "goal": "Open Calculator and compute 7 * 8",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 32.679,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    9.295,
+    5.718,
+    5.671,
+    5.601,
+    5.888
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Google Gemini - Google Chrome",
+    "process_name": "chrome.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win",
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.15350067515432098,
+      "error_message": null,
+      "duration_sec": 9.295
+    },
+    {
+      "step_id": 2,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win",
+      "keys": [
+        "win"
+      ],
+      "success": true,
+      "screen_diff": 0.1036815200617284,
+      "error_message": null,
+      "duration_sec": 5.718
+    },
+    {
+      "step_id": 3,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win"
+      ],
+      "success": true,
+      "screen_diff": 0.12262635030864198,
+      "error_message": null,
+      "duration_sec": 5.671
+    },
+    {
+      "step_id": 4,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Calculator\n",
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": "Caret focus not detected",
+      "duration_sec": 5.601
+    },
+    {
+      "step_id": 5,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win",
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.01322289737654321,
+      "error_message": null,
+      "duration_sec": 5.888
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048668.1712756
+}

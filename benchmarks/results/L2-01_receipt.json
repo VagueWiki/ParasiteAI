@@ -1,0 +1,108 @@
+{
+  "goal": "Open Notepad, type 'Saved Note 101', and save it as C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt",
+  "success": false,
+  "claimed_done": false,
+  "total_steps": 5,
+  "max_steps": 5,
+  "duration_sec": 26.006,
+  "exit_reason": "MAX_STEPS",
+  "step_latencies_sec": [
+    5.057,
+    4.978,
+    5.201,
+    5.098,
+    5.165
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "*new 7 - Notepad++",
+    "process_name": "notepad++.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "win",
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.9102507716049383,
+      "error_message": null,
+      "duration_sec": 5.057
+    },
+    {
+      "step_id": 2,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "File",
+      "coordinates": [
+        16,
+        32
+      ],
+      "text": "",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.34485006518904826,
+      "error_message": null,
+      "duration_sec": 4.978
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 3,
+      "target_label": "Save As...\tCtrl+Alt+S",
+      "coordinates": [
+        337,
+        210
+      ],
+      "text": "Saved Note 101",
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.9797395079594791,
+      "error_message": null,
+      "duration_sec": 5.201
+    },
+    {
+      "step_id": 4,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 2,
+      "target_label": "Edit",
+      "coordinates": [
+        49,
+        32
+      ],
+      "text": "Saved Note 101",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.586578103527256,
+      "error_message": null,
+      "duration_sec": 5.098
+    },
+    {
+      "step_id": 5,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": 1,
+      "target_label": "File",
+      "coordinates": [
+        16,
+        32
+      ],
+      "text": "Saved Note 101",
+      "keys": [],
+      "success": true,
+      "screen_diff": 0.48598435462842243,
+      "error_message": null,
+      "duration_sec": 5.165
+    }
+  ],
+  "error": null,
+  "timestamp": 1794048758.508902
+}

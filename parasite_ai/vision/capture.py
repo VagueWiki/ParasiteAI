@@ -36,6 +36,43 @@ def get_virtual_screen_bounds() -> Tuple[int, int, int, int]:
     return (0, 0, 1920, 1080)
 
 
+def get_monitor_bounds(monitor_idx: int = 1) -> Tuple[int, int, int, int]:
+    """
+    Returns (left, top, width, height) of a specific monitor (1 = primary/left monitor,
+    2 = secondary monitor, 0 = combined virtual desktop).
+    """
+    if monitor_idx <= 0:
+        return get_virtual_screen_bounds()
+    try:
+        import mss
+        sct = mss.MSS() if hasattr(mss, "MSS") else mss.mss()
+        try:
+            monitors = sct.monitors
+            if len(monitors) > monitor_idx:
+                mon = monitors[monitor_idx]
+                return (int(mon["left"]), int(mon["top"]), int(mon["width"]), int(mon["height"]))
+        finally:
+            try:
+                sct.close()
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.debug("Failed querying mss monitor %d bounds: %s", monitor_idx, exc)
+
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            pw = user32.GetSystemMetrics(0)  # SM_CXSCREEN (Primary monitor width)
+            ph = user32.GetSystemMetrics(1)  # SM_CYSCREEN (Primary monitor height)
+            if pw > 0 and ph > 0:
+                return (0, 0, int(pw), int(ph))
+        except Exception:
+            pass
+
+    return (0, 0, 1920, 1080)
+
+
 def compute_frame_diff(frame_a: np.ndarray, frame_b: np.ndarray) -> float:
     """
     Calculates normalized visual frame difference ratio in [0.0, 1.0].
@@ -78,8 +115,10 @@ def compute_frame_diff(frame_a: np.ndarray, frame_b: np.ndarray) -> float:
 class ScreenCapture:
     """Fast screen capture manager supporting mss, PIL, and synthetic fallbacks."""
 
-    def __init__(self, backend: str = "mss") -> None:
+    def __init__(self, backend: str = "mss", monitor_index: int = 1) -> None:
         self.backend = backend.lower()
+        self.monitor_index = int(monitor_index)
+        self.last_capture_backend_used: str = "none"
         self._sct: Optional[Any] = None
         self._tls = __import__("threading").local()
         self._init_backend()
@@ -115,28 +154,33 @@ class ScreenCapture:
         except Exception:
             return self._sct
 
-    def capture_screen(self, monitor_idx: int = 0) -> np.ndarray:
+    def capture_screen(self, monitor_idx: Optional[int] = None) -> np.ndarray:
         """
-        Captures full virtual desktop (monitor_idx=0) or specific monitor returning RGB numpy array (H, W, 3).
+        Captures configured target monitor (default monitor_idx=1 for primary/left monitor,
+        or 0 for full virtual desktop) returning RGB numpy array (H, W, 3).
         Gracefully falls back to PIL ImageGrab or blank synthetic frame
         if running headless or in restricted Win32 desktop sessions.
         """
+        eff_idx = self.monitor_index if monitor_idx is None else int(monitor_idx)
         sct = self._get_thread_sct() if self.backend == "mss" else None
         if self.backend == "mss" and sct is not None:
             try:
                 monitors = sct.monitors
-                if len(monitors) > monitor_idx:
-                    mon = monitors[monitor_idx]
+                if 0 <= eff_idx < len(monitors):
+                    mon = monitors[eff_idx]
+                elif len(monitors) > 1:
+                    mon = monitors[1]
                 elif len(monitors) > 0:
                     mon = monitors[0]
                 else:
-                    vx, vy, vw, vh = get_virtual_screen_bounds()
+                    vx, vy, vw, vh = get_monitor_bounds(eff_idx)
                     mon = {"top": vy, "left": vx, "width": vw, "height": vh}
 
                 sct_img = sct.grab(mon)
                 # sct_img.rgb is RGB bytes, shape (H, W, 3)
                 arr = np.frombuffer(sct_img.rgb, dtype=np.uint8)
                 arr = arr.reshape((sct_img.height, sct_img.width, 3))
+                self.last_capture_backend_used = "mss"
                 return arr
             except Exception as exc:
                 logger.debug("mss capture failed (%s), falling back to PIL", exc)
@@ -145,16 +189,22 @@ class ScreenCapture:
         try:
             from PIL import ImageGrab
             try:
-                pil_img = ImageGrab.grab(all_screens=True)
+                if eff_idx >= 1:
+                    ml, mt, mw, mh = get_monitor_bounds(eff_idx)
+                    pil_img = ImageGrab.grab(bbox=(ml, mt, ml + mw, mt + mh), all_screens=True)
+                else:
+                    pil_img = ImageGrab.grab(all_screens=True)
             except TypeError:
                 pil_img = ImageGrab.grab()
             if pil_img is not None:
+                self.last_capture_backend_used = "pillow"
                 return np.array(pil_img.convert("RGB"))
         except Exception as exc:
             logger.debug("PIL capture failed (%s), returning synthetic frame", exc)
 
-        # Headless synthetic fallback: blank frame sized to virtual desktop
-        vx, vy, vw, vh = get_virtual_screen_bounds()
+        # Headless synthetic fallback: blank frame sized to target monitor
+        self.last_capture_backend_used = "synthetic"
+        vx, vy, vw, vh = get_monitor_bounds(eff_idx)
         return np.zeros((vh, vw, 3), dtype=np.uint8)
 
     def capture_rect(self, rect: Tuple[int, int, int, int]) -> np.ndarray:
