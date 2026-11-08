@@ -37,9 +37,9 @@
 
 | Stage | Name | Core Deliverables | Gate / Target | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **P0** | **Measure, De-Hardcode & Baseline Benchmark** | Purge app-specific literals (`P0.1`), 6.5 GB VRAM ceiling & `check_gpu_governance.py` (`P0.2`), `EpisodeReceipt` & deterministic exit codes (`P0.3`), 20-task Windows 10 ground-truth verifiers (`P0.4`), hands-off runner & `baseline_p0` scorecard (`P0.5`). | Establish honest empirical baseline (`5.0%` pass, `20.0%` False-DONE). | **DONE** |
-| **P1** | **Local CUA Engine Upgrade (`llama-server` + `UI-TARS-1.5-7B`)** | Persistent out-of-process `llama-server` supervisor (eliminating cold-start timeouts), `UI-TARS-1.5-7B` Q4_K_M/IQ4_XS + `mmproj` multimodal grounding, single-pass CUA action dispatch (decoupling persona narration from critical path), self-window filtering in `ScreenGrounder`. | Eliminate cold-start timeouts & `ActionPlan` enum crashes; drop median step latency `<= 5.0s`; lift L1 pass rate. | **NEXT (PLANNING)** |
-| **P2** | **Thin Perception-to-Action Loop & Post-Condition Verification** | Replace brittle 3,100-LOC heuristic overrides in `dual_mind.py` with clean VLM screenshot + UIA hybrid grounding loop and objective post-action / pre-`DONE` verification. | Pass **Alpha Gate**: `L1 >= 70%`, `L2 >= 40%`, `False-DONE <= 5%`, `Median step <= 5.0s`. | PLANNED |
+| **P0** | **Measure, De-Hardcode & Baseline Benchmark** ([`p0_stint_map.md`](file:///C:/ParasiteAI/p0_stint_map.md)) | Purge app-specific literals (`P0.1`), 6.5 GB VRAM ceiling & `check_gpu_governance.py` (`P0.2`), `EpisodeReceipt` & deterministic exit codes (`P0.3`), 20-task Windows 10 ground-truth verifiers (`P0.4`), hands-off runner & `baseline_p0` scorecard (`P0.5`). | Establish honest empirical baseline (`5.0%` pass, `20.0%` False-DONE). | **DONE** |
+| **P1** | **Local CUA Engine Upgrade (`llama-server` + `UI-TARS-1.5-7B`)** ([`p1_stint_map.md`](file:///C:/ParasiteAI/p1_stint_map.md)) | Persistent out-of-process `llama-server` supervisor (`P1.1`), `UI-TARS-1.5-7B` `IQ4_XS` + `mmproj` & `uitars_parser.py` (`P1.2`), single-pass CUA execution & `CompanionDock` self-exclusion (`P1.3`), `baseline_p1` benchmark & post-mortem (`P1.4`). | `0` cold-start timeouts (`was 5`), `0` enum crashes (`was 2`), median step `4.741s` (`<= 5.0s`), False-DONE `5.0%` (`was 20.0%`). | **DONE** |
+| **P2** | **Thin Perception-to-Action Loop, Resilient Parser & Pre-`DONE` Verification** ([`p2_stint_map.md`](file:///C:/ParasiteAI/p2_stint_map.md)) | Fix `max_tokens=256` + stop sequences, resilient regex action extraction & Windows 10 prompt alignment (`P2.1`); strip `dual_mind.py` heuristics & relax caret guard (`P2.2`); objective pre-`DONE` goal verifier & ROI diff history (`P2.3`); Alpha Gate run (`P2.4`). | Pass **Alpha Gate**: `L1 >= 70%`, `L2 >= 40%`, `False-DONE <= 5%`, `Median step <= 5.0s`. | **NEXT (PLANNING)** |
 | **P3** | **Free Visible Browser Consultation & Opt-In API Tier** | Clean 3-tier escalation (`T0` deterministic/UIA -> `T1` local 7B CUA -> `T2` visible browser AI consultation / opt-in API planner). | Lift L2 (`>= 60%`) and L3 (`>= 33%`) multi-app & recovery tasks. | PLANNED |
 | **P4** | **Unfreeze Phase 5 (Learned App Memory) & Packaging** | Re-enable verified episode trace compilation into `data/` app notes/routines; standalone Windows 10 packaging & crash recovery. | Zero regression on L1/L2 + measurable speedup on repeated workflows. | PLANNED |
 
@@ -71,15 +71,18 @@
 - `ScreenCapture`:
   - Multi-monitor virtual desktop (`3840x1080 @ 100% DPI`) screen capture via `mss` / `PIL` with `last_capture_backend_used` (`"mss"`, `"pillow"`, `"synthetic"`) telemetry.
 - `ScreenGrounder`:
-  - Tier 1 Win32 UI Automation tree walk + Tier 2 Scoped RapidOCR (CPU ONNX) + Tier 3 spatial deduplication.
+  - Tier 1 Win32 UI Automation tree walk (`2,000`-node ceiling, `os.getpid()` + `CompanionDock` / `GhostHUD` self-exclusion) + Tier 2 Scoped RapidOCR (CPU ONNX) + Tier 3 spatial deduplication.
+- `LocalBrainManager` & `LlamaServerBackend`:
+  - Manages persistent CUDA `llama-server.exe` hosting `UI-TARS-1.5-7B.IQ4_XS.gguf` + `mmproj-Q8_0.gguf` (`-np 1 -c 4096 --image-min-tokens 1024`) and single-pass `generate_cua_step()` parsed via `uitars_parser.py`.
 - `EpisodeReceipt` (`parasite_ai/mind/memory.py`) & `RuntimeOrchestrator` (`parasite_ai/runtime.py`):
   - Every CLI `--goal` execution writes an atomic JSON `EpisodeReceipt` (`--episode-report <path>`) recording `goal`, `success`, `claimed_done`, `exit_reason`, `step_latencies_sec`, `hardware_interrupt_count`, `final_active_window`, and per-step `StepRecordSummary` entries.
   - Deterministic process exit codes in `main.py`: `0` (`DONE`), `1` (`MAX_STEPS` / `LOOP_STAGNATION` / `ERROR`), `2` (`PANIC`).
 
-### 5. Objective OS Benchmark Harness (`benchmarks/`)
+### 5. Objective OS Benchmark & 4-Tier Test Harness (`benchmarks/`, `tests/`, `scripts/test.py`)
 - `benchmarks/suite.yaml`: 20 core Windows 10 tasks (`L1-01`..`L1-10`, `L2-01`..`L2-07`, `L3-01`..`L3-03`) + 3 stretch tasks (`S-01`..`S-03`).
 - `benchmarks/verifiers.py`: `SETUP_REGISTRY` (7 pre-task setup hooks) and `VERIFIER_REGISTRY` (12 objective OS ground-truth verifiers inspecting live Win32 processes, `WM_GETTEXT` classic Notepad edit buffers, `IsIconic` window state, filesystem state, and clipboard contents).
-- `benchmarks/run_benchmark.py` & `run_baseline_p0.bat`: Interactive desktop pre-flight guard (`check_interactive_desktop_access()`), incremental per-task checkpointing (`--resume`), `--max-steps-cap`, and Failure Mode Taxonomy classification (`PASS`, `FALSE_DONE`, `MAX_STEPS_EXHAUSTED`, `LOOP_STAGNATION`, `PANIC_ABORT`, `USER_PREEMPTED`, `ENV_BLOCKED`).
+- `benchmarks/run_benchmark.py`, `run_baseline_p0.bat`, `run_benchmark_p1.bat`, and `scripts/compare_benchmarks.py`.
+- `scripts/test.py`: 4-tier test runner (`unit`: 478 tests, `integration`: 287 tests, `live_os`: 1 harness, `archive`: 31 legacy suites).
 
 ---
 
@@ -95,8 +98,9 @@ C:\ParasiteAI\
 │   ├── run_benchmark.py              # Benchmark runner with pre-flight guard & checkpointing
 │   ├── workspace/                    # Ephemeral file/folder scratchpad for benchmark tasks
 │   └── results/
-│       ├── baseline_p0.json          # Stage P0 empirical baseline telemetry
-│       ├── baseline_p0.md            # Stage P0 empirical baseline scorecard
+│       ├── baseline_p0.json / .md    # Stage P0 empirical baseline scorecard
+│       ├── baseline_p1.json / .md    # Stage P1 empirical candidate scorecard
+│       ├── baseline_p0_vs_baseline_p1.md # Side-by-side P0 vs P1 delta report
 │       └── L*_receipt.json           # Per-task EpisodeReceipt artifacts
 ├── parasite_ai/
 │   ├── config.py                     # Pydantic config schema (6500 MB VRAM, 2.5s cooldown)
@@ -105,15 +109,28 @@ C:\ParasiteAI\
 │   ├── hands/                        # Kinematics, MouseDriver, KeyboardDriver
 │   ├── ui/                           # CompanionDock, GhostHUD, UIBridge, Win32 styles
 │   ├── vision/                       # ScreenCapture, ScreenGrounder, Foveated, VLMGrounder
-│   └── mind/                         # BrainManager, DualMind, Memory, Plan, Resolver, Offloader
+│   └── mind/                         # BrainManager, UITarsParser, DualMind, Memory, Plan, Resolver
 ├── scripts/
-│   └── check_gpu_governance.py       # RTX 4060 VRAM budget & WDDM spillover check
-├── tests/                            # Automated unit, integration & live OS verifier tests
+│   ├── test.py                       # 4-tier test suite runner (unit, integration, live_os, archive)
+│   ├── serve_llama.py                # Persistent CUDA llama-server supervisor CLI
+│   ├── check_gpu_governance.py       # RTX 4060 VRAM budget & WDDM spillover check
+│   └── compare_benchmarks.py         # Side-by-side benchmark scorecard generator
+├── tests/
+│   ├── unit/                         # Tier 1: Fast isolated unit tests (478 tests)
+│   ├── integration/                  # Tier 2: Subsystem & pipeline integration tests (287 tests)
+│   ├── archive/                      # Tier 3: Historical milestone stress/challenger tests
+│   └── live_os/                      # Tier 4: Physical desktop OS tests (@pytest.mark.live_os)
 ├── config.yaml                       # Active runtime configuration
 ├── main.py                           # CLI & GUI bootstrapper with deterministic exit codes
 ├── launch_parasite.bat               # Interactive desktop launcher
-├── run_baseline_p0.bat               # One-click interactive Windows 10 benchmark launcher
+├── run_baseline_p0.bat               # Stage P0 benchmark launcher
+├── run_benchmark_p1.bat              # Stage P1 benchmark launcher (warms llama-server + compares)
+├── feasibility_review.md             # Master Architectural Feasibility & Ground-Truth Review
+├── p0_stint_map.md                   # Stage P0 Stint Map (Complete)
+├── p1_stint_map.md                   # Stage P1 10-Dimension Stint Map (Complete)
+├── stage_p1_postmortem.md            # Standalone Stage P1 Post-Mortem & Root-Cause Audit
+├── p2_stint_map.md                   # Stage P2 10-Dimension Stint Map (Active Roadmap)
 ├── PROJECT.md                        # Canonical architecture & roadmap reference
 ├── GATE_STATUS.md                    # Milestone & Pivot Stage gate audit records
-└── HANDOFF.md                        # Master session handoff & Stage P1 bootstrap guide
+└── HANDOFF.md                        # Master session handoff & Stage P2 bootstrap guide
 ```
