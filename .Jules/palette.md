@@ -1,0 +1,3 @@
+## 2025-02-12 - Interactive Element Affordances and Accessibility in Companion Dock
+**Learning:** PyQt6 custom-styled interactive widgets (like `QPushButton` and `QCheckBox` in `companion_dock.py`) lacked standard web-like affordances such as the pointing hand cursor on hover. Additionally, they were missing accessibility labels and tooltips, which are crucial for screen readers and providing context for icon-heavy or terse UI buttons.
+**Action:** Always add `setCursor(Qt.CursorShape.PointingHandCursor)`, `setAccessibleName()`, and `setToolTip()` to all interactive UI components in PyQt6 to ensure a consistent and accessible micro-UX experience.
