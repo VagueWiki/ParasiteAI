@@ -218,8 +218,8 @@ class TestPowerShellAliasesAndBypasses:
         except PermissionError:
             evasion_succeeded = False
 
-        assert evasion_succeeded is True, (
-            "Expected regex to fail on backtick obfuscation 'i`wr', documenting shell escaping surface."
+        assert evasion_succeeded is False, (
+            "Expected regex to block backtick obfuscation 'i`wr'."
         )
 
 
