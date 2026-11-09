@@ -1,0 +1,3 @@
+## 2026-11-09 - PyQt6 Interactive Element Accessibility
+**Learning:** In physical desktop agent UIs built with PyQt6, explicitly setting cursor shapes (e.g., `Qt.CursorShape.PointingHandCursor` for buttons/checkboxes/comboboxes and `Qt.CursorShape.IBeamCursor` for text inputs), accessible names (`setAccessibleName()`), and tooltips (`setToolTip()`) on all interactive components significantly improves keyboard navigation, screen reader support, and overall micro-UX consistency.
+**Action:** Always verify these three properties are present and appropriate (e.g. correct cursor for inputs vs buttons) when adding or modifying interactive UI components in PyQt6 to maintain accessibility standards.

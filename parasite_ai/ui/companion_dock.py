@@ -374,6 +374,9 @@ class CompanionDock(QWidget):
             "border-radius: 6px; padding: 6px; font-size: 9pt; } "
             "QLineEdit:focus { border: 1px solid #00e5ff; }"
         )
+        self.goal_input.setCursor(Qt.CursorShape.IBeamCursor)
+        self.goal_input.setAccessibleName("Task Input Field")
+        self.goal_input.setToolTip("Enter a task for Parasite to perform")
         self.goal_input.returnPressed.connect(self._on_submit_goal)
 
         self.btn_send = QPushButton("Send", self.main_card)
@@ -384,6 +387,9 @@ class CompanionDock(QWidget):
             "QPushButton:hover { background-color: #0369a1; } "
             "QPushButton:pressed { background-color: #075985; }"
         )
+        self.btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_send.setAccessibleName("Send Task Button")
+        self.btn_send.setToolTip("Submit the current task")
         self.btn_send.clicked.connect(self._on_submit_goal)
 
         goal_row.addWidget(self.goal_input)
@@ -400,6 +406,9 @@ class CompanionDock(QWidget):
             "border-radius: 6px; padding: 6px; font-weight: bold; font-size: 8.5pt; } "
             "QPushButton:hover { background-color: #475569; }"
         )
+        self.btn_pause.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pause.setAccessibleName("Pause Hands Button")
+        self.btn_pause.setToolTip("Temporarily pause Parasite's mouse and keyboard control")
         self.btn_pause.clicked.connect(self._on_toggle_pause)
 
         self.btn_panic = QPushButton("⚠ PANIC ABORT", self.main_card)
@@ -409,6 +418,9 @@ class CompanionDock(QWidget):
             "QPushButton:hover { background-color: #b91c1c; } "
             "QPushButton:pressed { background-color: #991b1b; }"
         )
+        self.btn_panic.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_panic.setAccessibleName("Panic Abort Button")
+        self.btn_panic.setToolTip("Immediately stop all actions and clear goals")
         self.btn_panic.clicked.connect(self._on_panic_clicked)
 
         action_row.addWidget(self.btn_pause)
@@ -422,6 +434,9 @@ class CompanionDock(QWidget):
         self.chk_hud = QCheckBox("Show HUD Tags", self.main_card)
         self.chk_hud.setChecked(True)
         self.chk_hud.setStyleSheet("QCheckBox { color: #94a3b8; font-size: 8pt; }")
+        self.chk_hud.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.chk_hud.setAccessibleName("Show HUD Tags Checkbox")
+        self.chk_hud.setToolTip("Toggle the visibility of Set-of-Mark targeting boxes")
         self.chk_hud.toggled.connect(self._on_toggle_hud)
 
         self.combo_brain_mode = QComboBox(self.main_card)
@@ -432,6 +447,9 @@ class CompanionDock(QWidget):
             "QComboBox { background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155; "
             "border-radius: 4px; padding: 2px 6px; font-size: 8pt; }"
         )
+        self.combo_brain_mode.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.combo_brain_mode.setAccessibleName("Brain Mode Selector")
+        self.combo_brain_mode.setToolTip("Select the active AI processing engine")
         self.combo_brain_mode.currentIndexChanged.connect(self._on_brain_mode_changed)
 
         utility_row.addWidget(self.chk_hud)
