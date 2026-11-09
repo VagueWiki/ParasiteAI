@@ -222,8 +222,9 @@ class CLIExecutionSandbox:
         if not command_str or not command_str.strip():
             raise ValueError("Empty CLI command string")
 
+        check_str = command_str.replace("`", "")
         for pat in cls.FORBIDDEN_PATTERNS:
-            if re.search(pat, command_str, re.IGNORECASE):
+            if re.search(pat, check_str, re.IGNORECASE):
                 raise PermissionError(f"Command rejected by security filter: pattern '{pat}' detected")
 
         # posix=False preserves Windows paths (e.g. C:\\ParasiteAI\\tests\\test_foo.py)
