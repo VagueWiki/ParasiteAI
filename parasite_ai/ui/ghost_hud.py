@@ -104,6 +104,15 @@ class HUDTarget:
     center_y: int
     color_hex: str
 
+    # Precomputed rendering attributes (⚡ Bolt: Performance optimization)
+    display_text: str = ""
+    text_width: int = 0
+    text_height: int = 0
+    pill_width: int = 0
+    pill_height: int = 0
+    qcolor: Optional[QColor] = None
+    qfill_color: Optional[QColor] = None
+
 
 class GhostHUD(QWidget):
     """
@@ -207,8 +216,9 @@ class GhostHUD(QWidget):
     def set_targets(self, targets: List[Any]) -> None:
         """Populates grounded UI elements for Set-of-Mark visual rendering."""
         normalized: List[HUDTarget] = []
+        metrics = QFontMetrics(self._badge_font)
         for raw in targets:
-            norm = self._normalize_target(raw)
+            norm = self._normalize_target(raw, metrics)
             if norm:
                 normalized.append(norm)
         self._targets = normalized
@@ -295,7 +305,7 @@ class GhostHUD(QWidget):
     # -----------------------------------------------------------------------
     # Normalization & Coordinates
     # -----------------------------------------------------------------------
-    def _normalize_target(self, raw: Any) -> Optional[HUDTarget]:
+    def _normalize_target(self, raw: Any, metrics: Optional[QFontMetrics] = None) -> Optional[HUDTarget]:
         if raw is None:
             return None
         try:
@@ -321,6 +331,23 @@ class GhostHUD(QWidget):
                 cy = int(getattr(raw, "center_y", y + h // 2))
 
             color_hex = ROLE_COLOR_MAP.get(role.lower(), self.config.som_box_color)
+
+            # Precompute string, sizes and colors to avoid per-frame allocations during animation
+            trunc_label = label[:14] + "…" if len(label) > 14 else label
+            display_text = f"[#{tid}: {trunc_label}]" if trunc_label else f"[#{tid}]"
+
+            text_w, text_h = 0, 0
+            if metrics:
+                text_w = metrics.horizontalAdvance(display_text)
+                text_h = metrics.height()
+
+            pill_w = text_w + 12
+            pill_h = text_h + 4
+
+            qcolor = QColor(color_hex)
+            box_alpha_int = max(0, min(255, int(255 * self.config.box_alpha)))
+            qfill_color = QColor(qcolor.red(), qcolor.green(), qcolor.blue(), box_alpha_int)
+
             return HUDTarget(
                 id=tid,
                 role=role,
@@ -332,6 +359,13 @@ class GhostHUD(QWidget):
                 center_x=cx,
                 center_y=cy,
                 color_hex=color_hex,
+                display_text=display_text,
+                text_width=text_w,
+                text_height=text_h,
+                pill_width=pill_w,
+                pill_height=pill_h,
+                qcolor=qcolor,
+                qfill_color=qfill_color,
             )
         except Exception:
             return None
@@ -361,30 +395,30 @@ class GhostHUD(QWidget):
 
     def _paint_som_elements(self, painter: QPainter) -> None:
         vgeom = self.geometry()
-        box_alpha_int = max(0, min(255, int(255 * self.config.box_alpha)))
         stroke_w = self.config.stroke_width_px
-        metrics = QFontMetrics(self._badge_font)
+
+        # Pre-allocate shared constants (⚡ Bolt: Performance optimization)
+        pill_bg_brush = QColor(17, 24, 39, 230)
+        text_pen = QColor(255, 255, 255)
+
+        painter.setFont(self._badge_font)
 
         for target in self._targets:
             local_pos = self._to_local(target.x, target.y)
             rect = QRectF(local_pos.x(), local_pos.y(), target.width, target.height)
 
-            color = QColor(target.color_hex)
-            fill_color = QColor(color.red(), color.green(), color.blue(), box_alpha_int)
+            color = target.qcolor or QColor(target.color_hex)
+            fill_color = target.qfill_color or QColor(color.red(), color.green(), color.blue(), 25)
 
             # Bounding box
             painter.setPen(QPen(color, stroke_w))
             painter.setBrush(fill_color)
             painter.drawRoundedRect(rect, 3.0, 3.0)
 
-            # Pill Badge Text
-            trunc_label = target.label[:14] + "…" if len(target.label) > 14 else target.label
-            text = f"[#{target.id}: {trunc_label}]" if trunc_label else f"[#{target.id}]"
-
-            tw = metrics.horizontalAdvance(text)
-            th = metrics.height()
-            pw = tw + 12
-            ph = th + 4
+            # Pill Badge Text (using memoized values)
+            text = target.display_text
+            pw = target.pill_width
+            ph = target.pill_height
 
             # Pill position: Above box, or inside box if at top screen edge
             bx = local_pos.x()
@@ -398,12 +432,11 @@ class GhostHUD(QWidget):
 
             # Draw Pill Card
             painter.setPen(QPen(color, 1.0))
-            painter.setBrush(QColor(17, 24, 39, 230))  # Slate-900 90% opacity
+            painter.setBrush(pill_bg_brush)
             painter.drawRoundedRect(pill_rect, 4.0, 4.0)
 
             # Draw Pill Text
-            painter.setPen(QColor(255, 255, 255))
-            painter.setFont(self._badge_font)
+            painter.setPen(text_pen)
             painter.drawText(pill_rect, Qt.AlignmentFlag.AlignCenter, text)
 
     def _paint_reticle_and_path(self, painter: QPainter) -> None:
