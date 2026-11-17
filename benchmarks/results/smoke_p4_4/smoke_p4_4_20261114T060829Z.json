@@ -1,0 +1,92 @@
+{
+  "timestamp": "20261114T060829Z",
+  "results": {
+    "P-A": {
+      "passed": true,
+      "hwnd": 3211992,
+      "process": "chrome.exe",
+      "title": "",
+      "identity_mode": "uia_overlay",
+      "has_minimize_box": false,
+      "caret_ok": true,
+      "uia_input_point": null,
+      "assist_input_point": null,
+      "uia_labels_sample": [
+        "PaneControl:Gemini",
+        "PaneControl:Chrome Legacy Window",
+        "DocumentControl:Gemini in Chrome"
+      ],
+      "dismissed_cleanly": true,
+      "detail": "Gemini verified via uia_overlay (caret=True, uia_input=None, dismissed=True)."
+    },
+    "P-B": {
+      "passed": true,
+      "frame_shape": [
+        1080,
+        1920,
+        3
+      ],
+      "restored_match": true,
+      "detail": "CF_DIB image pack and CF_UNICODETEXT snapshot restore verified."
+    },
+    "P-C": {
+      "passed": true,
+      "failure": null,
+      "selected_program": "LibreOffice Calc",
+      "steps_count": 10,
+      "identity_mode": "uia_overlay",
+      "submit_method": "enter",
+      "rescued_by": "uia_overlay",
+      "scroll_steps": 15,
+      "duration_sec": 33.43,
+      "detail": "Symbiosis invocation completed cleanly.",
+      "diagnostics_path": null
+    },
+    "P-D": {
+      "passed": true,
+      "failure": null,
+      "action_verb": "HOTKEY",
+      "action_target": "Active document window",
+      "identity_mode": "uia_overlay",
+      "submit_method": "send_button:local_vlm",
+      "rescued_by": "uia_overlay",
+      "scroll_steps": 7,
+      "duration_sec": 26.13,
+      "detail": "Symbiosis invocation completed cleanly.",
+      "diagnostics_path": null
+    },
+    "P-E": {
+      "passed": true,
+      "sensitive_window_match": true,
+      "preflight_failure": "PREFLIGHT_SENSITIVE_WINDOW",
+      "detail": "Sensitive window preflight hard block verified cleanly."
+    },
+    "P-F": {
+      "passed": true,
+      "phash": "d663c89567986396",
+      "phash_compute_ms": 20.653,
+      "ttl_decayed_to_stale": true,
+      "detail": "pHash=d663c89567986396 computed in 20.65ms; 35-day TTL decayed cleanly."
+    },
+    "P-G": {
+      "passed": true,
+      "open_windows_count": 8,
+      "discovered_programs_count": 25,
+      "sample_programs": [
+        "2XKO",
+        "7-Zip File Manager",
+        "7-Zip Help",
+        "7zFM",
+        "About iTunes",
+        "Access",
+        "Access Manager",
+        "Acrobat"
+      ],
+      "parasite_vram_mb": 0,
+      "desktop_total_vram_mb": 6907,
+      "vram_within_budget": true,
+      "detail": "Discovered 25 OS programs; Parasite GPU VRAM=0 MB (ceiling 6500 MB; whole-desktop GPU=6907 MB)."
+    }
+  },
+  "all_passed": true
+}

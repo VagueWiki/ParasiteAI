@@ -9,12 +9,14 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import logging
+import random
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from parasite_ai.config import MouseConfig
 from parasite_ai.hands.kinematics import KinematicConfig, KinematicsEngine
+from parasite_ai.safety.window_guard import ensure_interactive_desktop
 
 
 logger = logging.getLogger(__name__)
@@ -103,6 +105,7 @@ class MouseDriver:
         simulation_mode: bool = False,
         speed_factor: Optional[float] = None,
         preview_reticle_ms: Optional[int] = None,
+        seed: Optional[int] = None,
     ):
         self.config = config or MouseConfig()
         self.kinematics = kinematics or KinematicsEngine(
@@ -110,8 +113,15 @@ class MouseDriver:
                 arc_deviation_ratio=0.14,
                 jitter_amplitude_px=self.config.micro_jitter_amplitude_px,
                 overshoot_distance_max=float(min(5, self.config.overshoot_radius_px)),
-            )
+                use_two_phase_ballistics=getattr(self.config, "use_two_phase_ballistics", True),
+                motor_hesitation_min_s=getattr(self.config, "motor_hesitation_min_ms", 25) / 1000.0,
+                motor_hesitation_max_s=getattr(self.config, "motor_hesitation_max_ms", 60) / 1000.0,
+                dwell_mean_s=getattr(self.config, "dwell_mean_ms", 45) / 1000.0,
+                dwell_std_s=getattr(self.config, "dwell_std_ms", 10) / 1000.0,
+            ),
+            seed=seed,
         )
+        self._rng = random.Random(seed)
         self.reticle_callback = reticle_callback
         self.simulation_mode = simulation_mode
         self.speed_factor = speed_factor if speed_factor is not None else self.config.speed_factor
@@ -125,6 +135,47 @@ class MouseDriver:
         self.simulation_history: List[Dict[str, Any]] = []
 
         self._init_win32()
+
+    def _wait_interruptible(
+        self,
+        duration_s: float,
+        cancellation_token: Optional[threading.Event] = None,
+    ) -> bool:
+        """
+        Sleeps for duration_s while maintaining <2ms interrupt preemption.
+        Returns True if wait completed un-interrupted, False if cancelled.
+        """
+        if duration_s <= 0.0:
+            return not (cancellation_token and cancellation_token.is_set())
+        if cancellation_token is not None:
+            if cancellation_token.wait(timeout=duration_s):
+                self.release_all_buttons()
+                return False
+            return True
+        time.sleep(duration_s)
+        return True
+
+    def _sample_motor_hesitation_s(self) -> float:
+        """Samples variable biological motor commitment hesitation (25-60ms default)."""
+        if not getattr(self.config, "enable_motor_hesitation", True):
+            return 0.0
+        min_ms = float(getattr(self.config, "motor_hesitation_min_ms", 25))
+        max_ms = float(getattr(self.config, "motor_hesitation_max_ms", 60))
+        lo = min(min_ms, max_ms)
+        hi = max(min_ms, max_ms)
+        if hi <= 0.0:
+            return 0.0
+        return self._rng.uniform(lo, hi) / 1000.0
+
+    def _sample_dwell_s(self) -> float:
+        """Samples normally distributed button dwell hold duration (45ms +/- 10ms default)."""
+        mean_ms = float(getattr(self.config, "dwell_mean_ms", 45))
+        std_ms = float(getattr(self.config, "dwell_std_ms", 10))
+        if std_ms <= 0.0:
+            return max(0.010, mean_ms / 1000.0)
+        sampled_ms = self._rng.gauss(mean_ms, std_ms)
+        clamped_ms = max(20.0, min(85.0, sampled_ms))
+        return clamped_ms / 1000.0
 
     def _init_win32(self) -> None:
         try:
@@ -226,6 +277,9 @@ class MouseDriver:
         interval_ms: int = 60,
         cancellation_token: Optional[threading.Event] = None,
         preview_reticle: bool = True,
+        move_duration: Optional[float] = None,
+        hesitation_s: Optional[float] = None,
+        dwell_s: Optional[float] = None,
     ) -> bool:
         """
         Executes optional pre-click reticle preview (300ms), glides to target, and clicks.
@@ -246,7 +300,19 @@ class MouseDriver:
                 return False
 
         if x is not None and y is not None:
-            if not self.move_to(x, y, cancellation_token=cancellation_token, preview_reticle=False):
+            if not self.move_to(x, y, duration=move_duration, cancellation_token=cancellation_token, preview_reticle=False):
+                return False
+
+        # Biological motor commitment hesitation (25-60ms default) before first press
+        eff_hesitation_s = hesitation_s if hesitation_s is not None else self._sample_motor_hesitation_s()
+        if eff_hesitation_s > 0.0:
+            if self.simulation_mode:
+                self.simulation_history.append({
+                    "event": "motor_hesitation",
+                    "duration_ms": round(eff_hesitation_s * 1000.0, 2),
+                    "pos": self._sim_cursor_pos,
+                })
+            if not self._wait_interruptible(eff_hesitation_s, cancellation_token):
                 return False
 
         for i in range(clicks):
@@ -257,10 +323,15 @@ class MouseDriver:
             if not self.mouse_down(button, cancellation_token=cancellation_token):
                 return False
 
-            # Dwell hold time
-            dwell_s = 0.040
-            if cancellation_token and cancellation_token.wait(timeout=dwell_s):
-                self.release_all_buttons()
+            # Stochastic dwell hold time (45ms +/- 10ms default)
+            eff_dwell_s = dwell_s if dwell_s is not None else self._sample_dwell_s()
+            if self.simulation_mode:
+                self.simulation_history.append({
+                    "event": "dwell",
+                    "duration_ms": round(eff_dwell_s * 1000.0, 2),
+                    "pos": self._sim_cursor_pos,
+                })
+            if not self._wait_interruptible(eff_dwell_s, cancellation_token):
                 return False
 
             if not self.mouse_up(button, cancellation_token=cancellation_token):
@@ -268,7 +339,7 @@ class MouseDriver:
 
             if i < clicks - 1:
                 int_s = max(0.010, interval_ms / 1000.0)
-                if cancellation_token and cancellation_token.wait(timeout=int_s):
+                if not self._wait_interruptible(int_s, cancellation_token):
                     return False
 
         return True
@@ -449,6 +520,7 @@ class MouseDriver:
         # Normalize with virtual screen boundary clamping
         norm_x, norm_y = self.normalize_coordinates(x, y, vx, vy, vcx, vcy)
 
+        ensure_interactive_desktop()
         inp = INPUT(type=INPUT_MOUSE)
         inp.u.mi.dx = norm_x
         inp.u.mi.dy = norm_y
@@ -460,6 +532,7 @@ class MouseDriver:
         self._user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
     def _send_mouse_flag(self, flag: int) -> None:
+        ensure_interactive_desktop()
         inp = INPUT(type=INPUT_MOUSE)
         inp.u.mi.dx = 0
         inp.u.mi.dy = 0

@@ -8,15 +8,19 @@ latency via per-keystroke interrupt verification.
 
 from __future__ import annotations
 
+import atexit
 import ctypes
 from ctypes import wintypes
 import logging
+import os
 import random
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple
+import weakref
 
 from parasite_ai.config import KeyboardConfig
+from parasite_ai.safety.window_guard import ensure_interactive_desktop
 
 
 logger = logging.getLogger(__name__)
@@ -88,6 +92,39 @@ LLMHF_INJECTED = 0x00000001
 LLKHF_INJECTED = 0x00000010
 LLKHF_ALTDOWN = 0x00000020
 LLKHF_UP = 0x00000080
+
+# Keys that require KEYEVENTF_EXTENDEDKEY (0x0001) on Windows SendInput
+EXTENDED_VKS: frozenset[int] = frozenset({
+    VK_LWIN,
+    VK_RWIN,
+    VK_RMENU,
+    VK_RCONTROL,
+    VK_INSERT,
+    VK_DELETE,
+    VK_HOME,
+    VK_END,
+    VK_PRIOR,
+    VK_NEXT,
+    VK_LEFT,
+    VK_UP,
+    VK_RIGHT,
+    VK_DOWN,
+})
+
+ALL_MODIFIER_AND_LOCK_VKS: Tuple[int, ...] = (
+    VK_SHIFT,
+    VK_LSHIFT,
+    VK_RSHIFT,
+    VK_CONTROL,
+    VK_LCONTROL,
+    VK_RCONTROL,
+    VK_MENU,
+    VK_LMENU,
+    VK_RMENU,
+    VK_LWIN,
+    VK_RWIN,
+    VK_TAB,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +266,31 @@ class Win32InputBackend:
         self._user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
         self._user32.GetCursorPos.restype = wintypes.BOOL
 
+        self._user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+        self._user32.GetAsyncKeyState.restype = wintypes.SHORT
+
+        self._user32.GetKeyState.argtypes = [ctypes.c_int]
+        self._user32.GetKeyState.restype = wintypes.SHORT
+
+        self._user32.MapVirtualKeyW.argtypes = [wintypes.UINT, wintypes.UINT]
+        self._user32.MapVirtualKeyW.restype = wintypes.UINT
+
+    def is_key_down(self, vk: int) -> bool:
+        """Returns True iff the virtual key is currently depressed physically."""
+        try:
+            return bool(self._user32.GetAsyncKeyState(vk) & 0x8000)
+        except Exception:
+            return False
+
+    def map_vk_to_scan(self, vk: int) -> int:
+        """Maps a Win32 virtual key code to its hardware scan code (MAPVK_VK_TO_VSC=0)."""
+        try:
+            return int(self._user32.MapVirtualKeyW(vk, 0) or 0) & 0xFFFF
+        except Exception:
+            return 0
+
     def send_inputs(self, inputs: List[INPUT]) -> int:
+        ensure_interactive_desktop()
         n = len(inputs)
         if n == 0:
             return 0
@@ -335,6 +396,12 @@ class MockInputBackend:
     def get_screen_metrics(self) -> Tuple[int, int, int, int, int, int]:
         return self.screen_metrics
 
+    def is_key_down(self, vk: int) -> bool:
+        return False
+
+    def map_vk_to_scan(self, vk: int) -> int:
+        return 0
+
     # Test Inspection Helpers
     def get_typed_unicode_scans(self) -> List[int]:
         """Returns sequence of wScan values for KEYEVENTF_UNICODE down events."""
@@ -360,6 +427,19 @@ class MockInputBackend:
         self.events.clear()
 
 
+def _atexit_release_driver(driver_ref: weakref.ref[KeyboardDriver]) -> None:
+    """Best-effort interpreter-exit modifier release for live Win32 keyboard drivers."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    drv = driver_ref()
+    if drv is None:
+        return
+    try:
+        drv.emergency_release_keys()
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # KeyboardDriver
 # ---------------------------------------------------------------------------
@@ -380,6 +460,8 @@ class KeyboardDriver:
         self.config = config or KeyboardConfig()
         self.backend = backend or Win32InputBackend()
         self._held_keys: Set[int] = set()
+        if isinstance(self.backend, Win32InputBackend):
+            atexit.register(_atexit_release_driver, weakref.ref(self))
 
     @staticmethod
     def decompose_utf16(char: str) -> List[int]:
@@ -569,50 +651,48 @@ class KeyboardDriver:
             else:
                 raise ValueError(f"Unknown hotkey name: '{k}'")
 
-        # Key Downs in order
-        for vk in vks:
-            if cancellation_token and cancellation_token.is_set():
-                self.emergency_release_keys()
-                return False
-            self._send_vk_event(vk, down=True)
-            self._held_keys.add(vk)
-            if self.backend.sleep_interruptible(0.015, cancellation_token):
-                self.emergency_release_keys()
-                return False
+        if not vks:
+            return True
 
-        # Brief hold
-        if self.backend.sleep_interruptible(0.030, cancellation_token):
-            self.emergency_release_keys()
-            return False
+        down_inputs = [self._build_vk_input(vk, down=True) for vk in vks]
+        up_inputs = [self._build_vk_input(vk, down=False) for vk in reversed(vks)]
+        all_inputs = down_inputs + up_inputs
 
-        # Key Ups in reverse order
-        for vk in reversed(vks):
-            self._send_vk_event(vk, down=False)
-            self._held_keys.discard(vk)
-            if self.backend.sleep_interruptible(0.010, cancellation_token):
+        self._held_keys.update(vks)
+        dispatched_ok = False
+        try:
+            sent = self.backend.send_inputs(all_inputs)
+            dispatched_ok = (sent == len(all_inputs))
+        finally:
+            for vk in vks:
+                self._held_keys.discard(vk)
+            if not dispatched_ok:
                 self.emergency_release_keys()
-                return False
 
-        return True
+        return dispatched_ok
 
     def emergency_release_keys(self) -> None:
         """
-        Releases all currently tracked held keys and vital modifier keys.
-        Guarantees no stuck-key or stuck-modifier state.
+        Releases currently tracked held keys and vital modifier/navigation lock keys.
+        On Win32InputBackend, queries OS key state so non-depressed keys (such as Alt)
+        are not spuriously pulsed with KEYUP (preventing menu-bar focus capture).
         """
-        keys_to_release = set(self._held_keys) | {
-            VK_SHIFT,
-            VK_LSHIFT,
-            VK_RSHIFT,
-            VK_CONTROL,
-            VK_LCONTROL,
-            VK_RCONTROL,
-            VK_MENU,
-            VK_LMENU,
-            VK_RMENU,
-        }
-        for vk in keys_to_release:
-            self._send_vk_event(vk, down=False)
+        candidate_vks = set(self._held_keys) | set(ALL_MODIFIER_AND_LOCK_VKS)
+        if isinstance(self.backend, Win32InputBackend):
+            keys_to_release = [
+                vk
+                for vk in candidate_vks
+                if vk in self._held_keys or self.backend.is_key_down(vk)
+            ]
+        else:
+            keys_to_release = list(candidate_vks)
+
+        if keys_to_release:
+            up_inputs = [self._build_vk_input(vk, down=False) for vk in keys_to_release]
+            try:
+                self.backend.send_inputs(up_inputs)
+            except Exception:
+                pass
         self._held_keys.clear()
 
     # -----------------------------------------------------------------------
@@ -637,19 +717,6 @@ class KeyboardDriver:
             inp_down.u.ki.wScan = w
             inp_down.u.ki.dwFlags = KEYEVENTF_UNICODE
             inp_down.u.ki.dwExtraInfo = 0
-            self.backend.send_inputs([inp_down])
-
-            # Interruptible dwell hold
-            if self.backend.sleep_interruptible(dwell_s, cancellation_token):
-                # Send key up immediately before aborting to avoid stuck character
-                inp_up = INPUT(type=INPUT_KEYBOARD)
-                inp_up.u.ki.wVk = 0
-                inp_up.u.ki.wScan = w
-                inp_up.u.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
-                inp_up.u.ki.dwExtraInfo = 0
-                self.backend.send_inputs([inp_up])
-                self.emergency_release_keys()
-                return False
 
             # Key Up (KEYEVENTF_UNICODE | KEYEVENTF_KEYUP = 0x0006)
             inp_up = INPUT(type=INPUT_KEYBOARD)
@@ -657,59 +724,80 @@ class KeyboardDriver:
             inp_up.u.ki.wScan = w
             inp_up.u.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
             inp_up.u.ki.dwExtraInfo = 0
-            self.backend.send_inputs([inp_up])
+
+            up_sent = False
+            self.backend.send_inputs([inp_down])
+            try:
+                if self.backend.sleep_interruptible(dwell_s, cancellation_token):
+                    self.backend.send_inputs([inp_up])
+                    up_sent = True
+                    self.emergency_release_keys()
+                    return False
+            finally:
+                if not up_sent:
+                    self.backend.send_inputs([inp_up])
 
         return True
 
     def _send_shift_enter(self, cancellation_token: Optional[threading.Event]) -> bool:
-        """Sends Shift down -> Enter down/up -> Shift up."""
+        """Atomically dispatches Shift down -> Enter down/up -> Shift up."""
         if cancellation_token and cancellation_token.is_set():
             return False
 
-        # Shift Down
-        self._send_vk_event(VK_SHIFT, down=True)
-        self._held_keys.add(VK_SHIFT)
+        vks = (VK_SHIFT, VK_RETURN)
+        all_inputs = [
+            self._build_vk_input(VK_SHIFT, down=True),
+            self._build_vk_input(VK_RETURN, down=True),
+            self._build_vk_input(VK_RETURN, down=False),
+            self._build_vk_input(VK_SHIFT, down=False),
+        ]
+        self._held_keys.update(vks)
+        dispatched_ok = False
+        try:
+            sent = self.backend.send_inputs(all_inputs)
+            dispatched_ok = (sent == len(all_inputs))
+        finally:
+            for vk in vks:
+                self._held_keys.discard(vk)
+            if not dispatched_ok:
+                self.emergency_release_keys()
 
-        if self.backend.sleep_interruptible(0.015, cancellation_token):
-            self.emergency_release_keys()
-            return False
-
-        # Enter Down & Up
-        self._send_vk_event(VK_RETURN, down=True)
-        if self.backend.sleep_interruptible(0.015, cancellation_token):
-            self.emergency_release_keys()
-            return False
-        self._send_vk_event(VK_RETURN, down=False)
-
-        if self.backend.sleep_interruptible(0.015, cancellation_token):
-            self.emergency_release_keys()
-            return False
-
-        # Shift Up
-        self._send_vk_event(VK_SHIFT, down=False)
-        self._held_keys.discard(VK_SHIFT)
-        return True
+        return dispatched_ok
 
     def _send_plain_enter(self, cancellation_token: Optional[threading.Event]) -> bool:
-        """Sends plain VK_RETURN down then up."""
+        """Sends plain VK_RETURN down then up with guaranteed release."""
         if cancellation_token and cancellation_token.is_set():
             return False
 
+        up_sent = False
+        self._held_keys.add(VK_RETURN)
         self._send_vk_event(VK_RETURN, down=True)
-        if self.backend.sleep_interruptible(0.020, cancellation_token):
-            self._send_vk_event(VK_RETURN, down=False)
-            self.emergency_release_keys()
-            return False
-        self._send_vk_event(VK_RETURN, down=False)
+        try:
+            if self.backend.sleep_interruptible(0.020, cancellation_token):
+                self._send_vk_event(VK_RETURN, down=False)
+                up_sent = True
+                self.emergency_release_keys()
+                return False
+        finally:
+            self._held_keys.discard(VK_RETURN)
+            if not up_sent:
+                self._send_vk_event(VK_RETURN, down=False)
         return True
 
-    def _send_vk_event(self, vk: int, down: bool) -> None:
+    def _build_vk_input(self, vk: int, down: bool) -> INPUT:
         inp = INPUT(type=INPUT_KEYBOARD)
         inp.u.ki.wVk = vk
-        inp.u.ki.wScan = 0
-        inp.u.ki.dwFlags = 0 if down else KEYEVENTF_KEYUP
+        scan = self.backend.map_vk_to_scan(vk) if hasattr(self.backend, "map_vk_to_scan") else 0
+        inp.u.ki.wScan = scan
+        flags = 0 if down else KEYEVENTF_KEYUP
+        if vk in EXTENDED_VKS:
+            flags |= KEYEVENTF_EXTENDEDKEY
+        inp.u.ki.dwFlags = flags
         inp.u.ki.dwExtraInfo = 0
-        self.backend.send_inputs([inp])
+        return inp
+
+    def _send_vk_event(self, vk: int, down: bool) -> None:
+        self.backend.send_inputs([self._build_vk_input(vk, down=down)])
 
     def _calculate_inter_key_delay(self, char: str, bounds: Tuple[int, int]) -> float:
         min_ms, max_ms = bounds

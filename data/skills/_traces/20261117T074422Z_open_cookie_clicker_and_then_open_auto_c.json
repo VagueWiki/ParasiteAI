@@ -1,0 +1,289 @@
+{
+  "goal": "Open cookie clicker and then open auto clicker by using steam",
+  "captured_at": "2026-11-17T07:44:22.343001+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win (step 1)",
+      "target_label": "Windows Start menu",
+      "coordinates": null,
+      "pre_window": "explorer.exe",
+      "post_window": "Start menu (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.09776475694444445,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Steam",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Start menu search input",
+      "coordinates": null,
+      "pre_window": "Start menu (explorer.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.7295155103665742,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY enter (step 3)",
+      "target_label": "Steam search result item",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Steam interface is now open, and I can see the top navigation bar. To locate the Cookie Clicker game, I need to access the game library. The \"Games\" option in the top navigation bar is the gateway to the game library, so I will click on it to proceed to the next step.",
+      "target_label": "Steam Library tab",
+      "coordinates": [
+        490,
+        155
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.12375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully opened the Steam store interface. The next step is to locate the Cookie Clicker game. I notice there is a search bar at the top of the interface, which is exactly what I need. By clicking on this search bar, I can start typing the game name to find it.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        1242,
+        184
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.85,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "cookie clicker",
+      "reasoning": "The Steam store interface is now open, and I can see the search bar at the top of the page. To find Cookie Clicker, I need to type its name into the search bar. The search bar is located at the top of the Steam store page, so I will click on it to activate it and then type \"Cookie Clicker\" to search for the game.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.20153492281151855,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The search results for \"cookie clicker\" are now displayed, and I can see the game entry for Cookie Clicker in the list. The next step is to click on this game entry to proceed with the task of opening it.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        1327,
+        267
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.764375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have located the Cookie Clicker game entry in the Steam store. The next step is to click on the game entry to access the game's page, where I can find the option to download and install the game. This is a necessary step to complete the task of opening Cookie Clicker.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        1213,
+        267
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.97625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "BURST",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully opened the Cookie Clicker game page in the Steam store. The next step is to locate the Auto Clicker game entry in the Steam store. I will type \"auto clicker\" into the search bar at the top of the Steam store interface to find the Auto Clicker game.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.48210920764112253,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully located the Cookie Clicker game page in the Steam store. The next step is to click on the \"Add to your wishlist\" button to add the game to my Steam wishlist. This will allow me to easily find and launch the game in the future.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        496,
+        268
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.8,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "auto clicker",
+      "reasoning": "I have successfully added Cookie Clicker to my Steam wishlist. Now, I need to open Auto Clicker. Let me type \"auto clicker\" into the Steam search bar to find it.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.41823960972897145,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully located the Cookie Clicker game page in the Steam store. The next step is to click the play button to open the game.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        544,
+        243
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.666875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully located the Cookie Clicker game page in the Steam store. The next step is to click on the game title to open it.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        481,
+        265
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.18538917824074075,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "BURST",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully opened the Cookie Clicker game page in the Steam store. The next step is to open Auto Clicker. I will type \"auto clicker\" into the Steam store search bar to find the Auto Clicker game.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.48142547504249633,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "auto clicker",
+      "reasoning": "I have successfully added Cookie Clicker to my Steam wishlist. Now, I need to open Auto Clicker. I will type \"auto clicker\" into the Steam search bar to find and open it.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.43389468495851474,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully located the Cookie Clicker game page in the Steam store. The next step is to click on the game's title to access the game's details page, where I can find the option to add it to my wishlist.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": [
+        612,
+        222
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 1.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 17,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully located the Auto Clicker game page in the Steam store. The next step is to click on the \"Add a Game\" button at the bottom of the page to add it to my Steam library. This will allow me to easily access and manage Auto Clicker from there.",
+      "target_label": "Cookie Clicker game entry in Steam Library",
+      "coordinates": null,
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "goal": "Open Notepad and write a short two-sentence greeting",
+  "captured_at": "2026-11-16T06:04:21.948252+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05597993827160494,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6991656529327762,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Hello! How can I assist you today?",
+      "reasoning": "The Notepad window is now open, and the next step is to type the two-sentence greeting. I notice that the Notepad window is active and ready for input, so I can start typing the text directly.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open and the two-sentence greeting is written. The task is complete, and I can now submit the task.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

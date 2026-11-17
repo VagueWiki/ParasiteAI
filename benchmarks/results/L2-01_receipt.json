@@ -1,38 +1,43 @@
 {
   "goal": "Open Notepad, type 'Saved Note 101', and save it as C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt",
-  "success": false,
-  "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 67.239,
-  "exit_reason": "MAX_STEPS",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 6,
+  "max_steps": 22,
+  "duration_sec": 9.683,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    5.702,
-    3.684,
-    3.936,
-    47.914,
-    5.498
+    0.924,
+    1.442,
+    1.32,
+    0.884,
+    4.392,
+    0.198
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Google Gemini - Google Chrome",
-    "process_name": "chrome.exe"
+    "title": "note101.txt - Notepad",
+    "process_name": "notepad.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": null,
+      "keys": [
+        "win",
+        "r"
+      ],
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.05602237654320988,
       "error_message": null,
-      "duration_sec": 5.702
+      "duration_sec": 0.924,
+      "burst_count": null
     },
     {
       "step_id": 2,
@@ -42,10 +47,11 @@
       "coordinates": null,
       "text": "notepad",
       "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.684
+      "success": true,
+      "screen_diff": 0.7942953870304319,
+      "error_message": null,
+      "duration_sec": 1.442,
+      "burst_count": null
     },
     {
       "step_id": 3,
@@ -53,29 +59,49 @@
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "notepad",
+      "text": "Saved Note 101",
       "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.936
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 1.32,
+      "burst_count": null
     },
     {
       "step_id": 4,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
+      "keys": [
+        "ctrl",
+        "shift",
+        "s"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
       "error_message": null,
-      "duration_sec": 47.914
+      "duration_sec": 0.884,
+      "burst_count": null
     },
     {
       "step_id": 5,
-      "action_type": "WAIT",
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.46488609154404825,
+      "error_message": null,
+      "duration_sec": 4.392,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
+      "action_type": "DONE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
@@ -84,9 +110,18 @@
       "success": true,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 5.498
+      "duration_sec": 0.198,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794175820.606335
+  "timestamp": 1794891673.0156043,
+  "plan_source": "skill",
+  "skill_id": "open-notepad-type-saved-note-101-and-save-it-as",
+  "farmed_plan_id": null,
+  "fast_path_steps": 6,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

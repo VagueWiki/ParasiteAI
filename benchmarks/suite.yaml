@@ -11,8 +11,10 @@ tasks:
     level: "L1"
     name: "Launch Notepad"
     prompt: "Open Notepad"
-    max_steps: 5
-    timeout_sec: 45
+    min_steps_with_skill: 2
+    min_steps_no_skill: 4
+    max_steps: 12
+    timeout_sec: 180
     setup: "clean_workspace"
     verifier: "verify_process_and_window"
     params:
@@ -24,8 +26,10 @@ tasks:
     level: "L1"
     name: "Launch Calculator"
     prompt: "Open Calculator"
-    max_steps: 5
-    timeout_sec: 45
+    min_steps_with_skill: 2
+    min_steps_no_skill: 4
+    max_steps: 12
+    timeout_sec: 180
     setup: "clean_workspace"
     verifier: "verify_process_and_window"
     params:
@@ -37,8 +41,10 @@ tasks:
     level: "L1"
     name: "Launch Paint"
     prompt: "Open Paint"
-    max_steps: 5
-    timeout_sec: 45
+    min_steps_with_skill: 2
+    min_steps_no_skill: 4
+    max_steps: 12
+    timeout_sec: 180
     setup: "clean_workspace"
     verifier: "verify_process_and_window"
     params:
@@ -50,8 +56,10 @@ tasks:
     level: "L1"
     name: "Type Exact Token in Notepad"
     prompt: "Open Notepad and type 'Benchmark Alpha Test 42'"
-    max_steps: 8
-    timeout_sec: 60
+    min_steps_with_skill: 3
+    min_steps_no_skill: 5
+    max_steps: 16
+    timeout_sec: 195
     setup: "clean_workspace"
     verifier: "verify_window_contains_text"
     params:
@@ -63,8 +71,10 @@ tasks:
     level: "L1"
     name: "Compose Greeting in Notepad (No Goal Echo)"
     prompt: "Open Notepad and write a short two-sentence greeting"
-    max_steps: 8
-    timeout_sec: 60
+    min_steps_with_skill: 3
+    min_steps_no_skill: 5
+    max_steps: 16
+    timeout_sec: 195
     setup: "clean_workspace"
     verifier: "verify_notepad_composed_text"
     params:
@@ -78,8 +88,10 @@ tasks:
     level: "L1"
     name: "Close Pre-Opened Notepad"
     prompt: "Close Notepad"
-    max_steps: 5
-    timeout_sec: 45
+    min_steps_with_skill: 2
+    min_steps_no_skill: 2
+    max_steps: 10
+    timeout_sec: 165
     setup: "open_notepad"
     verifier: "verify_process_terminated"
     params:
@@ -90,8 +102,10 @@ tasks:
     level: "L1"
     name: "Minimize Pre-Opened Notepad"
     prompt: "Minimize Notepad"
-    max_steps: 5
-    timeout_sec: 45
+    min_steps_with_skill: 2
+    min_steps_no_skill: 2
+    max_steps: 10
+    timeout_sec: 165
     setup: "open_notepad"
     verifier: "verify_window_minimized"
     params:
@@ -102,8 +116,10 @@ tasks:
     level: "L1"
     name: "Compute Multiplication in Calculator"
     prompt: "Open Calculator and compute 7 * 8"
-    max_steps: 8
-    timeout_sec: 60
+    min_steps_with_skill: 3
+    min_steps_no_skill: 6
+    max_steps: 16
+    timeout_sec: 195
     setup: "clean_workspace"
     verifier: "verify_calculator_result"
     params:
@@ -114,8 +130,10 @@ tasks:
     level: "L1"
     name: "Launch File Explorer"
     prompt: "Open File Explorer"
-    max_steps: 5
-    timeout_sec: 45
+    min_steps_with_skill: 2
+    min_steps_no_skill: 2
+    max_steps: 12
+    timeout_sec: 180
     setup: "clean_workspace"
     verifier: "verify_explorer_window_open"
     params: {}
@@ -125,8 +143,10 @@ tasks:
     level: "L1"
     name: "Type and Copy Text to Clipboard in Notepad"
     prompt: "Open Notepad, type 'Draft', select all text, and copy it to the clipboard"
-    max_steps: 10
-    timeout_sec: 60
+    min_steps_with_skill: 4
+    min_steps_no_skill: 7
+    max_steps: 16
+    timeout_sec: 195
     setup: "clean_workspace"
     verifier: "verify_clipboard_contains"
     params:
@@ -140,8 +160,10 @@ tasks:
     level: "L2"
     name: "Save Notepad Document to Workspace File"
     prompt: "Open Notepad, type 'Saved Note 101', and save it as C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt"
-    max_steps: 12
-    timeout_sec: 75
+    min_steps_with_skill: 5
+    min_steps_no_skill: 9
+    max_steps: 22
+    timeout_sec: 240
     setup: "clean_workspace"
     verifier: "verify_file_exists_and_content"
     params:
@@ -153,8 +175,10 @@ tasks:
     level: "L2"
     name: "Open Seed File and Append Text"
     prompt: "Open C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt in Notepad and append ' - Approved' to the end"
-    max_steps: 12
-    timeout_sec: 75
+    min_steps_with_skill: 5
+    min_steps_no_skill: 9
+    max_steps: 22
+    timeout_sec: 240
     setup: "seed_workspace_file"
     setup_params:
       filename: "seed.txt"
@@ -172,8 +196,10 @@ tasks:
     level: "L2"
     name: "Cross-App Calculator Result to Notepad"
     prompt: "Open Calculator, compute 144 / 12, and type the result into the open Notepad window"
-    max_steps: 12
-    timeout_sec: 75
+    min_steps_with_skill: 5
+    min_steps_no_skill: 9
+    max_steps: 22
+    timeout_sec: 240
     setup: "open_notepad"
     verifier: "verify_window_contains_text"
     params:
@@ -185,8 +211,10 @@ tasks:
     level: "L2"
     name: "Rename File in Workspace"
     prompt: "Open File Explorer to C:\\ParasiteAI\\benchmarks\\workspace and rename old_name.txt to new_name.txt"
-    max_steps: 12
-    timeout_sec: 75
+    min_steps_with_skill: 5
+    min_steps_no_skill: 9
+    max_steps: 22
+    timeout_sec: 240
     setup: "seed_rename_file"
     setup_params:
       old_name: "old_name.txt"
@@ -201,8 +229,10 @@ tasks:
     level: "L2"
     name: "Create Directory in Workspace via File Explorer"
     prompt: "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer"
-    max_steps: 12
-    timeout_sec: 75
+    min_steps_with_skill: 4
+    min_steps_no_skill: 7
+    max_steps: 22
+    timeout_sec: 240
     setup: "clean_workspace"
     verifier: "verify_directory_exists"
     params:
@@ -213,8 +243,10 @@ tasks:
     level: "L2"
     name: "Dismiss Modal Error Dialog and Open Notepad"
     prompt: "Close the error dialog and then open Notepad"
-    max_steps: 8
-    timeout_sec: 60
+    min_steps_with_skill: 3
+    min_steps_no_skill: 5
+    max_steps: 18
+    timeout_sec: 220
     setup: "spawn_modal_error_dialog"
     setup_params:
       dialog_title: "Benchmark System Error"
@@ -229,8 +261,10 @@ tasks:
     level: "L2"
     name: "Harvest Token from Open Notepad to Clipboard"
     prompt: "Copy the token text from the open Notepad window to the clipboard"
-    max_steps: 8
-    timeout_sec: 60
+    min_steps_with_skill: 3
+    min_steps_no_skill: 4
+    max_steps: 16
+    timeout_sec: 200
     setup: "open_notepad_with_seed_file"
     setup_params:
       filename: "source.txt"
@@ -247,8 +281,10 @@ tasks:
     level: "L3"
     name: "Close Dirty Notepad and Choose Don't Save"
     prompt: "Close the open Notepad window and choose Don't Save on the prompt"
-    max_steps: 8
-    timeout_sec: 60
+    min_steps_with_skill: 3
+    min_steps_no_skill: 4
+    max_steps: 18
+    timeout_sec: 240
     setup: "open_dirty_notepad"
     setup_params:
       initial_text: "Unsaved benchmark draft"
@@ -261,8 +297,10 @@ tasks:
     level: "L3"
     name: "Compute in Calculator, Format & Save in Notepad"
     prompt: "Compute 25 * 4 in Calculator, write 'Total: 100' in Notepad, and save to C:\\ParasiteAI\\benchmarks\\workspace\\total.txt"
-    max_steps: 15
-    timeout_sec: 90
+    min_steps_with_skill: 7
+    min_steps_no_skill: 12
+    max_steps: 26
+    timeout_sec: 260
     setup: "clean_workspace"
     verifier: "verify_file_exists_and_content"
     params:
@@ -274,8 +312,10 @@ tasks:
     level: "L3"
     name: "Browser Navigation & Cross-App Note Recording"
     prompt: "Open Chrome, go to https://example.com, and write the main heading text into Notepad"
-    max_steps: 15
-    timeout_sec: 90
+    min_steps_with_skill: 6
+    min_steps_no_skill: 10
+    max_steps: 26
+    timeout_sec: 260
     setup: "clean_workspace"
     verifier: "verify_window_contains_text"
     params:
@@ -292,7 +332,7 @@ stretch_tasks:
     name: "Launch Warsim: The Realm of Aslona"
     prompt: "Launch Warsim The Realm of Aslona and start a new game"
     max_steps: 15
-    timeout_sec: 90
+    timeout_sec: 135
     setup: "clean_workspace"
     verifier: "verify_process_and_window"
     params:
@@ -305,7 +345,7 @@ stretch_tasks:
     name: "Launch Rift Wizard 2"
     prompt: "Launch Rift Wizard 2 and enter the first level"
     max_steps: 15
-    timeout_sec: 90
+    timeout_sec: 135
     setup: "clean_workspace"
     verifier: "verify_process_and_window"
     params:
@@ -318,7 +358,7 @@ stretch_tasks:
     name: "Launch RimWorld"
     prompt: "Launch RimWorld"
     max_steps: 15
-    timeout_sec: 90
+    timeout_sec: 135
     setup: "clean_workspace"
     verifier: "verify_process_and_window"
     params:

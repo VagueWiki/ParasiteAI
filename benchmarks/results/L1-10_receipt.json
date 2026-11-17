@@ -1,0 +1,144 @@
+{
+  "goal": "Open Notepad, type 'Draft', select all text, and copy it to the clipboard",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 7,
+  "max_steps": 16,
+  "duration_sec": 6.535,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    0.947,
+    1.514,
+    0.702,
+    0.789,
+    0.886,
+    0.867,
+    0.203
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "*Untitled - Notepad",
+    "process_name": "notepad.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.05600694444444444,
+      "error_message": null,
+      "duration_sec": 0.947,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "notepad",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.7942109368014227,
+      "error_message": null,
+      "duration_sec": 1.514,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 0.702,
+      "burst_count": null
+    },
+    {
+      "step_id": 4,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Draft",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.789,
+      "burst_count": null
+    },
+    {
+      "step_id": 5,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.886,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.867,
+      "burst_count": null
+    },
+    {
+      "step_id": 7,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 0.203,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794891657.9288807,
+  "plan_source": "skill",
+  "skill_id": "open-notepad-type-draft-select-all-text-and-copy",
+  "farmed_plan_id": null,
+  "fast_path_steps": 7,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
+}

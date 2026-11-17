@@ -1,0 +1,39 @@
+{
+  "goal": "Minimize Notepad",
+  "captured_at": "2026-11-17T05:00:13.965206+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "down"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+down (step 1)",
+      "target_label": "Notepad window minimize command",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": true,
+      "screen_diff": 0.32751543209876544,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "Directive fast-path CONCLUDE (step 2)",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

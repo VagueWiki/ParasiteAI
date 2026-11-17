@@ -1,0 +1,24 @@
+{
+  "goal": "minimize all windows",
+  "captured_at": "2026-11-17T05:51:10.884345+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The current screen displays a file explorer window, which is one of the windows that needs to be minimized. To complete the task of minimizing all windows, I need to click the minimize button located at the top right corner of the window. This button is typically represented by a horizontal line icon and is positioned next to the close button. By clicking this button, I can minimize the file explorer window, making it temporarily hidden while still accessible from the taskbar or desktop.",
+      "target_label": null,
+      "coordinates": [
+        1000,
+        119
+      ],
+      "pre_window": "ParasiteAI Discord C2 Launcher (cmd.exe)",
+      "post_window": "ParasiteAI Discord C2 Launcher (cmd.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

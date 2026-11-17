@@ -25,6 +25,7 @@ from pathlib import Path
 import statistics
 import subprocess
 import sys
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
@@ -89,6 +90,85 @@ def check_interactive_desktop_access(allow_headless: bool = False) -> Tuple[bool
     )
 
 
+def reset_cursor_to_neutral() -> None:
+    """Parks physical cursor at screen center between tasks to prevent hover lock or stale tooltip activation."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.SetCursorPos(960, 540)
+        except Exception:
+            pass
+
+
+class SuitePanicMonitor:
+    """Listens for Ctrl+Alt+K / Ctrl+Alt+Q at the benchmark suite level and kills active tasks immediately."""
+
+    def __init__(self) -> None:
+        self.aborted = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._thread_id: int = 0
+        self._ready = threading.Event()
+
+    def start(self) -> None:
+        if sys.platform != "win32" or self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._run_hotkey_loop,
+            name="BenchmarkSuitePanicMonitor",
+            daemon=True,
+        )
+        self._thread.start()
+        self._ready.wait(timeout=1.5)
+
+    def stop(self) -> None:
+        if sys.platform == "win32" and self._thread_id:
+            try:
+                import ctypes
+                ctypes.windll.user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
+            except Exception:
+                pass
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=1.5)
+        self._thread = None
+        self._thread_id = 0
+
+    def _run_hotkey_loop(self) -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        self._thread_id = kernel32.GetCurrentThreadId()
+        msg = wintypes.MSG()
+        user32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 0)
+
+        # Ctrl+Alt+K (9001) and Ctrl+Alt+Q (9002)
+        try:
+            user32.RegisterHotKey(None, 9001, 0x0001 | 0x0002 | 0x4000, 0x4B)
+            user32.RegisterHotKey(None, 9002, 0x0001 | 0x0002 | 0x4000, 0x51)
+        except Exception:
+            pass
+        self._ready.set()
+
+        while user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) > 0:
+            if msg.message == 0x0312 and msg.wParam in (9001, 9002):  # WM_HOTKEY
+                logger.critical("Suite-wide emergency panic hotkey detected (Ctrl+Alt+K/Q)! Halting benchmark suite...")
+                self.aborted.set()
+                try:
+                    cleanup_benchmark_processes()
+                except Exception:
+                    pass
+                break
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+
+        try:
+            user32.UnregisterHotKey(None, 9001)
+            user32.UnregisterHotKey(None, 9002)
+        except Exception:
+            pass
+
+
 def classify_failure_mode(task_res: Dict[str, Any]) -> str:
     """Categorizes the primary failure mode of a benchmark task episode."""
     if task_res.get("verifier_passed"):
@@ -129,6 +209,7 @@ def run_single_task(
     brain_mode: Optional[str] = None,
     headless: bool = False,
     max_steps_cap: Optional[int] = None,
+    suite_aborted: Optional[threading.Event] = None,
 ) -> Dict[str, Any]:
     """Runs a single benchmark task episode and executes its ground-truth OS verifier."""
     task_id = task["id"]
@@ -189,6 +270,7 @@ def run_single_task(
         res["failure_mode"] = classify_failure_mode(res)
         return res
 
+    reset_cursor_to_neutral()
     time.sleep(0.5)
 
     receipt_file = results_dir / f"{task_id}_receipt.json"
@@ -216,50 +298,75 @@ def run_single_task(
     t_start = time.time()
     exit_code = -1
     timed_out = False
+    suite_panic = False
+
+    logs_dir = results_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = logs_dir / f"{task_id}.log"
 
     try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            check=False,
-        )
-        exit_code = proc.returncode
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        logger.warning("Task [%s] timed out after %ds", task_id, timeout_sec)
-    except Exception as exc:
-        logger.error("Task [%s] subprocess invocation failed: %s", task_id, exc)
-
-    wall_duration = round(time.time() - t_start, 3)
-
-    # 3. Read generated EpisodeReceipt (Stint P0.3 schema)
-    receipt: Dict[str, Any] = {}
-    if receipt_file.exists():
         try:
-            receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+            with open(log_file, "w", encoding="utf-8", errors="replace") as log_fh:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                deadline = t_start + timeout_sec
+                while proc.poll() is None:
+                    if suite_aborted is not None and suite_aborted.is_set():
+                        suite_panic = True
+                        proc.kill()
+                        proc.wait(timeout=5)
+                        break
+                    if time.time() >= deadline:
+                        timed_out = True
+                        logger.warning("Task [%s] timed out after %ds", task_id, timeout_sec)
+                        proc.kill()
+                        proc.wait(timeout=5)
+                        break
+                    time.sleep(0.2)
+                else:
+                    exit_code = proc.returncode
         except Exception as exc:
-            logger.debug("Failed to parse receipt JSON: %s", exc)
+            logger.error("Task [%s] subprocess invocation failed: %s", task_id, exc)
 
-    agent_success = bool(receipt.get("success", False))
-    claimed_done = bool(receipt.get("claimed_done", agent_success))
-    exit_reason = receipt.get("exit_reason", "TIMEOUT" if timed_out else f"EXIT_{exit_code}")
-    total_steps = int(receipt.get("total_steps", 0))
-    step_latencies = list(receipt.get("step_latencies_sec", []))
-    hw_interrupts = int(receipt.get("hardware_interrupt_count", 0))
-    total_strikes = int(receipt.get("total_strikes", 0))
-    highest_tier = str(receipt.get("highest_tier_reached", "TIER_1_LOCAL"))
+        wall_duration = round(time.time() - t_start, 3)
 
-    # 4. Execute programmatic ground-truth verifier BEFORE post-task cleanup
-    logger.info("Running verifier '%s' for [%s]...", verifier_name, task_id)
-    verifier_passed = run_verifier(verifier_name, verifier_params)
+        # 3. Read generated EpisodeReceipt (Stint P0.3 + P4.6.6 schema)
+        receipt: Dict[str, Any] = {}
+        if receipt_file.exists():
+            try:
+                receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.debug("Failed to parse receipt JSON: %s", exc)
 
-    # 5. Check false-DONE anomaly (agent claimed DONE without objective OS side-effect)
-    false_done = (claimed_done or agent_success) and not verifier_passed
+        agent_success = bool(receipt.get("success", False))
+        claimed_done = bool(receipt.get("claimed_done", agent_success))
+        raw_exit_reason = str(receipt.get("exit_reason") or "").strip()
+        if suite_panic:
+            exit_reason = "PANIC"
+        elif raw_exit_reason and raw_exit_reason != "IN_PROGRESS":
+            exit_reason = raw_exit_reason
+        else:
+            exit_reason = "TIMEOUT" if timed_out else f"EXIT_{exit_code}"
+        total_steps = int(receipt.get("total_steps", 0))
+        step_latencies = list(receipt.get("step_latencies_sec", []))
+        hw_interrupts = int(receipt.get("hardware_interrupt_count", 0))
+        total_strikes = int(receipt.get("total_strikes", 0))
+        highest_tier = str(receipt.get("highest_tier_reached", "TIER_1_LOCAL"))
 
-    # 6. Teardown processes & modal dialogs post-task
-    cleanup_benchmark_processes()
+        # 4. Execute programmatic ground-truth verifier BEFORE post-task cleanup
+        logger.info("Running verifier '%s' for [%s]...", verifier_name, task_id)
+        verifier_passed = run_verifier(verifier_name, verifier_params)
+
+        # 5. Check false-DONE anomaly (agent claimed DONE without objective OS side-effect)
+        false_done = (claimed_done or agent_success) and not verifier_passed
+    finally:
+        # 6. Cold-to-cold teardown: kill lingering parasite_ai.main hooks, release modifiers, & close target apps
+        cleanup_benchmark_processes()
+        reset_cursor_to_neutral()
 
     res = {
         "id": task_id,
@@ -277,10 +384,22 @@ def run_single_task(
         "exit_code": exit_code,
         "exit_reason": exit_reason,
         "total_steps": total_steps,
+        "min_steps_with_skill": int(task.get("min_steps_with_skill", 0)),
+        "min_steps_no_skill": int(task.get("min_steps_no_skill", 0)),
+        "max_steps": max_steps,
         "step_latencies_sec": step_latencies,
         "hardware_interrupt_count": hw_interrupts,
         "total_strikes": total_strikes,
         "highest_tier_reached": highest_tier,
+        "plan_source": str(receipt.get("plan_source") or "local"),
+        "skill_id": receipt.get("skill_id"),
+        "farmed_plan_id": receipt.get("farmed_plan_id"),
+        "fast_path_steps": int(receipt.get("fast_path_steps", 0)),
+        "parasite_invocations": int(receipt.get("parasite_invocations", 0)),
+        "parasite_status": receipt.get("parasite_status"),
+        "veto_count": int(receipt.get("veto_count", 0)),
+        "fast_path_abort_reason": receipt.get("fast_path_abort_reason"),
+        "log_file": str(log_file),
         "duration_sec": wall_duration,
         "timed_out": timed_out,
         "error": receipt.get("error"),
@@ -347,6 +466,12 @@ def compute_metrics(task_results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     durations = [float(r.get("duration_sec", 0.0)) for r in task_results]
     steps = [int(r.get("total_steps", 0)) for r in task_results]
+    eff_ratios = [
+        float(r.get("total_steps", 0)) / float(r["min_steps_with_skill"])
+        for r in task_results
+        if r.get("verifier_passed") and int(r.get("min_steps_with_skill", 0)) > 0
+    ]
+    mean_eff_ratio = round(sum(eff_ratios) / len(eff_ratios), 2) if eff_ratios else 0.0
 
     all_step_latencies: List[float] = []
     for r in task_results:
@@ -367,6 +492,7 @@ def compute_metrics(task_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "loop_abort_count": loop_aborts,
         "total_hardware_interrupts": total_interrupts,
         "mean_steps": round(sum(steps) / total, 2) if total else 0.0,
+        "mean_step_efficiency_ratio": mean_eff_ratio,
         "mean_duration_sec": round(sum(durations) / total, 2) if total else 0.0,
         "median_step_sec": median_step_sec,
         "p90_step_sec": p90_step_sec,
@@ -394,7 +520,7 @@ def format_markdown_report(
         f"**Ground-Truth Pass Rate:** **{metrics.get('verified_pass_rate', 0.0)}%** ({metrics.get('verified_pass_count', 0)}/{metrics.get('total_tasks', 0)})  ",
         f"**Claimed DONE Rate:** {metrics.get('agent_claimed_success_rate', 0.0)}%  ",
         f"**False DONE Rate:** {metrics.get('false_done_rate', 0.0)}% ({metrics.get('false_done_count', 0)} occurrences)  ",
-        f"**Mean Steps:** {metrics.get('mean_steps', 0.0)} | **Mean Duration:** {metrics.get('mean_duration_sec', 0.0)}s  ",
+        f"**Mean Steps:** {metrics.get('mean_steps', 0.0)} | **Step Efficiency (vs Ideal Skill Min):** {metrics.get('mean_step_efficiency_ratio', 0.0)}x | **Mean Duration:** {metrics.get('mean_duration_sec', 0.0)}s  ",
         f"**Median Step Latency:** {metrics.get('median_step_sec', 0.0)}s | **P90 Step Latency:** {metrics.get('p90_step_sec', 0.0)}s  ",
         f"**Hardware Interrupts:** {metrics.get('total_hardware_interrupts', 0)}  ",
         "",
@@ -437,8 +563,8 @@ def format_markdown_report(
         [
             "",
             "## Detailed Task Scorecard",
-            "| Task ID | Name | Tier | Lvl | Verifier | Agent | Outcome Mode | Steps | Duration | Exit Reason |",
-            "| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |",
+            "| Task ID | Name | Tier | Lvl | Verifier | Agent | Outcome Mode | Plan Source | Steps (Act/MinS/MinL/Max) | Duration | Exit Reason |",
+            "| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :--- |",
         ]
     )
 
@@ -446,8 +572,21 @@ def format_markdown_report(
         v_icon = "✅ PASS" if r.get("verifier_passed") else "❌ FAIL"
         a_icon = "DONE" if r.get("claimed_done", r.get("agent_success")) else "FAIL"
         mode_str = r.get("failure_mode") or classify_failure_mode(r)
+        psrc = str(r.get("plan_source") or "local")
+        sid = r.get("skill_id")
+        fpid = r.get("farmed_plan_id")
+        if sid:
+            plan_col = f"`{psrc}` ({sid})"
+        elif fpid is not None:
+            plan_col = f"`{psrc}` (#{fpid})"
+        else:
+            plan_col = f"`{psrc}`"
+        min_s = r.get("min_steps_with_skill", "-")
+        min_l = r.get("min_steps_no_skill", "-")
+        max_s = r.get("max_steps", "-")
+        steps_col = f"{r['total_steps']} / {min_s} / {min_l} / {max_s}"
         lines.append(
-            f"| `{r['id']}` | {r['name']} | {r['tier']} | {r['level']} | {v_icon} | {a_icon} | `{mode_str}` | {r['total_steps']} | {r['duration_sec']}s | `{r['exit_reason']}` |"
+            f"| `{r['id']}` | {r['name']} | {r['tier']} | {r['level']} | {v_icon} | {a_icon} | `{mode_str}` | {plan_col} | {steps_col} | {r['duration_sec']}s | `{r['exit_reason']}` |"
         )
 
     return "\n".join(lines)
@@ -516,6 +655,11 @@ def main() -> int:
         help="Skip tasks that have already been recorded in the target JSON report",
     )
     parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Wipe existing JSON/MD report and receipt files to ensure a clean benchmark run",
+    )
+    parser.add_argument(
         "--max-steps-cap",
         type=int,
         default=None,
@@ -575,6 +719,21 @@ def main() -> int:
     except Exception:
         pass
 
+    # Clean run override
+    if args.fresh:
+        args.resume = False
+        if json_file.exists():
+            json_file.unlink()
+        if md_file.exists():
+            md_file.unlink()
+        for f in results_dir.glob("*_receipt.json"):
+            if not f.name.startswith("test_"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+        logger.info("Clean run requested (--fresh): wiped previous benchmark files for %s", output_basename)
+
     # Check for resume
     task_results: List[Dict[str, Any]] = []
     completed_ids: set[str] = set()
@@ -599,33 +758,71 @@ def main() -> int:
         logger.info(" Max Steps Cap: %d", args.max_steps_cap)
     logger.info("============================================================")
 
-    for task in tasks:
-        if task["id"] in completed_ids:
-            logger.info("Skipping task [%s] (already completed in %s)", task["id"], json_file.name)
-            continue
+    cleanup_benchmark_processes()
+    suite_monitor = SuitePanicMonitor()
+    suite_monitor.start()
+    suite_abort_requested = False
+    try:
+        for task in tasks:
+            if suite_monitor.aborted.is_set():
+                suite_abort_requested = True
+                logger.critical("Suite-wide emergency panic active; stopping benchmark run.")
+                break
+            if task["id"] in completed_ids:
+                logger.info("Skipping task [%s] (already completed in %s)", task["id"], json_file.name)
+                continue
 
-        res = run_single_task(
-            task=task,
-            results_dir=results_dir,
-            python_exe=python_exe,
-            brain_mode=args.brain_mode,
-            headless=args.headless,
-            max_steps_cap=args.max_steps_cap,
-        )
-        task_results.append(res)
-        completed_ids.add(task["id"])
+            res = run_single_task(
+                task=task,
+                results_dir=results_dir,
+                python_exe=python_exe,
+                brain_mode=args.brain_mode,
+                headless=args.headless,
+                max_steps_cap=args.max_steps_cap,
+                suite_aborted=suite_monitor.aborted,
+            )
+            task_results.append(res)
+            completed_ids.add(task["id"])
 
-        # Incremental checkpointing: save immediately after each task
-        metrics = compute_metrics(task_results)
-        report_title = f"ParasiteAI Benchmark Report ({output_basename})"
-        md_content = format_markdown_report(metrics, task_results, report_title, gpu_info=gpu_info)
+            # Incremental checkpointing: save immediately after each task
+            metrics = compute_metrics(task_results)
+            report_title = f"ParasiteAI Benchmark Report ({output_basename})"
+            md_content = format_markdown_report(metrics, task_results, report_title, gpu_info=gpu_info)
 
-        md_file.write_text(md_content, encoding="utf-8")
-        json_file.write_text(
-            json.dumps({"metrics": metrics, "tasks": task_results}, indent=2),
-            encoding="utf-8",
-        )
-        logger.info("Checkpoint saved: %s and %s (%d/%d tasks)", md_file.name, json_file.name, len(task_results), len(tasks))
+            md_file.write_text(md_content, encoding="utf-8")
+            json_file.write_text(
+                json.dumps({"metrics": metrics, "tasks": task_results}, indent=2),
+                encoding="utf-8",
+            )
+            logger.info("Checkpoint saved: %s and %s (%d/%d tasks)", md_file.name, json_file.name, len(task_results), len(tasks))
+
+            if suite_monitor.aborted.is_set() or res.get("exit_reason") == "PANIC" or res.get("exit_code") == 2:
+                suite_abort_requested = True
+                logger.critical(
+                    "Emergency panic detected on task [%s] (exit_reason=%s, exit_code=%s). Halting benchmark suite.",
+                    task["id"],
+                    res.get("exit_reason"),
+                    res.get("exit_code"),
+                )
+                break
+
+            if res.get("outcome_mode") == "HARDWARE_PREEMPTED" and sys.stdin and sys.stdin.isatty():
+                logger.warning("Task [%s] was preempted by physical mouse/keyboard input. Pausing suite.", task["id"])
+                try:
+                    choice = input(
+                        f"\n[PAUSED] Task {task['id']} preempted by physical touch. "
+                        "Press Enter to resume benchmark suite, or type 'q' + Enter to stop: "
+                    ).strip().lower()
+                except EOFError:
+                    choice = "q"
+                if choice in ("q", "quit", "exit", "abort"):
+                    suite_abort_requested = True
+                    logger.info("Operator requested benchmark stop after hardware preemption.")
+                    break
+    finally:
+        suite_monitor.stop()
+        cleanup_benchmark_processes()
+        reset_cursor_to_neutral()
 
     metrics = compute_metrics(task_results)
     report_title = f"ParasiteAI Benchmark Report ({output_basename})"
@@ -640,7 +837,7 @@ def main() -> int:
     print("\n" + md_content + "\n")
     logger.info("Saved final benchmark reports to %s and %s", md_file, json_file)
 
-    return 0
+    return 2 if suite_abort_requested else 0
 
 
 if __name__ == "__main__":

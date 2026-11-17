@@ -1,8 +1,9 @@
 """
-parasite_ai/main.py - Application Entry Point and Subsystem Coordinator.
+parasite_ai/main.py - Application Entry Point and Pure-Python Subsystem Coordinator.
 
-Manages High-DPI awareness bootstrap, Qt application lifecycle, cross-thread
-cognitive daemon synchronization, clean Win32 exit handlers, and CLI options.
+Manages High-DPI awareness bootstrap, pure-Python runtime orchestration,
+Discord C2 daemon lifecycle, clean signal handlers, and CLI options with
+zero PyQt6 dependencies.
 """
 
 from __future__ import annotations
@@ -14,18 +15,15 @@ import os
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, List, Optional
-
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtWidgets import QApplication
 
 from parasite_ai.config import AppConfig, load_config
 from parasite_ai.runtime import RuntimeOrchestrator
 from parasite_ai.ui.bridge import UIBridge
-from parasite_ai.ui.companion_dock import CompanionDock
+from parasite_ai.ui.discord_bot import DiscordBotC2
 from parasite_ai.ui.dpi import init_dpi_awareness
-from parasite_ai.ui.ghost_hud import GhostHUD
 
 logger = logging.getLogger("parasite_ai.main")
 
@@ -34,13 +32,22 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     """Parses command-line arguments for ParasiteAI."""
     parser = argparse.ArgumentParser(
         prog="parasite",
-        description="ParasiteAI - 100% visible, desktop-native local AI assistant operating on physical Windows desktop.",
+        description="ParasiteAI - Desktop-native local AI agent operating on physical Windows desktop.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("-c", "--config", dest="config_path", type=str, default=None, help="Path to config.yaml")
-    parser.add_argument("--headless", action="store_true", default=False, help="Run in headless/offscreen mode.")
+    parser.add_argument("--headless", action="store_true", default=False, help="Run headless without local GUI windows.")
+    parser.add_argument(
+        "--simulation",
+        dest="simulation",
+        action="store_true",
+        default=False,
+        help="Run in simulation mode using mock hardware input backends (for tests / CI).",
+    )
     parser.add_argument("--dry-run", action="store_true", default=False, help="Initialize subsystems, validate self-test, and exit 0.")
-    parser.add_argument("--no-hud", action="store_true", default=False, help="Disable transparent GhostHUD overlay.")
+    parser.add_argument("--discord", dest="discord", action="store_true", default=False, help="Enable Discord C2 bot listener.")
+    parser.add_argument("--no-discord", dest="no_discord", action="store_true", default=False, help="Explicitly disable Discord C2 bot.")
+    parser.add_argument("--no-hud", action="store_true", default=False, help="Legacy compatibility flag (ignored).")
     parser.add_argument(
         "--brain-mode",
         choices=["local_llm", "browser_offload", "hybrid", "mock"],
@@ -73,7 +80,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--max-steps",
         dest="max_steps",
         type=int,
-        default=15,
+        default=30,
         help="Maximum cognitive steps per goal episode.",
     )
     parser.add_argument(
@@ -95,7 +102,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=None,
         help="Path to write rotating debug log file (defaults to logs/parasite_debug.log).",
     )
-    parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
+    from parasite_ai import __version__
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser.parse_args(argv)
 
 
@@ -107,8 +115,8 @@ def setup_logging(
     """
     Configures unified dual-stream logging:
     1. Console stream (StreamHandler to sys.stderr) with clean formatting.
-    2. High-fidelity rotating debug log file (RotatingFileHandler at DEBUG level)
-       recording line numbers, thread names, LLM reasoning, and diagnostic traces.
+    2. High-fidelity rotating debug log file recording line numbers, thread names,
+       LLM reasoning, and diagnostic traces.
     """
     root_logger = logging.getLogger()
     for handler in list(root_logger.handlers):
@@ -118,7 +126,7 @@ def setup_logging(
     root_logger.setLevel(logging.DEBUG)
 
     # Suppress verbose third-party COM/HTTP debug log flooding
-    for noisy_logger in ("comtypes", "comtypes._post_coinit", "urllib3", "httpx", "httpcore", "PIL"):
+    for noisy_logger in ("comtypes", "comtypes._post_coinit", "urllib3", "httpx", "httpcore", "PIL", "discord"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
     console_formatter = logging.Formatter(
@@ -133,7 +141,6 @@ def setup_logging(
     log_path = Path(log_file_override) if log_file_override else config.system.log_file or Path("logs/parasite_debug.log")
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        # Automatically archive existing non-empty debug log to a timestamped file before starting a new session
         if log_path.exists() and log_path.stat().st_size > 0:
             import datetime
             import shutil
@@ -146,6 +153,19 @@ def setup_logging(
             try:
                 shutil.copy2(log_path, archive_candidate)
                 log_path.write_text("", encoding="utf-8")
+                max_archives = getattr(config.system, "max_archived_logs", 25)
+                if isinstance(max_archives, int) and max_archives >= 1:
+                    archived = [
+                        p for p in log_path.parent.glob(f"{log_path.stem}*{log_path.suffix}")
+                        if p != log_path and p.is_file()
+                    ]
+                    if len(archived) > max_archives:
+                        archived.sort(key=lambda p: p.stat().st_mtime)
+                        for stale_log in archived[: len(archived) - max_archives]:
+                            try:
+                                stale_log.unlink()
+                            except Exception:
+                                pass
             except Exception:
                 pass
         file_formatter = logging.Formatter(
@@ -175,31 +195,28 @@ def setup_logging(
 
 class ParasiteApp:
     """
-    Main application coordinator managing High-DPI bootstrapping, Qt lifecycle,
-    GUI components, runtime orchestrator, and clean shutdown.
+    Main application coordinator managing High-DPI bootstrapping, pure-Python runtime,
+    Discord C2 daemon, and clean signal handling with zero Qt event loop dependencies.
     """
 
     def __init__(self, args: Optional[argparse.Namespace] = None) -> None:
         self.args = args or parse_args([])
         self._shutdown_lock = threading.Lock()
         self._is_shutdown = False
+        self._stop_event = threading.Event()
+        self.exit_code: int = 0
 
-        # 1. Bootstrap High-DPI Awareness before QApplication setup
+        # 1. Bootstrap High-DPI Awareness
         init_dpi_awareness()
 
-        # 2. Configure headless offscreen platform if requested or detected
-        if self.args.headless:
-            os.environ["QT_QPA_PLATFORM"] = "offscreen"
-
-        # 3. Instantiate or retrieve QApplication
-        self.qapp = QApplication.instance()
-        if self.qapp is None:
-            self.qapp = QApplication(sys.argv)
-
-        # 4. Load configuration & apply CLI overrides
+        # 2. Load configuration & apply CLI overrides
         self.config: AppConfig = load_config(self.args.config_path)
+        if self.args.headless:
+            self.config.headless = True
         if self.args.brain_mode:
             self.config.brain.mode = self.args.brain_mode
+        elif self.args.dry_run:
+            self.config.brain.mode = "mock"
         if getattr(self.args, "monitor_index", None) is not None:
             self.config.vision.monitor_index = int(self.args.monitor_index)
         if self.args.debug:
@@ -207,69 +224,60 @@ class ParasiteApp:
         elif self.args.log_level:
             self.config.system.log_level = self.args.log_level
 
-        # 5. Configure dual-stream logging (Console + Rotating Debug Log File)
+        # Discord configuration overrides
+        if self.args.discord:
+            self.config.discord.enabled = True
+        elif self.args.no_discord:
+            self.config.discord.enabled = False
+
+        # 3. Configure dual-stream logging
         self.log_path = setup_logging(
             config=self.config,
             debug=bool(self.args.debug),
             log_file_override=self.args.log_file,
         )
 
-        # 6. Instantiate UIBridge
+        # 4. Instantiate UIBridge
         self.bridge = UIBridge()
 
-        # 7. Instantiate Runtime Orchestrator
+        # 5. Determine simulation mode vs headless
+        # Simulation mode is used in CI/unit tests to mock hardware.
+        # Headless mode on real desktop operates with real Win32 hardware drivers.
+        is_simulation = bool(self.args.simulation or self.args.dry_run)
+
+        # 6. Instantiate Runtime Orchestrator
         self.runtime = RuntimeOrchestrator(
             config=self.config,
             bridge=self.bridge,
-            simulation_mode=self.args.headless,
-            headless=self.args.headless,
+            simulation_mode=is_simulation,
+            headless=bool(self.args.headless or self.config.headless),
             episode_report_path=self.args.episode_report,
         )
         self.runtime.auto_exit_on_complete = bool(getattr(self.args, "auto_exit_on_complete", False))
-        self.runtime.default_max_steps = int(getattr(self.args, "max_steps", 15))
-        self.bridge.sig_close_requested.connect(self._on_dock_close_requested)
-        self.exit_code: int = 0
+        self.runtime.default_max_steps = int(getattr(self.args, "max_steps", 30))
+        self.bridge.sig_close_requested.connect(self._on_close_requested)
 
-        # 8. Instantiate CompanionDock
-        self.dock = CompanionDock(
-            config=self.config.ui.dock,
-            bridge=self.bridge,
-        )
-        idx = self.dock.combo_brain_mode.findData(self.config.brain.mode)
-        if idx >= 0:
-            self.dock.combo_brain_mode.blockSignals(True)
-            self.dock.combo_brain_mode.setCurrentIndex(idx)
-            self.dock.combo_brain_mode.blockSignals(False)
-
-        # 9. Instantiate GhostHUD (unless disabled via CLI or config)
-        self.hud: Optional[GhostHUD] = None
-        if not self.args.no_hud and self.config.ui.hud.enabled:
-            self.hud = GhostHUD(
-                config=self.config.ui.hud,
-                bridge=self.bridge,
-                enable_win32_styles=not self.args.headless,
-            )
-            self.bridge.sig_hud_toggled.connect(
-                lambda visible: self.hud.setVisible(visible) if self.hud else None
+        # 7. Instantiate Discord C2 Bot (if enabled)
+        self.discord_bot: Optional[DiscordBotC2] = None
+        if self.config.discord.enabled and not self.args.dry_run:
+            self.discord_bot = DiscordBotC2(
+                orchestrator=self.runtime,
+                config=self.config,
             )
 
-        # 10. Wire clean shutdown hooks & Qt signal handling
-        self.qapp.aboutToQuit.connect(self.shutdown)
-        self.dock.sig_close_requested.connect(self._on_dock_close_requested)
+        # 8. Setup Signal Handlers
         self._setup_signal_handling()
 
-        # 11. Initial display setup (unless headless/dry-run)
-        if not self.args.headless and not self.args.dry_run:
-            self.dock.show()
-            if self.hud:
-                self.hud.show()
-
-        # 12. Submit initial goal if passed on CLI
+        # 9. Submit initial goal if passed on CLI
         if self.args.goal:
-            self.bridge.sig_goal_submitted.emit(self.args.goal)
+            self.bridge.submit_goal(
+                goal=self.args.goal,
+                max_steps=self.runtime.default_max_steps,
+                source="cli",
+            )
 
-    def _on_dock_close_requested(self) -> None:
-        """Handles explicit Close button click from CompanionDock or auto-exit completion."""
+    def _on_close_requested(self) -> None:
+        """Handles close signal from bridge (e.g. after episode auto-exit)."""
         logger.info("Application close requested. Evaluating episode outcome...")
         if self.runtime and self.runtime.last_episode_receipt:
             receipt = self.runtime.last_episode_receipt
@@ -279,22 +287,13 @@ class ParasiteApp:
                 self.exit_code = 2
             else:
                 self.exit_code = 1
-        self.shutdown()
-        if self.qapp:
-            self.qapp.quit()
+        self._stop_event.set()
 
     def _setup_signal_handling(self) -> None:
-        """Sets up 200ms heartbeat timer and SIGINT/SIGTERM handlers for clean exit."""
-        self._heartbeat_timer = QTimer()
-        self._heartbeat_timer.setInterval(200)
-        self._heartbeat_timer.timeout.connect(lambda: None)  # Wakes Python interpreter
-        self._heartbeat_timer.start()
-
+        """Configures clean SIGINT / SIGTERM handlers."""
         def _handle_signal(signum: int, frame: Any) -> None:
-            logger.info("Exit signal received (%d). Shutting down...", signum)
-            self.shutdown()
-            if self.qapp:
-                self.qapp.quit()
+            logger.info(f"Exit signal received ({signum}). Initiating shutdown...")
+            self._on_close_requested()
 
         try:
             signal.signal(signal.SIGINT, _handle_signal)
@@ -303,10 +302,9 @@ class ParasiteApp:
             pass
 
     def run(self) -> int:
-        """Runs application: self-test if dry-run, or starts runtime and Qt event loop."""
+        """Runs application in self-test mode, Discord daemon mode, or goal execution loop."""
         if self.args.dry_run:
             logger.info("Executing ParasiteAI dry-run self-test...")
-            # Validate subsystem health
             assert self.bridge is not None, "UIBridge was not initialized"
             assert self.runtime is not None, "RuntimeOrchestrator was not initialized"
             assert self.runtime.interrupt_guard is not None, "InterruptGuard was not initialized"
@@ -319,26 +317,34 @@ class ParasiteApp:
             assert self.runtime.browser_offloader is not None, "BrowserOffloader was not initialized"
             assert self.runtime.memory is not None, "EpisodicMemory was not initialized"
             assert self.runtime.pipeline is not None, "DualMindPipeline was not initialized"
-            assert self.dock is not None, "CompanionDock was not initialized"
-            if not self.args.no_hud and self.config.ui.hud.enabled:
-                assert self.hud is not None, "GhostHUD was not initialized"
 
             print("Clean dry-run initialization completed successfully")
             self.shutdown()
             return 0
 
-        # Start runtime cognitive daemon and enter Qt event loop
+        # Start background runtime orchestrator
         self.runtime.start()
-        qt_exit = self.qapp.exec()
-        if self.runtime and self.runtime.last_episode_receipt and getattr(self.args, "auto_exit_on_complete", False):
-            receipt = self.runtime.last_episode_receipt
-            if receipt.success:
-                return 0
-            elif receipt.exit_reason == "PANIC":
-                return 2
-            else:
-                return 1
-        return self.exit_code if self.exit_code != 0 else qt_exit
+
+        # Start Discord C2 bot if configured
+        if self.discord_bot:
+            self.discord_bot.start()
+
+        logger.info("ParasiteAI core running. Press Ctrl+C or issue /panic to stop.")
+
+        try:
+            while not self._stop_event.is_set():
+                time.sleep(0.15)
+                # If single-shot goal execution requested via CLI with auto_exit_on_complete
+                if self.runtime.auto_exit_on_complete and self.runtime.last_episode_receipt:
+                    receipt = self.runtime.last_episode_receipt
+                    self.exit_code = 0 if receipt.success else (2 if receipt.exit_reason == "PANIC" else 1)
+                    break
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt received.")
+        finally:
+            self.shutdown()
+
+        return self.exit_code
 
     def shutdown(self) -> None:
         """Atomically shuts down all subsystems and cleans up resources."""
@@ -348,32 +354,24 @@ class ParasiteApp:
             self._is_shutdown = True
             logger.info("Shutting down ParasiteAI subsystems...")
 
-            if hasattr(self, "_heartbeat_timer") and self._heartbeat_timer:
+            if self.discord_bot:
                 try:
-                    self._heartbeat_timer.stop()
-                except Exception:
-                    pass
+                    self.discord_bot.stop()
+                except Exception as exc:
+                    logger.debug(f"Error stopping Discord bot: {exc}")
 
             if hasattr(self, "runtime") and self.runtime:
                 try:
                     self.runtime.stop()
                 except Exception as exc:
-                    logger.debug("Error stopping runtime orchestrator: %s", exc)
-
-            if hasattr(self, "hud") and self.hud:
-                try:
-                    self.hud.clear_targets()
-                    self.hud.close()
-                except Exception:
-                    pass
-
-            if hasattr(self, "dock") and self.dock:
-                try:
-                    self.dock.close()
-                except Exception:
-                    pass
+                    logger.debug(f"Error stopping runtime orchestrator: {exc}")
 
             logger.info("ParasiteAI shutdown complete.")
+            for handler in list(logging.getLogger().handlers):
+                try:
+                    handler.flush()
+                except Exception:
+                    pass
 
 
 def main(argv: Optional[List[str]] = None) -> int:

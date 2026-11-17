@@ -1,0 +1,300 @@
+{
+  "goal": "Open Chrome, go to https://example.com, and write the main heading text into Notepad",
+  "captured_at": "2026-11-15T18:18:42.850892+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.041357542438271604,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "chrome https://example.com",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog input text field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.8876361045597484,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Directive fast-path WAIT 500ms (step 3)",
+      "target_label": "Chrome browser window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 4)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04073013117283951,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 5)",
+      "target_label": "Run dialog input text field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6909784495400934,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Example Domain",
+      "reasoning": "Directive fast-path TYPE (step 6)",
+      "target_label": "Notepad text editing area",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Notepad window is open and displaying the text \"Example Domain.\" To proceed with the task, I need to switch to the Chrome window to access the example.com page. Let me click on the Chrome window to bring it to the foreground.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        1630,
+        1055
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.83125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Notepad window is open and displaying the text \"Example Domain.\" To proceed with the task, I need to click on the Notepad window to bring it to the foreground and activate it for further text editing.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        564,
+        290
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.00525366512345679,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully opened the Notepad window and entered the text \"Example Domain.\" Now, I need to switch back to the Chrome browser window to continue with the task. I can see the Chrome window in the background, so I will click on it to bring it to the foreground.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        1603,
+        399
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.5570172646604938,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The main heading text is clearly displayed in the center of the page. To proceed with the task, I need to select this text. I will use the mouse to click and drag from the beginning of the heading to the end, ensuring that the entire text is highlighted for further actions.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        755,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.450625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The main heading text is clearly displayed in the center of the page. To proceed with the task, I need to select this text. I will use the mouse to click and drag from the beginning of the heading to the end, ensuring that the entire text is highlighted for further actions.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        755,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The main heading text is clearly displayed in the center of the page. To proceed with the task, I need to select and copy this text. I will use my mouse to click and drag from the beginning of the text to the end, ensuring that the entire heading is highlighted. This will allow me to easily copy it into Notepad later.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        755,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully opened the Notepad window and entered the text \"Example Domain.\" Now, I need to switch back to the Chrome window to continue with the task. I can see the Chrome window in the taskbar, so I will click on it to bring it to the foreground.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        658,
+        1071
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.9094661458333333,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is currently active, and the text \"Example Domain\" is already entered. To proceed with the task, I need to switch back to the Google Chrome window. I can do this by clicking on the Google Chrome icon in the taskbar, which will allow me to continue with the task of navigating to the example.com website. [Upgraded to double-click]",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        662,
+        1070
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.9108179012345679,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The main heading text is clearly displayed in the center of the page. To proceed with the task, I need to select and copy this text. I will use the mouse to click and drag from the beginning of the heading to the end to highlight the text, then use the keyboard shortcut Ctrl+C to copy it to the clipboard.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        560,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.54,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 17,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The main heading text is clearly displayed in the center of the page. To proceed with the task, I need to select and copy this text so that I can later paste it into Notepad. I will use my mouse to click and drag from the beginning of the heading to the end, ensuring that the entire text is selected.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        560,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 4.8225308641975306e-05,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 18,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The main heading text is clearly displayed in the center of the page. To proceed with the task, I need to select this text. I will use the mouse to click and drag from the beginning to the end of the heading text to highlight it.",
+      "target_label": "Notepad text editing area",
+      "coordinates": [
+        560,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

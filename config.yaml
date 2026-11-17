@@ -2,12 +2,17 @@
 # ParasiteAI - Unified System Configuration
 # ==============================================================================
 
+headless: true
+
 system:
   log_level: "INFO"
   integrity_mode: "development"
   data_dir: "data"
   models_dir: "models"
   log_file: "logs/parasite_debug.log"
+  save_debug_screenshots: true
+  max_screenshot_episodes: 20
+  max_archived_logs: 25
 
 persona:
   name: "Parasite"
@@ -26,7 +31,7 @@ brain:
     model_id: "mradermacher/UI-TARS-1.5-7B-GGUF"
     filename: "UI-TARS-1.5-7B.IQ4_XS.gguf"
     mmproj_filename: "UI-TARS-1.5-7B.mmproj-Q8_0.gguf"
-    context_size: 4096
+    context_size: 8192
     gpu_layers: -1
     vram_budget_mb: 6500
     local_endpoint: "http://127.0.0.1:8080/v1"
@@ -37,6 +42,9 @@ brain:
     server_startup_timeout_sec: 60.0
     server_parallel_slots: 1
     image_min_tokens: 1024
+    kv_cache_type_k: "q8_0"
+    kv_cache_type_v: "q8_0"
+    cache_reuse_tokens: 0
     keep_server_alive_on_exit: true
     download_auto: false
   offload:
@@ -57,8 +65,6 @@ safety:
     - "ctrl+alt+backspace"
     - "ctrl+alt+p"
     - "esc"
-  corner_panic_enabled: true
-  corner_distance_px: 4
   sensitive_window_titles:
     - "Bitwarden"
     - "1Password"
@@ -102,6 +108,17 @@ ui:
     box_alpha: 0.25
     stroke_width_px: 1.5
 
+discord:
+  enabled: false
+  token: ""
+  authorized_user_ids: []
+  authorized_channel_ids: []
+  require_risk_consent: true
+  consent_timeout_sec: 60.0
+  milestone_screenshot_interval: 3
+  screen_max_width: 1280
+  screen_jpeg_quality: 75
+
 vision:
   grounding_mode: "hybrid"  # "hybrid", "uia_only", or "ocr_only"
   max_som_elements: 100
@@ -127,6 +144,14 @@ hands:
     micro_pause_duration_ms: [200, 600]
     punctuation_pause_ms: [80, 150]
     multiline_shift_enter: true
+  reflex:
+    enabled: true
+    max_burst_actions: 8
+    inter_action_min_ms: 15
+    inter_action_max_ms: 30
+    reflex_move_duration_ms: 20
+    reflex_dwell_ms: 15
+    abort_on_window_change: true
 
 window_rules:
   persistent_processes:
@@ -175,3 +200,24 @@ window_rules:
     - "eaapp.exe"
     - "ubisoftconnect.exe"
     - "goggalaxy.exe"
+
+skills:
+  enabled: true
+  learning_enabled: false
+
+parasite_skill:
+  enabled: true
+  proactive_planning: true
+  proactive_mode: "open_ended"
+  reactive_recovery: true
+  local_assist_enabled: true
+  max_local_assist_calls_per_invoke: 4
+  attach_settle_ms: 2500
+  submit_verify_timeout_sec: 1.5
+  min_generation_wait_ms: 2000
+  scroll_before_copy_attempts: 3
+  scroll_wheel_delta: -8
+
+app_memory:
+  enabled: true
+  db_path: "data/app_memory.db"

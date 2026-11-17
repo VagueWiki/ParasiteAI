@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "active_stage": "P5.1",
+  "hold_stage_until_graduated": false,
+  "graduated_stages": [
+    "P0",
+    "P1",
+    "P2",
+    "P2.5",
+    "P2.6",
+    "P2.7",
+    "P3",
+    "P4.1",
+    "P4.2",
+    "P4.3",
+    "P4.4",
+    "P4.5",
+    "P4.6",
+    "P4.7"
+  ],
+  "stage_sequence": [
+    "P4.7",
+    "P5.1",
+    "P5.2",
+    "P5.3",
+    "P5.4",
+    "P6.1",
+    "P6.2",
+    "P6.3",
+    "P7.1",
+    "P7.2",
+    "P7.3"
+  ],
+  "ignore_legacy_results_before": "2026-11-16T14:00:00-08:00",
+  "last_evaluated_at": "2026-11-16T20:54:05-08:00",
+  "last_app_version": "0.4.7.12",
+  "processed_receipts": [
+    "smoke_p4_7_20261116T220817Z.json",
+    "smoke_p4_7_20261116T221916Z.json",
+    "smoke_p4_7_20261116T223220Z.json",
+    "smoke_p4_7_20261116T224205Z.json",
+    "smoke_p4_7_20261116T224436Z.json",
+    "smoke_p4_7_20261117T003922Z.json",
+    "smoke_p4_7_20261117T010318Z.json",
+    "smoke_p4_7_20261117T011501Z.json",
+    "smoke_p4_7_20261117T043425Z.json",
+    "smoke_p4_7_20261117T044420Z.json",
+    "smoke_p4_7_20261117T044841Z.json"
+  ],
+  "last_stint_summary": "Stage P4 (P4.7 / 0.4.7.12) GRADUATED: smoke_p4_7_20261117T044841Z.json passed all_passed=true (P4.7-B 5/5, P4.7-A 9 steps / 60.7s / 214 chars non-literal prose / DONE) and 114 targeted tests passed in 12.04s. Cursor advanced to P5.1."
+}

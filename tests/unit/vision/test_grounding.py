@@ -13,7 +13,6 @@ import pytest
 
 from parasite_ai.config import VisionConfig
 from parasite_ai.ui.bridge import UIBridge
-from parasite_ai.ui.ghost_hud import GhostHUD
 from parasite_ai.ui.types import UIElement
 from parasite_ai.vision.capture import ScreenCapture, compute_frame_diff
 from parasite_ai.vision.grounding import (
@@ -306,9 +305,21 @@ def test_compute_frame_diff() -> None:
     assert compute_frame_diff(frame1, frame_noise) == 0.0
 
 
-def test_ghost_hud_and_bridge_interop(qapp: Any) -> None:
+def test_hud_targets_and_bridge_interop() -> None:
     bridge = UIBridge()
-    hud = GhostHUD(bridge=bridge)
+    received_targets: list[Any] = []
+    cleared = False
+
+    def on_targets(elements: list[Any]) -> None:
+        nonlocal received_targets
+        received_targets = elements
+
+    def on_cleared() -> None:
+        nonlocal cleared
+        cleared = True
+
+    bridge.sig_targets_updated.connect(on_targets)
+    bridge.sig_targets_cleared.connect(on_cleared)
 
     elements = [
         UIElement.from_bbox(1, (10, 20, 100, 40), label="TestButton", role="Button"),
@@ -316,12 +327,40 @@ def test_ghost_hud_and_bridge_interop(qapp: Any) -> None:
     ]
 
     bridge.set_hud_targets(elements)
-    qapp.processEvents()
-    assert len(hud._targets) == 2
-    assert hud._targets[0].id == 1
-    assert hud._targets[0].label == "TestButton"
+    assert len(received_targets) == 2
+    assert received_targets[0].id == 1
+    assert received_targets[0].label == "TestButton"
 
     bridge.clear_hud_targets()
-    qapp.processEvents()
-    assert len(hud._targets) == 0
-    hud.close()
+    assert cleared is True
+
+
+def test_ground_lazy_fg_control_does_not_hit_unbound_local_error() -> None:
+    """
+    Stint P4.1.1: Verifies ground(lazy=True) walks an active external foreground control
+    cleanly without hitting UnboundLocalError on 'children' and preserves nested depth=5 controls.
+    """
+    import os
+
+    cfg = VisionConfig(grounding_mode="uia_only")
+    grounder = ScreenGrounder(config=cfg)
+
+    fg_win = MockControl("Calculator", "WindowControl", 100, 100, 400, 600)
+    fg_win.ProcessId = os.getpid() + 1000
+
+    nested_btn_7 = MockControl("Seven", "ButtonControl", 130, 300, 60, 44)
+    nested_btn_8 = MockControl("Eight", "ButtonControl", 194, 300, 60, 44)
+
+    mock_auto = MagicMock()
+    mock_auto.GetForegroundControl.return_value = fg_win
+    mock_auto.WalkControl.return_value = [
+        (nested_btn_7, 5),
+        (nested_btn_8, 5),
+    ]
+
+    with patch.dict("sys.modules", {"uiautomation": mock_auto}):
+        elements = grounder.ground(lazy=True)
+
+    labels = [e.label for e in elements]
+    assert "Seven" in labels
+    assert "Eight" in labels

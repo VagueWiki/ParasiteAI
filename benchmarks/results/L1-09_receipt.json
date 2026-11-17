@@ -1,0 +1,78 @@
+{
+  "goal": "Open File Explorer",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 3,
+  "max_steps": 12,
+  "duration_sec": 9.333,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    0.962,
+    3.198,
+    4.96
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "File Explorer",
+    "process_name": "explorer.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.05600694444444444,
+      "error_message": null,
+      "duration_sec": 0.962,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "explorer",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.27681905636451093,
+      "error_message": null,
+      "duration_sec": 3.198,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.96,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794891645.395361,
+  "plan_source": "local",
+  "skill_id": null,
+  "farmed_plan_id": null,
+  "fast_path_steps": 2,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
+}

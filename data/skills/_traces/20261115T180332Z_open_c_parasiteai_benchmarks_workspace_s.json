@@ -1,0 +1,105 @@
+{
+  "goal": "Open C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt in Notepad and append ' - Approved' to the end",
+  "captured_at": "2026-11-15T18:03:32.988225+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "explorer.exe",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.040634162808641974,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog input text field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "seed.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6983554671910837,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "end"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+end (step 3)",
+      "target_label": "Notepad text editing area",
+      "coordinates": null,
+      "pre_window": "seed.txt - Notepad (notepad.exe)",
+      "post_window": "seed.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "TYPE",
+      "keys": null,
+      "text": " - Approved",
+      "reasoning": "Directive fast-path TYPE (step 4)",
+      "target_label": "Notepad text editing area",
+      "coordinates": null,
+      "pre_window": "seed.txt - Notepad (notepad.exe)",
+      "post_window": "*seed.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+s (step 5)",
+      "target_label": "Notepad save file shortcut",
+      "coordinates": null,
+      "pre_window": "*seed.txt - Notepad (notepad.exe)",
+      "post_window": "seed.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open and displaying the text \"Project Proposal v1 - Approved.\" The task is complete, and I can now submit the task.",
+      "target_label": "Notepad save file shortcut",
+      "coordinates": null,
+      "pre_window": "seed.txt - Notepad (notepad.exe)",
+      "post_window": "seed.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

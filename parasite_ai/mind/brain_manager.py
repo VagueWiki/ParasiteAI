@@ -499,8 +499,8 @@ class LlamaCppBackend(InferenceBackend):
             messages.append({
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": data_uri}},
                     {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_uri}},
                 ],
             })
         elif self._chat_handler is not None:
@@ -597,8 +597,8 @@ class OpenAIEndpointBackend(InferenceBackend):
             messages.append({
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": data_uri}},
                     {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_uri}},
                 ],
             })
         else:
@@ -655,9 +655,12 @@ class LlamaServerBackend(InferenceBackend):
         mmproj_path: Optional[Union[str, Path]] = None,
         server_binary: Optional[Union[str, Path]] = "bin/llama-server/llama-server.exe",
         n_gpu_layers: int = -1,
-        n_ctx: int = 4096,
+        n_ctx: int = 8192,
         parallel_slots: int = 1,
         image_min_tokens: int = 1024,
+        kv_cache_type_k: str = "q8_0",
+        kv_cache_type_v: str = "q8_0",
+        cache_reuse_tokens: int = 0,
         keep_alive_on_exit: bool = True,
         auto_start: bool = True,
         startup_timeout_sec: float = 60.0,
@@ -675,6 +678,9 @@ class LlamaServerBackend(InferenceBackend):
         self.n_ctx = n_ctx
         self.parallel_slots = parallel_slots
         self.image_min_tokens = image_min_tokens
+        self.kv_cache_type_k = kv_cache_type_k
+        self.kv_cache_type_v = kv_cache_type_v
+        self.cache_reuse_tokens = cache_reuse_tokens
         self.keep_alive_on_exit = keep_alive_on_exit
         self.auto_start = auto_start
         self.startup_timeout_sec = startup_timeout_sec
@@ -775,6 +781,14 @@ class LlamaServerBackend(InferenceBackend):
             "-fa", "auto",
         ]
 
+        if self.kv_cache_type_k:
+            cmd.extend(["-ctk", str(self.kv_cache_type_k)])
+        if self.kv_cache_type_v:
+            cmd.extend(["-ctv", str(self.kv_cache_type_v)])
+        is_multimodal = bool(self.mmproj_path and self.mmproj_path.is_file())
+        if self.cache_reuse_tokens and self.cache_reuse_tokens > 0 and not is_multimodal:
+            cmd.extend(["--cache-reuse", str(self.cache_reuse_tokens)])
+
         # Multimodal projector
         if self.mmproj_path and self.mmproj_path.is_file():
             cmd.extend([
@@ -864,8 +878,8 @@ class LlamaServerBackend(InferenceBackend):
             messages.append({
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": data_uri}},
                     {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_uri}},
                 ],
             })
         else:
@@ -1137,6 +1151,9 @@ class LocalBrainManager:
         timeout_sec = getattr(self.config.brain.local_model, "server_startup_timeout_sec", 60.0)
         parallel_slots = getattr(self.config.brain.local_model, "server_parallel_slots", 1)
         image_min_tokens = getattr(self.config.brain.local_model, "image_min_tokens", 1024)
+        kv_cache_type_k = getattr(self.config.brain.local_model, "kv_cache_type_k", "q8_0")
+        kv_cache_type_v = getattr(self.config.brain.local_model, "kv_cache_type_v", "q8_0")
+        cache_reuse_tokens = getattr(self.config.brain.local_model, "cache_reuse_tokens", 0)
         keep_alive = getattr(self.config.brain.local_model, "keep_server_alive_on_exit", True)
 
         try:
@@ -1150,6 +1167,9 @@ class LocalBrainManager:
                 n_ctx=self.config.brain.local_model.context_size,
                 parallel_slots=parallel_slots,
                 image_min_tokens=image_min_tokens,
+                kv_cache_type_k=kv_cache_type_k,
+                kv_cache_type_v=kv_cache_type_v,
+                cache_reuse_tokens=cache_reuse_tokens,
                 keep_alive_on_exit=keep_alive,
                 auto_start=auto_start,
                 startup_timeout_sec=timeout_sec,
@@ -1862,6 +1882,15 @@ class LocalBrainManager:
             "reasoning": f"Re-evaluating target. Raw output was: {raw_response[:60]}...",
         }
 
+    CUA_STOP_SEQUENCES: List[str] = [
+        "<|im_end|>",
+        "<|endoftext|>",
+        "\nassistant",
+        "\nuser",
+        "\nUser:",
+        "\nObservation:",
+    ]
+
     def generate_cua_step(
         self,
         user_goal: str,
@@ -1871,45 +1900,57 @@ class LocalBrainManager:
         screen_height: int = 1080,
         candidate_elements: Optional[List[Any]] = None,
         memory_context: Optional[str] = None,
+        working_memory_context: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_tokens: int = 128,
+        max_tokens: int = 256,
         temperature: float = 0.1,
+        stop_sequences: Optional[List[str]] = None,
     ) -> Tuple[str, ActionPlan]:
         """
         Executes single-pass multimodal CUA step:
         1. Encodes screen frame to base64 JPEG if not already supplied.
-        2. Formats concise prompt with user goal and memory history.
+        2. Formats concise prompt with user goal, memory history, and CPU working memory snapshot.
         3. Queries active multimodal backend with UITARS_SYSTEM_PROMPT in 1 call.
         4. Parses output into (thought, ActionPlan) via parse_uitars_action.
         """
         from parasite_ai.mind.uitars_parser import UITARS_SYSTEM_PROMPT, parse_uitars_action
         import numpy as np
 
-        # Convert numpy frame to base64 JPEG if needed
+        # Convert numpy frame to base64 JPEG if needed (preserve full desktop resolution without downscaling)
         eff_b64 = image_base64
         if eff_b64 is None and screen_frame is not None and isinstance(screen_frame, np.ndarray) and screen_frame.size > 0:
-            import io
-            import base64
-            from PIL import Image
-            pil_img = Image.fromarray(screen_frame)
-            buf = io.BytesIO()
-            pil_img.save(buf, format="JPEG", quality=85)
-            eff_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            try:
+                from parasite_ai.vision.foveated import encode_image_to_data_uri
+                eff_b64 = encode_image_to_data_uri(screen_frame, max_dim=1920, quality=90)
+            except Exception:
+                import io
+                import base64
+                from PIL import Image
+                pil_img = Image.fromarray(screen_frame)
+                buf = io.BytesIO()
+                pil_img.save(buf, format="JPEG", quality=90)
+                eff_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
-        prompt_parts = []
+        # Prefix-stable ordering: static Task goal first, then append-only Recent History,
+        # then compact CPU Working Memory snapshot, then instruction before image tail
+        prompt_parts = [f"Task: {user_goal}"]
         if memory_context:
             prompt_parts.append(f"Recent History:\n{memory_context}")
-        prompt_parts.append(f"Task: {user_goal}")
+        if working_memory_context:
+            prompt_parts.append(f"Current OS Working Memory:\n{working_memory_context}")
         prompt_parts.append("Determine the next single action to achieve the task.")
         prompt_str = "\n\n".join(prompt_parts)
 
+        eff_stop = stop_sequences if stop_sequences is not None else list(self.CUA_STOP_SEQUENCES)
         raw_output = self.generate(
             prompt=prompt_str,
             system_prompt=system_prompt or UITARS_SYSTEM_PROMPT,
             max_tokens=max_tokens,
             temperature=temperature,
+            stop_sequences=eff_stop,
             image_base64=eff_b64,
         )
+        logger.info("[CUA RAW OUTPUT] %s", raw_output)
 
         thought, plan = parse_uitars_action(
             raw_output=raw_output,

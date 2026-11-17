@@ -12,9 +12,11 @@ import base64
 from dataclasses import dataclass
 import io
 import logging
+import math
+import re
 import sys
 import time
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -236,9 +238,9 @@ class FoveatedVisionEngine:
         quality: int = 80,
     ) -> str:
         """
-        Builds a Set-of-Mark annotated image data URI from the FoveatedFrame for VLM inference.
-        Overlays [#ID] tags onto the foveal active-window crop (or macro desktop overview)
-        so the VLM can directly read custom-rendered/console text and visual UI controls.
+        Builds an encoded image data URI from the FoveatedFrame for VLM inference.
+        Note: Deprecated for UI-TARS single-pass CUA (which receives unscaled Monitor 1 frames).
+        Retained for legacy 2-pass compatibility and mock testing.
         """
         base_img = frame.fovea_image if (use_fovea and frame.fovea_image is not None and frame.fovea_image.size > 0) else frame.macro_image
         if base_img is None or base_img.size == 0:
@@ -296,3 +298,308 @@ class FoveatedVisionEngine:
         self._last_capture_time = 0.0
         self._last_dhash = None
         self._last_frame = None
+
+
+@dataclass
+class OpticalVerificationResult:
+    """Result of pre-click 128x128 optical crop verification (Hybrid Option C)."""
+    x: int
+    y: int
+    verified: bool = True
+    nudge_dx: int = 0
+    nudge_dy: int = 0
+    tier_used: str = "none"   # "none" | "cpu_ocr" | "vlm_glance" | "mismatch"
+    detected_text: str = ""
+    mismatch_reason: Optional[str] = None
+
+
+_ACTION_QUOTED_HINT_RE = re.compile(
+    r"(?:click|press|hit|select|tap|button|key|icon|tab|menu)\s+(?:on\s+)?(?:the\s+)?['\"]([^'\"]{1,24})['\"]",
+    re.IGNORECASE,
+)
+_GENERIC_QUOTED_HINT_RE = re.compile(r"['\"]([^'\"]{1,24})['\"]")
+_ACTION_UNQUOTED_HINT_RE = re.compile(
+    r"\b(?:click|press|hit|select|tap|open|launch)\s+(?:on\s+)?(?:the\s+)?([A-Za-z0-9][A-Za-z0-9\+\-\./_]*(?:\s+[A-Za-z0-9][A-Za-z0-9\+\-\./_]*)?)",
+    re.IGNORECASE,
+)
+_COORD_LIKE_RE = re.compile(r"^\s*\(?\s*-?\d+\s*,\s*-?\d+\s*\)?\s*$")
+_MULTI_INT_RE = re.compile(r"^\d+(?:\s+\d+)+$")
+_LARGE_INT_RE = re.compile(r"^\d{3,}$")
+_OFFSET_RESPONSE_RE = re.compile(r"OFFSET\s*\(\s*([+-]?\d+)\s*,\s*([+-]?\d+)\s*\)", re.IGNORECASE)
+_GENERIC_UI_NOUNS = frozenset({
+    "icon", "menu", "screen", "window", "area", "button", "tab", "item",
+    "target", "box", "field", "element", "control", "widget", "panel", "pane",
+    "dialog", "modal", "popup", "toolbar", "taskbar", "desktop", "app",
+    "application", "program", "bar", "link", "coordinates", "coordinate",
+    "coords", "point", "pixel", "pixels", "location", "position", "spot",
+    "corner", "edge", "center", "middle", "top", "bottom", "left", "right",
+    "upper", "lower", "top-left", "top-right", "bottom-left", "bottom-right",
+    "upper-left", "upper-right", "lower-left", "lower-right",
+})
+_UNQUOTED_STOPWORDS = frozenset({
+    "the", "a", "an", "this", "that", "it", "its", "there", "here",
+    "at", "in", "on", "of", "to", "for", "from", "with", "by", "as",
+    "into", "onto", "near", "around", "inside", "outside", "under", "over",
+    "and", "or", "but", "so", "then", "than", "when", "while", "which",
+    "is", "are", "was", "be", "will", "would", "can", "could", "should",
+    "x", "y",
+})
+
+
+def extract_target_glyph_hint(reasoning: Optional[str]) -> Optional[str]:
+    """
+    Extracts a concise target glyph or button label (e.g. '7', 'Save', 'Don't Save')
+    from action reasoning text while filtering out raw coordinate strings and
+    generic UI filler nouns.
+    """
+    if not reasoning or not isinstance(reasoning, str):
+        return None
+
+    for pattern in (_ACTION_QUOTED_HINT_RE, _GENERIC_QUOTED_HINT_RE):
+        for match in pattern.finditer(reasoning):
+            token = match.group(1).strip()
+            if not token or len(token) > 20:
+                continue
+            if _COORD_LIKE_RE.match(token):
+                continue
+            return token
+
+    for match in _ACTION_UNQUOTED_HINT_RE.finditer(reasoning):
+        words = [w for w in match.group(1).strip().split() if w]
+        while words and words[-1].lower() in (_GENERIC_UI_NOUNS | _UNQUOTED_STOPWORDS):
+            # Keep uppercase/titlecase second word when preceded by a concrete verb/noun (e.g. "Save As")
+            if len(words) == 2 and words[-1].lower() == "as" and words[-1][:1].isupper():
+                break
+            words.pop()
+        if not words:
+            continue
+        if words[0].lower() in (_GENERIC_UI_NOUNS | _UNQUOTED_STOPWORDS):
+            continue
+        token = " ".join(words)
+        if not token or len(token) > 20:
+            continue
+        if _COORD_LIKE_RE.match(token) or _MULTI_INT_RE.match(token) or _LARGE_INT_RE.match(token):
+            continue
+        return token
+
+    return None
+
+
+class PreClickOpticalVerifier:
+    """
+    Hybrid Option C pre-click optical zoom verifier:
+    1. Extracts a native 128x128 px crop centered on (x, y) in <1ms on CPU.
+    2. Tier 1 (CPU RapidOCR): Confirms target glyph alignment and nudges cursor to
+       the glyph center when offset within max_nudge_px.
+    3. Tier 2 (Optional VLM Micro-Glance): If Tier 1 is ambiguous and vlm_glance_fn
+       is provided, runs a constrained small-crop neural check (~20-36 visual tokens).
+    """
+
+    def __init__(
+        self,
+        ocr_engine: Optional[Any] = None,
+        crop_size: int = 128,
+        max_nudge_px: int = 24,
+    ) -> None:
+        self._ocr_engine = ocr_engine
+        self.crop_size = int(crop_size)
+        self.max_nudge_px = int(max_nudge_px)
+
+    def _get_ocr_engine(self) -> Optional[Any]:
+        """Lazy initializer for RapidOCR ONNX engine."""
+        if self._ocr_engine is None:
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+                self._ocr_engine = RapidOCR()
+            except Exception as exc:
+                logger.debug("PreClickOpticalVerifier RapidOCR unavailable: %s", exc)
+                self._ocr_engine = None
+        return self._ocr_engine
+
+    def extract_crop(
+        self,
+        x: int,
+        y: int,
+        frame: np.ndarray,
+        crop_size: Optional[int] = None,
+        frame_origin: Tuple[int, int] = (0, 0),
+    ) -> Tuple[np.ndarray, Tuple[int, int], Tuple[int, int]]:
+        """
+        Extracts a square 1:1 native pixel crop centered on (x, y) in <1ms on CPU.
+        Returns (crop_array, (crop_origin_x, crop_origin_y), (cursor_local_x, cursor_local_y)).
+        """
+        if frame is None or frame.size == 0:
+            return np.empty((0, 0, 3), dtype=np.uint8), (0, 0), (0, 0)
+
+        fh, fw = frame.shape[:2]
+        ox, oy = frame_origin
+        fx = x - ox
+        fy = y - oy
+        if fx < 0 or fy < 0 or fx >= fw or fy >= fh:
+            return np.empty((0, 0, 3), dtype=np.uint8), (0, 0), (0, 0)
+
+        sz = max(16, int(crop_size or self.crop_size))
+        half = sz // 2
+        x1 = max(0, fx - half)
+        y1 = max(0, fy - half)
+        x2 = min(fw, x1 + sz)
+        y2 = min(fh, y1 + sz)
+        if (x2 - x1) < sz and x1 > 0:
+            x1 = max(0, x2 - sz)
+        if (y2 - y1) < sz and y1 > 0:
+            y1 = max(0, y2 - sz)
+
+        crop = frame[y1:y2, x1:x2]
+        return crop, (ox + x1, oy + y1), (fx - x1, fy - y1)
+
+    @staticmethod
+    def _match_glyph_in_ocr(
+        boxes: List[Any],
+        target_glyph: str,
+        cx_local: int,
+        cy_local: int,
+        max_nudge_px: int,
+    ) -> Optional[Tuple[int, int, str]]:
+        """Finds closest OCR box matching target_glyph within max_nudge_px."""
+        target_clean = target_glyph.strip().lower()
+        if not target_clean:
+            return None
+
+        best_match: Optional[Tuple[float, int, int, str]] = None
+        for item in boxes:
+            try:
+                if len(item) < 3:
+                    continue
+                pts, text, conf = item[0], item[1], item[2]
+                if float(conf) < 0.35:
+                    continue
+                text_str = str(text).strip()
+                text_clean = text_str.lower()
+                if not text_clean:
+                    continue
+
+                if len(target_clean) == 1:
+                    matched = (
+                        text_clean == target_clean
+                        or bool(re.search(rf"(?<!\w){re.escape(target_clean)}(?!\w)", text_clean))
+                    )
+                else:
+                    matched = (text_clean == target_clean or target_clean in text_clean)
+
+                if not matched:
+                    continue
+
+                pts_arr = np.array(pts)
+                gx = int(round((float(np.min(pts_arr[:, 0])) + float(np.max(pts_arr[:, 0]))) / 2.0))
+                gy = int(round((float(np.min(pts_arr[:, 1])) + float(np.max(pts_arr[:, 1]))) / 2.0))
+                dx = gx - cx_local
+                dy = gy - cy_local
+                if abs(dx) > max_nudge_px or abs(dy) > max_nudge_px:
+                    continue
+
+                dist = math.hypot(dx, dy)
+                if best_match is None or dist < best_match[0]:
+                    best_match = (dist, dx, dy, text_str)
+            except Exception:
+                continue
+
+        if best_match is None:
+            return None
+        return (best_match[1], best_match[2], best_match[3])
+
+    def verify_and_nudge(
+        self,
+        x: int,
+        y: int,
+        frame: Optional[np.ndarray],
+        target_glyph: Optional[str] = None,
+        crop_size: Optional[int] = None,
+        frame_origin: Tuple[int, int] = (0, 0),
+        vlm_glance_fn: Optional[Callable[[np.ndarray, str], str]] = None,
+        max_nudge_px: Optional[int] = None,
+    ) -> OpticalVerificationResult:
+        """
+        Verifies the target region under (x, y) using a 128x128 crop:
+        - Tier 1: RapidOCR glyph check on CPU.
+        - Tier 2: Optional VLM micro-glance callback if Tier 1 yields no match.
+        """
+        if frame is None or frame.size == 0 or not target_glyph or not target_glyph.strip():
+            return OpticalVerificationResult(x=x, y=y, verified=True, tier_used="none")
+
+        crop, _, (cx_local, cy_local) = self.extract_crop(
+            x=x,
+            y=y,
+            frame=frame,
+            crop_size=crop_size,
+            frame_origin=frame_origin,
+        )
+        if crop.size == 0:
+            return OpticalVerificationResult(x=x, y=y, verified=True, tier_used="none")
+
+        nudge_cap = self.max_nudge_px if max_nudge_px is None else int(max_nudge_px)
+
+        # Tier 1: Fast CPU RapidOCR glyph alignment check
+        engine = self._get_ocr_engine()
+        if engine is not None:
+            try:
+                ocr_res = engine(crop)
+                boxes = ocr_res[0] if isinstance(ocr_res, tuple) else ocr_res
+                if boxes:
+                    matched = self._match_glyph_in_ocr(
+                        boxes=boxes,
+                        target_glyph=target_glyph,
+                        cx_local=cx_local,
+                        cy_local=cy_local,
+                        max_nudge_px=nudge_cap,
+                    )
+                    if matched is not None:
+                        dx, dy, matched_text = matched
+                        return OpticalVerificationResult(
+                            x=x + dx,
+                            y=y + dy,
+                            verified=True,
+                            nudge_dx=dx,
+                            nudge_dy=dy,
+                            tier_used="cpu_ocr",
+                            detected_text=matched_text,
+                        )
+            except Exception as exc:
+                logger.debug("PreClickOpticalVerifier OCR pass failed: %s", exc)
+
+        # Tier 2: Hybrid Option C VLM Micro-Glance fallback on ambiguous targets
+        if vlm_glance_fn is not None:
+            try:
+                raw_resp = (vlm_glance_fn(crop, target_glyph) or "").strip()
+                upper = raw_resp.upper()
+                if upper.startswith("MISMATCH") or upper == "NO" or upper.startswith("NO "):
+                    return OpticalVerificationResult(
+                        x=x,
+                        y=y,
+                        verified=False,
+                        tier_used="mismatch",
+                        mismatch_reason=raw_resp,
+                    )
+                offset_m = _OFFSET_RESPONSE_RE.search(raw_resp)
+                if offset_m:
+                    dx = int(offset_m.group(1))
+                    dy = int(offset_m.group(2))
+                    if abs(dx) <= nudge_cap and abs(dy) <= nudge_cap:
+                        return OpticalVerificationResult(
+                            x=x + dx,
+                            y=y + dy,
+                            verified=True,
+                            nudge_dx=dx,
+                            nudge_dy=dy,
+                            tier_used="vlm_glance",
+                        )
+                if "YES" in upper or "CONFIRM" in upper:
+                    return OpticalVerificationResult(
+                        x=x,
+                        y=y,
+                        verified=True,
+                        tier_used="vlm_glance",
+                    )
+            except Exception as exc:
+                logger.debug("PreClickOpticalVerifier VLM glance fallback failed: %s", exc)
+
+        return OpticalVerificationResult(x=x, y=y, verified=True, tier_used="none")

@@ -142,22 +142,12 @@ class TestInterruptGuardFilteringAndPreemption:
         assert guard.is_panic()
         assert guard.panic_manager.get_panic_reason() == "ctrl_alt_backspace"
 
-    def test_corner_panic_detection(self):
-        guard = InterruptGuard(cooldown_seconds=1.0, corner_panic_enabled=True, corner_distance_px=4)
+    def test_mouse_corner_coordinates_only_interrupt_not_panic(self):
+        guard = InterruptGuard(cooldown_seconds=1.0)
 
-        # Coordinate (2, 2) is <= 4px from (0, 0)
+        # Corner coordinates must only pause via physical touch, never trigger corner-slam panic
         guard.simulate_event("mouse", flags=0, pt=(2, 2))
 
-        assert guard.is_interrupted()
-        assert guard.is_panic()
-        assert guard.panic_manager.get_panic_reason() == "corner_slam"
-
-    def test_corner_panic_ignored_when_disabled(self):
-        guard = InterruptGuard(cooldown_seconds=1.0, corner_panic_enabled=False, corner_distance_px=4)
-
-        guard.simulate_event("mouse", flags=0, pt=(2, 2))
-
-        # Physical touch interrupt should fire, but NOT panic
         assert guard.is_interrupted()
         assert not guard.is_panic()
 

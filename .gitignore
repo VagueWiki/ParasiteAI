@@ -7,3 +7,10 @@ __pycache__/
 logs/
 benchmarks/runs/
 bin/
+.env*
+discord_secrets.bat
+data/logs/
+data/screenshots/
+data/app_memory.db*
+@AutomationLog.txt
+benchmarks/new_name.txt/

@@ -280,8 +280,160 @@ def clear_clipboard() -> None:
         pass
 
 
+def minimize_non_target_monitor1_windows() -> None:
+    """
+    Cleans Monitor 1 (0 <= center_x < 1920) between benchmark tasks:
+    1. Closes leftover File Explorer (CabinetWClass/ExploreWClass), #32770 dialogs, and open Start Menus.
+    2. Minimizes non-shell, non-ParasiteAI third-party windows sitting on Monitor 1 so they do not
+       occlude the desktop or pre-opened benchmark applications.
+    Strictly preserves all windows on Monitor 2 (center_x >= 1920).
+    """
+    if os.name != "nt":
+        return
+    try:
+        user32 = ctypes.windll.user32
+        cur_pid = os.getpid()
+        shell_exempt = {
+            "progman",
+            "workerw",
+            "shell_traywnd",
+            "shell_secondarytraywnd",
+            "windows.ui.core.corewindow",
+            "xamlislandroot",
+            "ime",
+            "msctfime ui",
+        }
+        menu_or_dialog_close = {
+            "openshell.cmenucontainer",
+            "classicmenu.cmenucontainer",
+            "dv2controlhost",
+            "#32768",
+        }
+
+        for win in get_open_windows(include_empty_titles=True):
+            hwnd = win["hwnd"]
+            cls_low = (win.get("class_name") or "").lower()
+            title_low = (win.get("title") or "").lower()
+
+            # 1. Dismiss open Start Menus or popup context menus
+            if cls_low in menu_or_dialog_close:
+                user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+                continue
+
+            # 2. Dismiss leftover #32770 modal dialogs (Save As, Open, Confirm, Benchmark System Error)
+            if cls_low == "#32770" and any(
+                k in title_low for k in ("save", "open", "confirm", "benchmark", "error", "replace")
+            ):
+                user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+                continue
+
+            if win.get("is_minimized") or win.get("pid") == cur_pid:
+                continue
+            if (
+                cls_low in shell_exempt
+                or "parasite" in title_low
+                or "benchmark runner" in title_low
+                or "companiondock" in cls_low
+            ):
+                continue
+
+            rect = wintypes.RECT()
+            if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                continue
+            w = rect.right - rect.left
+            h = rect.bottom - rect.top
+            if w <= 50 or h <= 50:
+                continue
+            cx = (rect.left + rect.right) // 2
+            cy = (rect.top + rect.bottom) // 2
+
+            # Only touch windows whose center lies on Monitor 1 (0 <= cx < 1920)
+            if 0 <= cx < 1920 and 0 <= cy < 1080:
+                if cls_low in ("cabinetwclass", "explorewclass"):
+                    user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+                elif title_low.strip():
+                    user32.ShowWindowAsync(hwnd, SW_MINIMIZE)
+                    if not user32.IsIconic(hwnd):
+                        user32.ShowWindowAsync(hwnd, 11)  # SW_FORCEMINIMIZE fallback
+    except Exception as exc:
+        logger.debug("minimize_non_target_monitor1_windows error: %s", exc)
+
+
+def _focus_window_on_monitor1(hwnd: int) -> None:
+    """Positions a benchmark window on Monitor 1 if needed and brings it to the foreground."""
+    if os.name != "nt" or not hwnd:
+        return
+    try:
+        user32 = ctypes.windll.user32
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        else:
+            user32.ShowWindow(hwnd, 5)  # SW_SHOW
+
+        rect = wintypes.RECT()
+        if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            cx = (rect.left + rect.right) // 2
+            if not (0 <= cx < 1920):
+                w = max(600, min(1200, rect.right - rect.left))
+                h = max(400, min(800, rect.bottom - rect.top))
+                user32.SetWindowPos(hwnd, 0, 200, 150, w, h, 0x0004)  # SWP_NOZORDER
+
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
+def release_stuck_input_state() -> None:
+    """Releases any stuck Win32 modifier/tab keys and mouse buttons after subprocess exit/timeout."""
+    if os.name != "nt":
+        return
+    try:
+        user32 = ctypes.windll.user32
+        KEYEVENTF_EXTENDEDKEY = 0x0001
+        KEYEVENTF_KEYUP = 0x0002
+        extended_vks = {0x5B, 0x5C, 0xA3, 0xA5}
+        # VK_SHIFT, VK_CONTROL, VK_MENU, VK_LSHIFT..VK_RMENU, VK_LWIN, VK_RWIN, VK_TAB
+        for vk in (0x10, 0x11, 0x12, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C, 0x09):
+            if bool(user32.GetAsyncKeyState(vk) & 0x8000):
+                flags = KEYEVENTF_KEYUP | (KEYEVENTF_EXTENDEDKEY if vk in extended_vks else 0)
+                scan = int(user32.MapVirtualKeyW(vk, 0) or 0) & 0xFFFF
+                user32.keybd_event(vk, scan, flags, 0)
+        # Release any held mouse buttons (LEFTUP=0x04, RIGHTUP=0x10, MIDDLEUP=0x40)
+        for btn_vk, up_flag in ((0x01, 0x0004), (0x02, 0x0010), (0x04, 0x0040)):
+            if bool(user32.GetAsyncKeyState(btn_vk) & 0x8000):
+                user32.mouse_event(up_flag, 0, 0, 0, 0)
+    except Exception as exc:
+        logger.debug("release_stuck_input_state error: %s", exc)
+
+
+def kill_lingering_parasite_processes() -> None:
+    """Terminates any orphaned parasite_ai.main python processes so no WH_KEYBOARD_LL/MOUSE_LL hook lingers."""
+    if os.name != "nt":
+        return
+    try:
+        cur_pid = os.getpid()
+        parent_pid = os.getppid()
+        ps_cmd = (
+            f"Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+            f"Where-Object {{ $_.ProcessId -ne {cur_pid} -and $_.ProcessId -ne {parent_pid} "
+            f"-and $_.CommandLine -match 'parasite_ai\\.main' }} | "
+            f"ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except Exception as exc:
+        logger.debug("kill_lingering_parasite_processes error: %s", exc)
+
+
 def cleanup_benchmark_processes() -> None:
-    """Closes benchmark target applications and modal dialogs to leave the desktop clean."""
+    """Closes benchmark target applications, lingering parasite_ai.main processes, modal dialogs, and stuck modifiers."""
+    kill_lingering_parasite_processes()
+    release_stuck_input_state()
     close_modal_dialogs()
     targets = [
         "notepad.exe",
@@ -292,6 +444,7 @@ def cleanup_benchmark_processes() -> None:
     for target in targets:
         if is_process_running(target):
             kill_process(target)
+    minimize_non_target_monitor1_windows()
 
 
 # ---------------------------------------------------------------------------
@@ -308,13 +461,14 @@ def setup_clean_workspace(**kwargs: Any) -> bool:
 
 
 def setup_open_notepad(**kwargs: Any) -> bool:
-    """Cleans workspace, launches notepad.exe, and verifies it is open and visible."""
+    """Cleans workspace, launches notepad.exe, and verifies it is open and visible on Monitor 1."""
     setup_clean_workspace()
     subprocess.Popen(["notepad.exe"])
     deadline = time.time() + 5.0
     while time.time() < deadline:
         for win in get_open_windows():
             if win["process_name"].lower() == "notepad.exe" and not win["is_minimized"]:
+                _focus_window_on_monitor1(win["hwnd"])
                 return True
         time.sleep(0.2)
     return False
@@ -355,7 +509,7 @@ def setup_open_notepad_with_seed_file(
     content: str = "TOKEN_9941",
     **kwargs: Any,
 ) -> bool:
-    """Creates a seed file in benchmarks/workspace and opens it in Notepad."""
+    """Creates a seed file in benchmarks/workspace and opens it in Notepad on Monitor 1."""
     if not setup_seed_workspace_file(filename=filename, content=content):
         return False
     target = WORKSPACE_DIR / filename
@@ -363,6 +517,10 @@ def setup_open_notepad_with_seed_file(
     deadline = time.time() + 5.0
     while time.time() < deadline:
         if content in read_notepad_text():
+            for win in get_open_windows():
+                if win["process_name"].lower() == "notepad.exe":
+                    _focus_window_on_monitor1(win["hwnd"])
+                    break
             return True
         time.sleep(0.2)
     return False

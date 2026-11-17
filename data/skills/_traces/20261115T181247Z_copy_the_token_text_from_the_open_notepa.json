@@ -1,0 +1,114 @@
+{
+  "goal": "Copy the token text from the open Notepad window to the clipboard",
+  "captured_at": "2026-11-15T18:12:47.900019+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I first need to select it. I will use the mouse to click and drag from the beginning of the text to the end, ensuring the entire text is highlighted.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        326,
+        127
+      ],
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.2475,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. I will use the mouse to click and drag from the beginning of the text to the end, ensuring the entire text is highlighted. This will allow me to proceed with the copy operation.",
+      "target_label": null,
+      "coordinates": [
+        324,
+        127
+      ],
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 8.680555555555556e-06,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. I will use the mouse to click and drag from the beginning of the text to the end to highlight the entire text.",
+      "target_label": null,
+      "coordinates": [
+        324,
+        127
+      ],
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. I can do this by clicking and dragging the mouse from the beginning to the end of the text, which will highlight the entire text.",
+      "target_label": null,
+      "coordinates": [
+        324,
+        127
+      ],
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.04502025462962963,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select the text first. I can do this by clicking and dragging the mouse from the beginning of the text to the end, which will highlight the entire text.",
+      "target_label": null,
+      "coordinates": [
+        324,
+        127
+      ],
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. I will use the mouse to click and drag from the beginning to the end of the text to highlight it.",
+      "target_label": null,
+      "coordinates": [
+        324,
+        127
+      ],
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 1.9290123456790123e-05,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

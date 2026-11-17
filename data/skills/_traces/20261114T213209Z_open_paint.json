@@ -1,0 +1,95 @@
+{
+  "goal": "Open Paint",
+  "captured_at": "2026-11-14T21:32:09.460338+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Paint.net icon on the desktop, which is the first step in launching the Paint application. I need to double-click it to open the program. This is the most straightforward and effective way to start the application.",
+      "target_label": "Paint",
+      "coordinates": [
+        32,
+        714
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.540625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter on selected desktop target at (36, 707)",
+      "target_label": "Paint",
+      "coordinates": [
+        36,
+        707
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Paint.net icon in the background, which is the first step in launching the Paint program. I need to double-click it to open the program.",
+      "target_label": "Paint",
+      "coordinates": [
+        36,
+        714
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Paint.NET Updates (paintdotnet.exe)",
+      "success": true,
+      "screen_diff": 0.30616367669753086,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint.NET Updates window is currently open, and I need to close it to proceed with the task. I will click the close button at the top right corner of the window to close the update notification.",
+      "target_label": null,
+      "coordinates": [
+        923,
+        555
+      ],
+      "pre_window": "Paint.NET Updates (paintdotnet.exe)",
+      "post_window": "Untitled - Paint.NET 5.1.12 (paintdotnet.exe)",
+      "success": true,
+      "screen_diff": 0.963125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint.NET application is now open, and the color picker window is visible. The task of launching Paint has been successfully completed, and no further actions are required to achieve the goal.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Paint.NET 5.1.12 (paintdotnet.exe)",
+      "post_window": "Untitled - Paint.NET 5.1.12 (paintdotnet.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "goal": "Open Calculator, compute 144 / 12, and type the result into the open Notepad window",
+  "captured_at": "2026-11-14T18:27:04.007063+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, but I need to launch the Calculator to perform the division operation. The most efficient way to do this is by using the Windows search bar. I'll click on the search bar at the bottom left of the screen and type \"Calculator\" to quickly locate and open the Calculator application.",
+      "target_label": "Calculator",
+      "coordinates": [
+        171,
+        1073
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.037037037037037035,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "shift",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but I need to launch the Calculator to perform the division...",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Search (SearchApp.exe)",
+      "post_window": "Search (SearchApp.exe)",
+      "success": true,
+      "screen_diff": 0.1849122299382716,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Calculator",
+      "reasoning": "The Notepad window is open, but I need to launch the Calculator to perform the division. The search box is ready for input, so I can type \"Calculator\" to find and open it.",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Search (SearchApp.exe)",
+      "post_window": "Search (SearchApp.exe)",
+      "success": true,
+      "screen_diff": 0.44441046551138297,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The search results are ready, and the Calculator app is right at the top. I just need to click on it to launch the calculator, and then I can start working on the division problem.",
+      "target_label": "Calculator",
+      "coordinates": [
+        137,
+        679
+      ],
+      "pre_window": "Search (SearchApp.exe)",
+      "post_window": "Search (SearchApp.exe)",
+      "success": true,
+      "screen_diff": 0.900625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Calculator app is open, and the search results are ready, and the Calculator app is right at the top. I just need to click on it to launch the app.",
+      "target_label": "Calculator",
+      "coordinates": [
+        618,
+        685
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, but I need to launch the Calculator to perform the division. I just need to click the Calculator icon on the taskbar to open it.",
+      "target_label": "Calculator",
+      "coordinates": [
+        776,
+        1070
+      ],
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.7508333333333334,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Calculator app is open, and the search results are ready, and the Calculator app is ready to use. I just need to click on the Calculator app to perform the division.",
+      "target_label": null,
+      "coordinates": [
+        1449,
+        663
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0008994020061728395,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Calculator app is open, and the search results are ready, and the Calculator app is ready to use. I need to perform the division operation 144 / 12. I will click on the number 1 on the calculator to start entering the calculation.",
+      "target_label": null,
+      "coordinates": [
+        1421,
+        758
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0003713348765432099,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

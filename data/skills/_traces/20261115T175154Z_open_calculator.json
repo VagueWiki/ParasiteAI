@@ -1,0 +1,54 @@
+{
+  "goal": "Open Calculator",
+  "captured_at": "2026-11-15T17:51:54.714708+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04130545910493827,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "calc",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "calc",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.03992235725308642,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator application is now open, and the task is complete. There are no further actions required to achieve the goal of opening the calculator.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

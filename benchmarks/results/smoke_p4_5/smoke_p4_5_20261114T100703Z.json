@@ -1,0 +1,47 @@
+{
+  "timestamp": "20261114T100703Z",
+  "all_passed": false,
+  "results": {
+    "P-H": {
+      "passed": false,
+      "goal": "open Notepad and type ParasiteAI P4.5 verified",
+      "exit_reason": "MAX_STEPS",
+      "steps_executed": 12,
+      "fast_path_steps": 0,
+      "duration_sec": 98.86,
+      "farmed_plan": null
+    },
+    "P-I": {
+      "passed": false,
+      "goal": "open Notepad and type ParasiteAI P4.5 verified",
+      "exit_reason": "DONE",
+      "parasite_invocations": 1,
+      "fast_path_steps": 1,
+      "duration_sec": 69.45
+    },
+    "P-J": {
+      "passed": false,
+      "goal": "calculate 12*7",
+      "exit_reason": "MAX_STEPS",
+      "steps_executed": 10,
+      "fast_path_steps": 2,
+      "duration_sec": 54.08
+    },
+    "P-K": {
+      "passed": true,
+      "goal": "open paint and save as C:\\Users\\Suici\\AppData\\Local\\Temp\\parasite_p4_5_cdltk50m\\p4_5_smoke_canvas.png",
+      "exit_reason": "DONE",
+      "file_exists": true,
+      "duration_sec": 33.36
+    },
+    "P-L": {
+      "passed": false,
+      "journal_mode": "wal",
+      "farmed_plans": 1,
+      "episodes": 4,
+      "app_profiles": 4,
+      "promoted_count": 0,
+      "draft_skill_verified": false
+    }
+  }
+}

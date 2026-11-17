@@ -1,0 +1,24 @@
+{
+  "goal": "open cookie clicker, the. Open auto clicker, then activate auto clicker",
+  "captured_at": "2026-11-17T06:56:33.047128+00:00",
+  "entries": [
+    {
+      "step_index": 2,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Cookie Clicker icon on the desktop, located in the \"Sam's Online Casino\" section. To start the game, I need to double-click this icon. This is the first step in completing the task, and once I open the game, I can proceed to open and activate the auto-clicker.",
+      "target_label": "Cookie Clicker desktop shortcut",
+      "coordinates": [
+        1829,
+        550
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Fences (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0002652391975308642,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

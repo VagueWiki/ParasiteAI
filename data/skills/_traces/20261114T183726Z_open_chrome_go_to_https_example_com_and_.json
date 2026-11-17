@@ -1,0 +1,129 @@
+{
+  "goal": "Open Chrome, go to https://example.com, and write the main heading text into Notepad",
+  "captured_at": "2026-11-14T18:37:26.649899+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu open, and the Chrome icon is right there. The next step is to launch the browser, so I'll click on the Chrome icon in the Start menu. This will allow me to proceed with the task of navigating to example.com.",
+      "target_label": "Chrome",
+      "coordinates": [
+        40,
+        894
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.5675,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, and the Chrome icon is visible. The next step is to launch the Chrome browser to proceed with the task. [Upgraded to double-click]",
+      "target_label": "Chrome",
+      "coordinates": [
+        38,
+        894
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.00044077932098765435,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu open, and the Chrome icon is right there. The next step is to launch the browser. I need to click on the Chrome icon in the Start menu to open the browser window, which will allow me to proceed with the task of navigating to example.com.",
+      "target_label": "Chrome",
+      "coordinates": [
+        38,
+        900
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Chrome Remote Desktop - Remote Access - Chrome Remote Desktop (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.878125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu open, and the Chrome icon is right there. The next step is to launch the Chrome browser to proceed with the task. I'll click on the Chrome icon in the Start menu to open the browser and continue with the task. [Upgraded to double-click]",
+      "target_label": "Chrome",
+      "coordinates": [
+        40,
+        894
+      ],
+      "pre_window": "Chrome Remote Desktop - Remote Access - Chrome Remote Desktop (chrome.exe)",
+      "post_window": "Chrome Remote Desktop - Remote Access - Chrome Remote Desktop (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0003761574074074074,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu open, and the Chrome icon is right there. The next step is to launch the Chrome browser to proceed with the task.",
+      "target_label": null,
+      "coordinates": [
+        38,
+        894
+      ],
+      "pre_window": "Chrome Remote Desktop - Remote Access - Chrome Remote Desktop (chrome.exe)",
+      "post_window": "Chrome Remote Desktop - Remote Access - Chrome Remote Desktop (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Chrome Remote Desktop - Remote Access - Chrome Remote Desktop (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.042890625,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 8,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "chrome",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog input field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.5529679888656924,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

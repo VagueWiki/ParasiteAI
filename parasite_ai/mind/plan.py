@@ -15,7 +15,7 @@ import json
 import logging
 import re
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, TYPE_CHECKING
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from parasite_ai.mind.memory import ActionPlan, ActionType, CadenceTier
 
@@ -25,6 +25,52 @@ if TYPE_CHECKING:
     from parasite_ai.mind.dual_mind import ActionResult
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Coordinate & Control-Character Guards (Shared across Plan, Protocol & Skills)
+# ---------------------------------------------------------------------------
+
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+_COORDINATE_PATTERNS: Tuple[re.Pattern[str], ...] = (
+    # Parenthesized (x, y) integer pairs
+    re.compile(r"\(\s*\d{1,5}\s*,\s*\d{1,5}\s*\)"),
+    # Bracketed [x, y] or [x1, y1, x2, y2] integer tuples/bboxes
+    re.compile(r"\[\s*\d{1,5}\s*,\s*\d{1,5}(?:\s*,\s*\d{1,5}){0,2}\s*\]"),
+    # Explicit x=<num> / y=<num> / coord=<num> assignments
+    re.compile(r"(?<![a-zA-Z0-9_])(?:[xy]|coord(?:inate)?s?)\s*[:=]\s*\d{1,5}\b", re.IGNORECASE),
+)
+
+
+def strip_control_chars(value: str) -> str:
+    """Removes unsafe ASCII control characters while preserving standard whitespace."""
+    if not value:
+        return ""
+    return _CONTROL_CHAR_RE.sub("", value)
+
+
+def find_coordinate_patterns(text: Optional[str]) -> List[str]:
+    """Returns any matched coordinate-like literals in a string."""
+    if not text:
+        return []
+    matches: List[str] = []
+    for pat in _COORDINATE_PATTERNS:
+        matches.extend(m.group(0) for m in pat.finditer(text))
+    return matches
+
+
+def assert_no_numeric_coordinates(text: Optional[str], field_name: str = "text") -> Optional[str]:
+    """Sanitizes control chars and raises ValueError if numeric coordinates appear."""
+    if text is None:
+        return None
+    cleaned = strip_control_chars(text)
+    hits = find_coordinate_patterns(cleaned)
+    if hits:
+        raise ValueError(
+            f"Field '{field_name}' violates zero-coordinate contract; rejected patterns: {hits}"
+        )
+    return cleaned
 
 
 class StepIntent(str, Enum):
@@ -48,6 +94,48 @@ class StepStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class StepDirective(BaseModel):
+    """Typed, coordinate-free execution payload for a PlanStep (§8: semantic only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    verb: Literal[
+        "CLICK",
+        "DOUBLE_CLICK",
+        "RIGHT_CLICK",
+        "TYPE",
+        "HOTKEY",
+        "SCROLL",
+        "WAIT",
+    ]
+    text: Optional[str] = Field(default=None, max_length=500)
+    keys: Optional[List[str]] = Field(default=None, max_length=4)
+    submit: bool = Field(default=False, description="Whether to press Enter after TYPE.")
+    clear_first: bool = Field(default=False, description="Whether to clear existing text before TYPE.")
+    scroll_direction: Optional[Literal["up", "down"]] = None
+    wait_ms: int = Field(default=0, ge=0, le=10000)
+
+    @field_validator("text")
+    @classmethod
+    def _no_coords_in_text(cls, v: Optional[str]) -> Optional[str]:
+        return assert_no_numeric_coordinates(v, "directive.text")
+
+    @field_validator("keys")
+    @classmethod
+    def _clean_keys(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        return [assert_no_numeric_coordinates(k, "directive.keys") or "" for k in v if k]
+
+    @model_validator(mode="after")
+    def _validate_verb_shape(self) -> "StepDirective":
+        if self.verb == "TYPE" and self.text is None:
+            raise ValueError("TYPE directive requires non-null 'text'.")
+        if self.verb == "HOTKEY" and not self.keys:
+            raise ValueError("HOTKEY directive requires non-empty 'keys'.")
+        return self
+
+
 class PlanStep(BaseModel):
     """Represents a discrete verifiable milestone within a LivingPlan."""
     model_config = ConfigDict(extra="ignore", validate_default=True)
@@ -62,6 +150,10 @@ class PlanStep(BaseModel):
     contingency: Optional[str] = Field(default=None, description="Handling instructions if blocked")
     tool_route: Optional[Literal["GUI", "CLI", "ADVISOR"]] = Field(
         default=None, description="Routed execution affordance"
+    )
+    directive: Optional[StepDirective] = Field(
+        default=None,
+        description="Optional typed, coordinate-free execution payload; None => free-form VLM.",
     )
 
 
@@ -225,12 +317,36 @@ class LivingPlan(BaseModel):
             else:
                 mark = " "
             lines.append(f"  [{mark}] Step {step.step_id}: {step.intent.value} — {step.description} ({step.status.value})")
+            if step.step_id == self.current_step_id and step.status != StepStatus.COMPLETED:
+                if step.target_description:
+                    lines.append(f"      Target: {step.target_description}")
+                if step.success_criteria:
+                    lines.append(f"      Expected Result: {step.success_criteria}")
+                if step.contingency:
+                    lines.append(f"      If Blocked: {step.contingency}")
         return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Strategic Gemini Consultation Protocol Formatters & Parsers
 # ---------------------------------------------------------------------------
+
+def _detect_windows_host_label() -> str:
+    """Detects the active Windows OS generation label (e.g. 'Windows 10'), defaulting to 'Windows 10'."""
+    try:
+        import platform
+        if platform.system().lower() == "windows":
+            rel = str(platform.release() or "").strip()
+            if rel:
+                return f"Windows {rel}"
+    except Exception:
+        pass
+    return "Windows 10"
+
+
+DEFAULT_WINDOWS_HOST_LABEL: str = _detect_windows_host_label()
+DEFAULT_TARGET_ENVIRONMENT: str = f"{DEFAULT_WINDOWS_HOST_LABEL} 64-bit Desktop"
+
 
 class GroundedCapabilityContract(BaseModel):
     """
@@ -240,7 +356,7 @@ class GroundedCapabilityContract(BaseModel):
     model_config = ConfigDict(extra="ignore", validate_default=True)
 
     version: str = Field(default="4.0.0")
-    target_environment: str = Field(default="Windows 11 64-bit Desktop")
+    target_environment: str = Field(default=DEFAULT_TARGET_ENVIRONMENT)
     virtual_desktop_bounds: Tuple[int, int, int, int] = Field(
         default=(0, 0, 3840, 1080),
         description="Dynamic virtual screen bounds [x_min, y_min, width, height]"
@@ -519,7 +635,7 @@ def format_gemini_consultation_prompt(
     caret_status_text = "Active (Blinking)" if caret_active else "Inactive / Hidden"
 
     prompt = f"""[SYSTEM: PARASITE STRATEGIC ADVISOR PROTOCOL]
-You are the Strategic Cognitive Advisor for ParasiteAI, a 100% visible, desktop-native Windows 11 AI companion.
+You are the Strategic Cognitive Advisor for ParasiteAI, a 100% visible, desktop-native {DEFAULT_WINDOWS_HOST_LABEL} AI companion.
 
 # CAPABILITY CONTRACT & CONSTRAINTS
 {capability_manifest}
@@ -926,9 +1042,21 @@ def verify_step_completion(
     if getattr(action, "action", None) == ActionType.PANIC:
         return False
 
+    directive = getattr(step, "directive", None)
+    act_type = getattr(action, "action", None)
+    if directive is not None and step.intent != StepIntent.LAUNCH_OR_ACTIVATE:
+        if directive.verb == "WAIT":
+            return act_type == ActionType.WAIT
+        if directive.verb == "HOTKEY":
+            return act_type == ActionType.HOTKEY and screen_diff >= 0.02
+        if directive.verb == "TYPE":
+            return act_type == ActionType.TYPE and screen_diff >= 0.005
+
     intent = step.intent
 
     if intent == StepIntent.LAUNCH_OR_ACTIVATE:
+        if directive is not None and directive.verb == "HOTKEY" and act_type == ActionType.HOTKEY:
+            return screen_diff >= 0.02
         # Check window title / process name match
         target = (step.target_description or "").strip().lower()
         if not target:

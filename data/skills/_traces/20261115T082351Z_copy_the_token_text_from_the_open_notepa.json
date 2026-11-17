@@ -1,0 +1,246 @@
+{
+  "goal": "Copy the token text from the open Notepad window to the clipboard",
+  "captured_at": "2026-11-15T08:23:51.603878+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I first need to select it. I will use the mouse to click and drag from the beginning of the text to the end, highlighting the entire string. [Unrecognized verb: drag]",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I first need to select it. I can do this by clicking and dragging the mouse from the beginning of the text to the end, which will highlight the entire text. [Unrecognized verb: drag]",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. I will use the mouse to click and drag from the beginning of the text to the end to highlight the entire text. [Unrecognized verb: drag]",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. I will use the mouse to click and drag from the beginning of the text to the end to highlight the entire text. [Unrecognized verb: drag]",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. The easiest way to do this is by using the keyboard shortcut \"Ctrl A\" to select all the text in the Notepad window.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. The easiest way to do this is by using the keyboard shortcut \"Ctrl A,\" which will select all the text in the Notepad window at once.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to use the keyboard shortcut \"Ctrl C.\"",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I will use the keyboard shortcut \"Ctrl + C.\"",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I will use the keyboard shortcut \"Ctrl + C.\"",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I can use the keyboard shortcut \"Ctrl + C.\"",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to use the keyboard shortcut \"Ctrl C.\" This will copy the selected text to the system clipboard, making it available for pasting in other applications.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I will use the keyboard shortcut \"Ctrl + C.\" This action will copy the selected text to the system clipboard, making it available for pasting in other applications.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I will use the keyboard shortcut \"Ctrl + C.\"",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I will use the keyboard shortcut \"Ctrl + C.\"",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "source.txt - Notepad (notepad.exe)",
+      "post_window": "source.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "goal": "Open Notepad and type 'Benchmark Alpha Test 42'",
+  "captured_at": "2026-11-15T08:04:00.510017+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04130594135802469,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6955138068151767,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Benchmark Alpha Test 42",
+      "reasoning": "The Notepad window is ready, and the cursor is blinking, waiting for input. The next step is to type the text \"Benchmark Alpha Test 42\" into this blank document.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter for 'benchmark alpha test 42' after repetitive typing loop",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open and ready for input, with the text \"Benchmark Alpha Test 42\" already entered. The task is complete, and no further action is required.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

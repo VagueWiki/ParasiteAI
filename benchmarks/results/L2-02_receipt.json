@@ -1,81 +1,109 @@
 {
   "goal": "Open C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt in Notepad and append ' - Approved' to the end",
-  "success": false,
-  "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 23.299,
-  "exit_reason": "MAX_STEPS",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 6,
+  "max_steps": 22,
+  "duration_sec": 15.095,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    5.409,
-    5.112,
-    3.61,
-    4.305,
-    4.354
+    0.952,
+    4.727,
+    0.863,
+    1.252,
+    0.863,
+    5.917
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Google Gemini - Google Chrome",
-    "process_name": "chrome.exe"
+    "title": "seed.txt - Notepad",
+    "process_name": "notepad.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": null,
+      "keys": [
+        "win",
+        "r"
+      ],
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.05600694444444444,
       "error_message": null,
-      "duration_sec": 5.409
+      "duration_sec": 0.952,
+      "burst_count": null
     },
     {
       "step_id": 2,
-      "action_type": "WAIT",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.0,
-      "error_message": null,
-      "duration_sec": 5.112
-    },
-    {
-      "step_id": 3,
       "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "notepad",
+      "text": "notepad C:\\ParasiteAI\\benchmarks\\workspace\\seed.txt",
       "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.61
+      "success": true,
+      "screen_diff": 0.7943065642666243,
+      "error_message": null,
+      "duration_sec": 4.727,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "ctrl",
+        "end"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.863,
+      "burst_count": null
     },
     {
       "step_id": 4,
-      "action_type": "WAIT",
+      "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": null,
+      "text": " - Approved",
       "keys": null,
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.02,
       "error_message": null,
-      "duration_sec": 4.305
+      "duration_sec": 1.252,
+      "burst_count": null
     },
     {
       "step_id": 5,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.863,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
+      "action_type": "DONE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
@@ -84,9 +112,18 @@
       "success": true,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 4.354
+      "duration_sec": 5.917,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794175847.1237655
+  "timestamp": 1794891693.3836043,
+  "plan_source": "skill",
+  "skill_id": "open-c-parasiteai-benchmarks-workspace-seed-txt",
+  "farmed_plan_id": null,
+  "fast_path_steps": 5,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

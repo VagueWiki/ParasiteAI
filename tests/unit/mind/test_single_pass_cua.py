@@ -173,9 +173,13 @@ def test_brain_manager_generate_cua_step() -> None:
     )
 
     assert mock_backend.generate.call_count == 1, "Must execute in exactly ONE LLM call"
+    call_kwargs = mock_backend.generate.call_args.kwargs
+    assert call_kwargs["max_tokens"] == 256, "Default CUA max_tokens must be 256 to prevent Action truncation"
+    assert "<|im_end|>" in call_kwargs["stop_sequences"]
+    assert "\nassistant" in call_kwargs["stop_sequences"]
     assert "Save button" in thought
     assert plan.action == ActionType.CLICK
-    assert plan.coordinates == (960, 216)
+    assert plan.coordinates == (500, 200)
 
 
 # ---------------------------------------------------------------------------
@@ -220,3 +224,69 @@ def test_dual_mind_single_pass_cua_path() -> None:
     assert step_rec.action.action == ActionType.CLICK
     assert step_rec.action.coordinates == (25, 980)
     assert step_rec.persona_speech == "Opening Notepad via Start menu."
+
+
+def test_brain_manager_generate_cua_step_includes_working_memory_in_prefix_order() -> None:
+    """Verifies LocalBrainManager.generate_cua_step() structures prompt in exact prefix-stable order."""
+    cfg = AppConfig()
+    mgr = LocalBrainManager(cfg)
+
+    mock_backend = MagicMock()
+    mock_backend.is_available.return_value = True
+    mock_backend.supports_vision.return_value = True
+    mock_backend.generate.return_value = (
+        "Thought: Notepad is already open. I will click to focus.\n"
+        "Action: click(start_box='(500, 500)')"
+    )
+    mgr.active_backend = mock_backend
+    mgr.mode = BrainMode.LOCAL_LLM
+
+    dummy_frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    thought, plan = mgr.generate_cua_step(
+        user_goal="Launch Notepad and type hello",
+        screen_frame=dummy_frame,
+        memory_context="- Step #1: HOTKEY [win+r] -> Screen Diff: 4.0% (SUCCESS)",
+        working_memory_context="- Active Window: Desktop (explorer.exe)\n- Sub-Goal Progress:\n  [ ] Launch Notepad",
+    )
+
+    assert mock_backend.generate.called
+    call_kwargs = mock_backend.generate.call_args.kwargs
+    prompt = call_kwargs["prompt"]
+
+    # Verify exact prefix-stable ordering: Task -> Recent History -> Current OS Working Memory -> Instruction
+    idx_task = prompt.index("Task: Launch Notepad and type hello")
+    idx_hist = prompt.index("Recent History:\n- Step #1: HOTKEY [win+r]")
+    idx_wm = prompt.index("Current OS Working Memory:\n- Active Window: Desktop (explorer.exe)")
+    idx_inst = prompt.index("Determine the next single action to achieve the task.")
+
+    assert idx_task < idx_hist < idx_wm < idx_inst
+    assert plan.action == ActionType.CLICK
+
+
+def test_generate_cua_step_native_1080p_encoding() -> None:
+    """Verifies LocalBrainManager.generate_cua_step encodes frames at native 1080p resolution (max_dim=1920)."""
+    cfg = AppConfig()
+    mgr = LocalBrainManager(cfg)
+
+    mock_backend = MagicMock()
+    mock_backend.is_available.return_value = True
+    mock_backend.supports_vision.return_value = True
+    mock_backend.generate.return_value = (
+        "Thought: I see the target icon.\n"
+        "Action: click(start_box='(100, 100)')"
+    )
+    mgr.active_backend = mock_backend
+    mgr.mode = BrainMode.LOCAL_LLM
+
+    dummy_frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    with patch("parasite_ai.vision.foveated.encode_image_to_data_uri", return_value="data:image/jpeg;base64,stub") as mock_encode:
+        thought, plan = mgr.generate_cua_step(
+            user_goal="Click icon",
+            screen_frame=dummy_frame,
+            screen_width=1920,
+            screen_height=1080,
+        )
+
+    mock_encode.assert_called_once_with(dummy_frame, max_dim=1920, quality=90)
+    assert plan.action == ActionType.CLICK
+

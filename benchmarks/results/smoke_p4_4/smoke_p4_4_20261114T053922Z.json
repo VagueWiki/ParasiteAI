@@ -1,0 +1,92 @@
+{
+  "timestamp": "20261114T053922Z",
+  "results": {
+    "P-A": {
+      "passed": true,
+      "hwnd": 5048470,
+      "process": "chrome.exe",
+      "title": "",
+      "identity_mode": "uia_overlay",
+      "has_minimize_box": false,
+      "caret_ok": true,
+      "uia_input_point": null,
+      "assist_input_point": null,
+      "uia_labels_sample": [
+        "PaneControl:Gemini",
+        "PaneControl:Chrome Legacy Window",
+        "DocumentControl:Gemini in Chrome"
+      ],
+      "dismissed_cleanly": true,
+      "detail": "Gemini verified via uia_overlay (caret=True, uia_input=None, dismissed=True)."
+    },
+    "P-B": {
+      "passed": true,
+      "frame_shape": [
+        1080,
+        1920,
+        3
+      ],
+      "restored_match": true,
+      "detail": "CF_DIB image pack and CF_UNICODETEXT snapshot restore verified."
+    },
+    "P-C": {
+      "passed": false,
+      "failure": "HARVEST_TIMEOUT",
+      "selected_program": null,
+      "steps_count": 0,
+      "identity_mode": "uia_overlay",
+      "submit_method": "send_button:local_vlm",
+      "rescued_by": "uia_overlay",
+      "scroll_steps": 6,
+      "duration_sec": 85.0,
+      "detail": "Sentinel clipboard verifier received no response text after clicking Copy.",
+      "diagnostics_path": "data\\logs\\parasite_skill\\20261114T053852_673530Z_PROACTIVE_PLAN_HARVEST_TIMEOUT.json"
+    },
+    "P-D": {
+      "passed": false,
+      "failure": "HARVEST_TIMEOUT",
+      "action_verb": null,
+      "action_target": null,
+      "identity_mode": "uia_overlay",
+      "submit_method": "send_button:local_vlm",
+      "rescued_by": "uia_overlay",
+      "scroll_steps": 3,
+      "duration_sec": 29.09,
+      "detail": "Sentinel clipboard verifier received no response text after clicking Copy.",
+      "diagnostics_path": "data\\logs\\parasite_skill\\20261114T053921_774908Z_REACTIVE_RECOVERY_HARVEST_TIMEOUT.json"
+    },
+    "P-E": {
+      "passed": true,
+      "sensitive_window_match": true,
+      "preflight_failure": "PREFLIGHT_SENSITIVE_WINDOW",
+      "detail": "Sensitive window preflight hard block verified cleanly."
+    },
+    "P-F": {
+      "passed": true,
+      "phash": "dc63c6d8639a62d4",
+      "phash_compute_ms": 21.857,
+      "ttl_decayed_to_stale": true,
+      "detail": "pHash=dc63c6d8639a62d4 computed in 21.86ms; 35-day TTL decayed cleanly."
+    },
+    "P-G": {
+      "passed": true,
+      "open_windows_count": 7,
+      "discovered_programs_count": 25,
+      "sample_programs": [
+        "2XKO",
+        "7-Zip File Manager",
+        "7-Zip Help",
+        "7zFM",
+        "About iTunes",
+        "Access",
+        "Access Manager",
+        "Acrobat"
+      ],
+      "parasite_vram_mb": 0,
+      "desktop_total_vram_mb": 6842,
+      "vram_within_budget": true,
+      "detail": "Discovered 25 OS programs; Parasite GPU VRAM=0 MB (ceiling 6500 MB; whole-desktop GPU=6842 MB)."
+    }
+  },
+  "all_passed": false
+}

@@ -1,0 +1,34 @@
+{
+  "app_version": "0.4.7.6",
+  "timestamp": "20261117T010318Z",
+  "preflight": {
+    "llama_server_healthy": true,
+    "parasite_vram_mb": 0,
+    "desktop_total_vram_mb": 6630,
+    "vram_within_budget": true
+  },
+  "all_passed": false,
+  "results": {
+    "P4.7-B": {
+      "passed": true,
+      "app_profiles_resolved": "wordpad.exe",
+      "slot_parameterization_ok": true,
+      "scanner_injection_blocked": true,
+      "scanner_secret_redacted": true,
+      "authored_degraded_to_stale": true
+    },
+    "P4.7-A": {
+      "passed": false,
+      "goal": "Open Notepad and write a 2-sentence overview of desktop automation",
+      "pre_match_skill": null,
+      "episode_skill_id": null,
+      "notepad_text_len": 39,
+      "notepad_text_preview": "A brief overview of desktop automation.",
+      "non_literal_prose": false,
+      "capture_backend": "mss",
+      "exit_reason": "DONE",
+      "steps_executed": 5,
+      "duration_sec": 20.78
+    }
+  }
+}

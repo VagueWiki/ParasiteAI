@@ -1,0 +1,44 @@
+{
+  "goal": "open cookie clicker and then open auto clicker and turn on auto clicker.",
+  "captured_at": "2026-11-17T06:58:48.741182+00:00",
+  "entries": [
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter on selected desktop target at (1829, 550)",
+      "target_label": "Cookie Clicker desktop shortcut",
+      "coordinates": [
+        1829,
+        550
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.09580729166666667,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Cookie Clicker icon on the desktop, located in the \"Sam's Online Casino\" section. I will double-click it to open the game.",
+      "target_label": "Cookie Clicker desktop shortcut",
+      "coordinates": [
+        1829,
+        550
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Fences (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.048125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

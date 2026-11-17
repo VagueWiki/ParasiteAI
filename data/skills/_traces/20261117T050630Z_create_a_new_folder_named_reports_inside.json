@@ -1,0 +1,103 @@
+{
+  "goal": "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer",
+  "captured_at": "2026-11-17T05:06:30.833196+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Run dialog input",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04129195601851852,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog text input",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.3274713256378208,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "shift",
+        "n"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+shift+n (step 3)",
+      "target_label": "File Explorer workspace window",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Reports",
+      "reasoning": "Directive fast-path TYPE (step 4)",
+      "target_label": "New folder text input",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Directive fast-path WAIT 500ms (step 5)",
+      "target_label": "File Explorer window",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully created the 'Reports' folder in the specified location. I can see that the folder is now visible in the File Explorer window, confirming that the task has been completed successfully. There are no further actions required to fulfill the task objective.",
+      "target_label": "File Explorer window",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

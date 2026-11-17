@@ -1,6 +1,6 @@
 # Stage P1 Stint Map & Roadmap: Local CUA Engine Upgrade (`llama-server` + `UI-TARS-1.5-7B`)
 
-**Parent Documents:** [`feasibility_review.md`](file:///C:/ParasiteAI/feasibility_review.md) (§4, §5, §8, §10) | [`p0_stint_map.md`](file:///C:/ParasiteAI/p0_stint_map.md) | [`baseline_p0.md`](file:///C:/ParasiteAI/benchmarks/results/baseline_p0.md) | [`strict_stint_cadence.md`](file:///C:/ParasiteAI/.agents/rules/strict_stint_cadence.md)  
+**Parent Documents:** [`feasibility_review.md`](file:///C:/ParasiteAI/feasibility_review.md) (§4, §5, §8, §10) | [`p0_stint_map.md`](file:///C:/ParasiteAI/p0_stint_map.md) | [`baseline_p0.md`](file:///C:/ParasiteAI/benchmarks/results/baseline_p0.md) | [`engineering_cadence.md`](file:///C:/ParasiteAI/.agents/rules/engineering_cadence.md)  
 **Stage Status:** **COMPLETE & AUDITED** (See [`stage_p1_postmortem.md`](file:///C:/ParasiteAI/stage_p1_postmortem.md) for final empirical outcomes)  
 **Host Environment:** Windows 10 (64-bit, Build 19045) | NVIDIA GeForce RTX 4060 (`8,188 MiB` VRAM, `6,500 MB` budget ceiling, `~5,700–6,300 MiB` free after desktop compositing)
 
@@ -12,7 +12,7 @@ To ensure every architectural stage is effortless to read, execute, and verify, 
 
 | # | Roadmap Dimension | Purpose |
 | :-: | :--- | :--- |
-| **1** | **Stint Breakdown & Sequence** | Bounded single-turn work units (`P1.1`..`P1.4`) obeying [`.agents/rules/strict_stint_cadence.md`](file:///C:/ParasiteAI/.agents/rules/strict_stint_cadence.md). |
+| **1** | **Stint Breakdown & Sequence** | Bounded single-turn work units (`P1.1`..`P1.4`) obeying [`.agents/rules/engineering_cadence.md`](file:///C:/ParasiteAI/.agents/rules/engineering_cadence.md). |
 | **2** | **Empirical Root-Cause Link (`baseline_p0`)** | Connects every stint directly to the actual task failures measured in [`baseline_p0.md`](file:///C:/ParasiteAI/benchmarks/results/baseline_p0.md) so we only build what moves the benchmark needle. |
 | **3** | **Workspace Delta Audit (*Built vs. Missing*)** | Distinguishes code/binaries already present on disk from what is missing or broken—preventing duplicate work or hidden regressions. |
 | **4** | **Goal & Quantifiable Target Metrics** | Defines the exact measurable metric improvement expected from the stint (e.g., `0ms` cold-start attach, `0` enum crashes, `<= 5.0s` step latency). |

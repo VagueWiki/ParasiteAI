@@ -205,7 +205,14 @@ def start_cmd(args: argparse.Namespace) -> int:
         print(f"Vision mmproj   : {mmproj_path} ({mmproj_path.stat().st_size / (1024*1024):.1f} MB)")
     else:
         print("Vision mmproj   : [NONE - Text Only]")
+    cache_reuse_val = getattr(args, "cache_reuse", 0)
+    is_multimodal = bool(mmproj_path and mmproj_path.is_file())
+    if cache_reuse_val and cache_reuse_val > 0 and not is_multimodal:
+        reuse_str = f" (cache-reuse={cache_reuse_val})"
+    else:
+        reuse_str = " (cache-reuse disabled)"
     print(f"Context Window  : {args.ctx_size} tokens")
+    print(f"KV Cache Type   : K={args.cache_type_k}, V={args.cache_type_v}{reuse_str}")
     print(f"GPU Layers      : {args.ngl} (all offloaded)")
     print(f"Listen Address  : http://{args.host}:{args.port}")
 
@@ -219,6 +226,12 @@ def start_cmd(args: argparse.Namespace) -> int:
         "--port", str(args.port),
         "-fa", "auto",
     ]
+    if getattr(args, "cache_type_k", None):
+        cmd.extend(["-ctk", str(args.cache_type_k)])
+    if getattr(args, "cache_type_v", None):
+        cmd.extend(["-ctv", str(args.cache_type_v)])
+    if getattr(args, "cache_reuse", 0) and args.cache_reuse > 0 and not is_multimodal:
+        cmd.extend(["--cache-reuse", str(args.cache_reuse)])
     if args.image_min_tokens and args.image_min_tokens > 0:
         cmd.extend(["--image-min-tokens", str(args.image_min_tokens)])
     if mmproj_path and mmproj_path.is_file():
@@ -532,10 +545,13 @@ def main() -> int:
     p_start.add_argument("--binary", default=None)
     p_start.add_argument("--model", default=None)
     p_start.add_argument("--mmproj", default=None)
-    p_start.add_argument("--ctx-size", type=int, default=4096)
+    p_start.add_argument("--ctx-size", type=int, default=8192)
     p_start.add_argument("--ngl", type=int, default=-1)
-    p_start.add_argument("-np", "--parallel-slots", type=int, default=1, help="Number of parallel request slots (1 locks KV cache to 4k tokens to conserve VRAM)")
+    p_start.add_argument("-np", "--parallel-slots", type=int, default=1, help="Number of parallel request slots (1 locks KV cache to single slot to conserve VRAM)")
     p_start.add_argument("--image-min-tokens", type=int, default=1024, help="Min vision tokens for desktop UI coordinate grounding (1024)")
+    p_start.add_argument("-ctk", "--cache-type-k", default="q8_0", help="KV cache data type for K (default: q8_0)")
+    p_start.add_argument("-ctv", "--cache-type-v", default="q8_0", help="KV cache data type for V (default: q8_0)")
+    p_start.add_argument("--cache-reuse", type=int, default=0, help="Min chunk size to reuse from KV cache via KV shifting (default: 0, disabled for multimodal models)")
     p_start.add_argument("--timeout", type=float, default=60.0)
     p_start.add_argument("--budget-mb", type=int, default=6500)
     p_start.add_argument("--daemon", action=argparse.BooleanOptionalAction, default=True, help="Run as background detached daemon (use --no-daemon for foreground/runner)")

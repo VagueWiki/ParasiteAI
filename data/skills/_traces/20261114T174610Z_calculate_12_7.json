@@ -1,0 +1,103 @@
+{
+  "goal": "calculate 12*7",
+  "captured_at": "2026-11-14T17:46:10.233783+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04126736111111111,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "calc",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "calc",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0399170524691358,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "escape"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY escape (step 3)",
+      "target_label": "Calculator clear",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.09642939814814815,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "12*7",
+      "reasoning": "The calculator is ready, and the input field is active. I can now directly type in the calculation expression \"12*7\" to get the result of the multiplication.",
+      "target_label": "Calculator expression input",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY enter (step 5)",
+      "target_label": "Calculator equals",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculation is complete, and the result is displayed on the calculator screen. The task is finished, and no further action is needed.",
+      "target_label": "Calculator equals",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

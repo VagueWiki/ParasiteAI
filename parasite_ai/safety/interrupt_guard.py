@@ -8,6 +8,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import logging
+import os
 import threading
 import time
 from typing import Callable, Optional, Tuple
@@ -148,16 +149,12 @@ class InterruptGuard:
     def __init__(
         self,
         cooldown_seconds: float = 2.5,
-        corner_panic_enabled: bool = True,
-        corner_distance_px: int = 4,
         on_interrupt_callback: Optional[Callable[[str], None]] = None,
         on_panic_callback: Optional[Callable[[str], None]] = None,
         on_rearm_callback: Optional[Callable[[], None]] = None,
         panic_manager: Optional[PanicManager] = None,
     ):
         self._cooldown_seconds = float(cooldown_seconds)
-        self._corner_panic_enabled = corner_panic_enabled
-        self._corner_distance_px = int(corner_distance_px)
         self._on_interrupt_callback = on_interrupt_callback
         self._on_panic_callback = on_panic_callback
         self._on_rearm_callback = on_rearm_callback
@@ -261,7 +258,6 @@ class InterruptGuard:
         except Exception:
             pass
 
-        import os
         if self.panic_manager and not os.environ.get("PYTEST_CURRENT_TEST"):
             self.panic_manager.allow_process_exit = True
 
@@ -362,33 +358,34 @@ class InterruptGuard:
         self._mouse_proc_cb = HOOKPROC(self._low_level_mouse_proc)
         self._keyboard_proc_cb = HOOKPROC(self._low_level_keyboard_proc)
 
-        h_mod = self._kernel32.GetModuleHandleW(None)
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            h_mod = self._kernel32.GetModuleHandleW(None)
 
-        self._mouse_hook = self._user32.SetWindowsHookExW(
-            WH_MOUSE_LL,
-            self._mouse_proc_cb,
-            h_mod,
-            0,
-        )
-        self._keyboard_hook = self._user32.SetWindowsHookExW(
-            WH_KEYBOARD_LL,
-            self._keyboard_proc_cb,
-            h_mod,
-            0,
-        )
-
-        if not self._mouse_hook or not self._keyboard_hook:
-            logger.warning(
-                f"SetWindowsHookExW returned null (mouse={bool(self._mouse_hook)}, "
-                f"kbd={bool(self._keyboard_hook)}). Running in simulation fallback mode."
+            self._mouse_hook = self._user32.SetWindowsHookExW(
+                WH_MOUSE_LL,
+                self._mouse_proc_cb,
+                h_mod,
+                0,
+            )
+            self._keyboard_hook = self._user32.SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                self._keyboard_proc_cb,
+                h_mod,
+                0,
             )
 
-        # Register OS-level kernel hotkeys for instant kill (Ctrl+Alt+K = 9001, Ctrl+Alt+Q = 9002)
-        try:
-            self._user32.RegisterHotKey(None, 9001, 0x0001 | 0x0002 | 0x4000, 0x4B)  # MOD_ALT | MOD_CONTROL | MOD_NOREPEAT, VK_K
-            self._user32.RegisterHotKey(None, 9002, 0x0001 | 0x0002 | 0x4000, 0x51)  # MOD_ALT | MOD_CONTROL | MOD_NOREPEAT, VK_Q
-        except Exception:
-            pass
+            if not self._mouse_hook or not self._keyboard_hook:
+                logger.warning(
+                    f"SetWindowsHookExW returned null (mouse={bool(self._mouse_hook)}, "
+                    f"kbd={bool(self._keyboard_hook)}). Running in simulation fallback mode."
+                )
+
+            # Register OS-level kernel hotkeys for instant kill (Ctrl+Alt+K = 9001, Ctrl+Alt+Q = 9002)
+            try:
+                self._user32.RegisterHotKey(None, 9001, 0x0001 | 0x0002 | 0x4000, 0x4B)  # MOD_ALT | MOD_CONTROL | MOD_NOREPEAT, VK_K
+                self._user32.RegisterHotKey(None, 9002, 0x0001 | 0x0002 | 0x4000, 0x51)  # MOD_ALT | MOD_CONTROL | MOD_NOREPEAT, VK_Q
+            except Exception:
+                pass
 
         self._thread_ready_event.set()
 
@@ -408,11 +405,12 @@ class InterruptGuard:
             self._user32.DispatchMessageW(ctypes.byref(msg))
 
         # Unhook upon WM_QUIT exit
-        try:
-            self._user32.UnregisterHotKey(None, 9001)
-            self._user32.UnregisterHotKey(None, 9002)
-        except Exception:
-            pass
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                self._user32.UnregisterHotKey(None, 9001)
+                self._user32.UnregisterHotKey(None, 9002)
+            except Exception:
+                pass
         if self._mouse_hook:
             self._user32.UnhookWindowsHookEx(self._mouse_hook)
             self._mouse_hook = None
@@ -427,18 +425,14 @@ class InterruptGuard:
                 is_injected = bool(struct.flags & LLMHF_INJECTED)
 
                 if not is_injected:
-                    # Physical mouse event detected!
-                    # First check corner slam panic
-                    if self._corner_panic_enabled and self.panic_manager:
-                        if self.panic_manager.check_mouse_position(struct.pt.x, struct.pt.y, flags=struct.flags):
-                            return self._user32.CallNextHookEx(self._mouse_hook, n_code, w_param, l_param)
-
-                    # Signal physical interrupt
+                    # Physical mouse event detected -> signal physical interrupt
                     self._signal_physical_touch(f"mouse_msg_0x{w_param:04X}_at_({struct.pt.x},{struct.pt.y})")
             except Exception as e:
                 logger.error(f"Error in _low_level_mouse_proc: {e}")
 
-        return self._user32.CallNextHookEx(self._mouse_hook, n_code, w_param, l_param)
+        if self._mouse_hook:
+            return self._user32.CallNextHookEx(self._mouse_hook, n_code, w_param, l_param)
+        return 0
 
     def _low_level_keyboard_proc(self, n_code: int, w_param: int, l_param: int) -> int:
         if n_code >= 0 and l_param:
@@ -448,23 +442,30 @@ class InterruptGuard:
 
                 if not is_injected:
                     # Physical keyboard event detected!
-                    # First check panic hotkeys
+                    # Always pass physical key events to PanicManager so key-up clears modifier state
                     if self.panic_manager:
                         if self.panic_manager.check_key_event(struct.vkCode, flags=struct.flags):
-                            return self._user32.CallNextHookEx(self._keyboard_hook, n_code, w_param, l_param)
+                            if self._keyboard_hook:
+                                return self._user32.CallNextHookEx(self._keyboard_hook, n_code, w_param, l_param)
+                            return 0
 
-                    # Signal physical interrupt
-                    self._signal_physical_touch(f"keyboard_vk_0x{struct.vkCode:02X}")
+                    # Only trigger physical touch on key-DOWN so key releases do not re-arm cooldown
+                    is_key_up = bool(struct.flags & LLKHF_UP) or w_param in (WM_KEYUP, WM_SYSKEYUP)
+                    if not is_key_up:
+                        self._signal_physical_touch(f"keyboard_vk_0x{struct.vkCode:02X}")
             except Exception as e:
                 logger.error(f"Error in _low_level_keyboard_proc: {e}")
 
-        return self._user32.CallNextHookEx(self._keyboard_hook, n_code, w_param, l_param)
+        if self._keyboard_hook:
+            return self._user32.CallNextHookEx(self._keyboard_hook, n_code, w_param, l_param)
+        return 0
 
     def _signal_physical_touch(self, source_desc: str) -> None:
         """Sets cancellation token, updates cooldown timestamp, and starts sliding rearm timer."""
         self._cancellation_token.set()
         now = time.monotonic()
         with self._lock:
+            was_interrupted = self._interrupted
             self._interrupted = True
             self._interrupt_count += 1
             self._last_interrupt_time = now
@@ -476,7 +477,7 @@ class InterruptGuard:
                 self._rearm_timer.daemon = True
                 self._rearm_timer.start()
 
-        if self._on_interrupt_callback:
+        if not was_interrupted and self._on_interrupt_callback:
             try:
                 self._on_interrupt_callback(source_desc)
             except Exception:

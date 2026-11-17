@@ -2,94 +2,308 @@
   "goal": "Open File Explorer to C:\\ParasiteAI\\benchmarks\\workspace and rename old_name.txt to new_name.txt",
   "success": false,
   "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 25.767,
-  "exit_reason": "MAX_STEPS",
+  "total_steps": 16,
+  "max_steps": 22,
+  "duration_sec": 233.396,
+  "exit_reason": "IN_PROGRESS",
   "step_latencies_sec": [
-    5.643,
-    5.349,
-    5.336,
-    4.822,
-    4.111
+    0.984,
+    3.127,
+    9.613,
+    7.307,
+    6.888,
+    6.326,
+    6.688,
+    127.781,
+    7.92,
+    7.024,
+    7.166,
+    7.011,
+    6.445,
+    12.87,
+    8.052,
+    6.626
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Google Gemini - Google Chrome",
-    "process_name": "chrome.exe"
+    "title": "File Explorer",
+    "process_name": "explorer.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": null,
+      "keys": [
+        "win",
+        "r"
+      ],
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.05602237654320988,
       "error_message": null,
-      "duration_sec": 5.643
+      "duration_sec": 0.984,
+      "burst_count": null
     },
     {
       "step_id": 2,
-      "action_type": "WAIT",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.0,
-      "error_message": null,
-      "duration_sec": 5.349
-    },
-    {
-      "step_id": 3,
-      "action_type": "WAIT",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.0,
-      "error_message": null,
-      "duration_sec": 5.336
-    },
-    {
-      "step_id": 4,
-      "action_type": "CLICK",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": [
-        36,
-        218
-      ],
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.03758759231285666,
-      "error_message": null,
-      "duration_sec": 4.822
-    },
-    {
-      "step_id": 5,
       "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "text": "explorer",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.31440052413190656,
+      "error_message": null,
+      "duration_sec": 3.127,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "DOUBLE_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1176,
+        574
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.375,
+      "error_message": null,
+      "duration_sec": 9.613,
+      "burst_count": null
+    },
+    {
+      "step_id": 4,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1265,
+        542
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.533125,
+      "error_message": null,
+      "duration_sec": 7.307,
+      "burst_count": null
+    },
+    {
+      "step_id": 5,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1265,
+        542
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.133125,
+      "error_message": null,
+      "duration_sec": 6.888,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1265,
+        542
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 6.326,
+      "burst_count": null
+    },
+    {
+      "step_id": 7,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1265,
+        542
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 6.688,
+      "burst_count": null
+    },
+    {
+      "step_id": 8,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
       "keys": null,
       "success": false,
       "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 4.111
+      "error_message": null,
+      "duration_sec": 127.781,
+      "burst_count": null
+    },
+    {
+      "step_id": 9,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1226,
+        571
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.494375,
+      "error_message": null,
+      "duration_sec": 7.92,
+      "burst_count": null
+    },
+    {
+      "step_id": 10,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1112,
+        167
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.03530430169753086,
+      "error_message": null,
+      "duration_sec": 7.024,
+      "burst_count": null
+    },
+    {
+      "step_id": 11,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1236,
+        542
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.66125,
+      "error_message": null,
+      "duration_sec": 7.166,
+      "burst_count": null
+    },
+    {
+      "step_id": 12,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1242,
+        539
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 7.011,
+      "burst_count": null
+    },
+    {
+      "step_id": 13,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1242,
+        539
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 6.445,
+      "burst_count": null
+    },
+    {
+      "step_id": 14,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": false,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 12.87,
+      "burst_count": null
+    },
+    {
+      "step_id": 15,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1242,
+        539
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.131875,
+      "error_message": null,
+      "duration_sec": 8.052,
+      "burst_count": null
+    },
+    {
+      "step_id": 16,
+      "action_type": "RIGHT_CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1242,
+        539
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.089375,
+      "error_message": null,
+      "duration_sec": 6.626,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794175904.9593625
+  "timestamp": 1794891962.08567,
+  "plan_source": "local",
+  "skill_id": null,
+  "farmed_plan_id": null,
+  "fast_path_steps": 2,
+  "parasite_invocations": 2,
+  "parasite_status": "CARET_NOT_ACQUIRED",
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

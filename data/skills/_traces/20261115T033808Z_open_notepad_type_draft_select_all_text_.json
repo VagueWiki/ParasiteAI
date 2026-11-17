@@ -1,0 +1,135 @@
+{
+  "goal": "Open Notepad, type 'Draft', select all text, and copy it to the clipboard",
+  "captured_at": "2026-11-15T03:38:08.083975+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Taskbar / Run shortcut",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04061921296296296,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog input field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6983957360669689,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Directive fast-path WAIT 500ms (step 3)",
+      "target_label": "Notepad application window",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Draft",
+      "reasoning": "Directive fast-path TYPE (step 4)",
+      "target_label": "Notepad text editing area",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+a (step 5)",
+      "target_label": "Notepad text area",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+c (step 6)",
+      "target_label": "Notepad text area",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Directive fast-path WAIT 500ms (step 7)",
+      "target_label": "System Clipboard",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have confirmed that the Notepad window is active and the text \"Draft\" is present in the buffer. The clipboard also contains the same text, indicating that the copy operation was successful. The task of typing, selecting all, and copying the text to the clipboard has been completed. There are no further actions required to fulfill the task's objective.",
+      "target_label": "System Clipboard",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

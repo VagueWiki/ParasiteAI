@@ -1,0 +1,78 @@
+{
+  "goal": "Open Paint",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 3,
+  "max_steps": 12,
+  "duration_sec": 7.599,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    0.945,
+    1.636,
+    4.807
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Untitled - Paint",
+    "process_name": "mspaint.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.05602237654320988,
+      "error_message": null,
+      "duration_sec": 0.945,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "mspaint",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.9413649764150943,
+      "error_message": null,
+      "duration_sec": 1.636,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.807,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794891521.0152168,
+  "plan_source": "local",
+  "skill_id": null,
+  "farmed_plan_id": null,
+  "fast_path_steps": 2,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
+}

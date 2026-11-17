@@ -468,3 +468,147 @@ def test_preflight_detects_synthetic_capture_block(monkeypatch: pytest.MonkeyPat
     ok_interactive, reason = check_interactive_desktop_access(allow_headless=False)
     assert ok_interactive is False
     assert "Windows GDI BitBlt screen capture is blocked" in reason
+
+
+def test_format_markdown_report_includes_plan_source() -> None:
+    """P4.6.6: Detailed Task Scorecard surfaces Plan Source alongside outcome telemetry."""
+    results = [
+        {
+            "id": "L1-07",
+            "name": "Minimize Notepad",
+            "tier": 1,
+            "level": "L1",
+            "verifier_passed": True,
+            "agent_success": True,
+            "claimed_done": True,
+            "false_done": False,
+            "failure_mode": "PASS",
+            "plan_source": "skill",
+            "skill_id": "minimize-notepad",
+            "total_steps": 2,
+            "min_steps_with_skill": 2,
+            "min_steps_no_skill": 2,
+            "max_steps": 8,
+            "duration_sec": 3.5,
+            "exit_reason": "DONE",
+            "step_latencies_sec": [1.5, 2.0],
+            "hardware_interrupt_count": 0,
+            "total_strikes": 0,
+            "highest_tier_reached": "TIER_1_LOCAL",
+        },
+        {
+            "id": "L2-08",
+            "name": "Notepad Multiply",
+            "tier": 1,
+            "level": "L2",
+            "verifier_passed": False,
+            "agent_success": False,
+            "claimed_done": False,
+            "false_done": False,
+            "failure_mode": "TIMEOUT",
+            "plan_source": "farmed",
+            "farmed_plan_id": 10,
+            "total_steps": 3,
+            "min_steps_with_skill": 4,
+            "min_steps_no_skill": 6,
+            "max_steps": 15,
+            "duration_sec": 120.0,
+            "exit_reason": "TIMEOUT",
+            "step_latencies_sec": [5.0, 2.0, 3.0],
+            "hardware_interrupt_count": 0,
+            "total_strikes": 1,
+            "highest_tier_reached": "TIER_1_LOCAL",
+        },
+    ]
+    md = format_markdown_report(compute_metrics(results), results, title="P4.6.6 Scorecard Test")
+    assert "| Task ID | Name | Tier | Lvl | Verifier | Agent | Outcome Mode | Plan Source | Steps (Act/MinS/MinL/Max) | Duration | Exit Reason |" in md
+    assert "`skill` (minimize-notepad)" in md
+    assert "`farmed` (#10)" in md
+
+
+def test_run_single_task_streams_logs_and_preserves_in_progress_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P4.6.6: Subprocess redirects output to logs/<task_id>.log and preserves IN_PROGRESS checkpoint telemetry."""
+    import json
+    from unittest.mock import MagicMock
+    from benchmarks import run_benchmark
+
+    monkeypatch.setattr(run_benchmark, "run_setup", lambda name, params: True)
+    monkeypatch.setattr(run_benchmark, "run_verifier", lambda name, params: False)
+    monkeypatch.setattr(run_benchmark, "cleanup_benchmark_processes", lambda: None)
+    monkeypatch.setattr(run_benchmark, "reset_cursor_to_neutral", lambda: None)
+
+    receipt_file = tmp_path / "L1-01_receipt.json"
+
+    class _FakeProc:
+        returncode = None
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+    popen_calls = []
+
+    def _fake_popen(cmd, stdout=None, stderr=None, text=False, **kwargs):
+        popen_calls.append({"cmd": cmd, "stdout": stdout, "stderr": stderr})
+        assert stdout is not None and stdout is not run_benchmark.subprocess.PIPE
+        assert stderr == run_benchmark.subprocess.STDOUT
+        stdout.write("chunk of stdout log\n")
+        stdout.flush()
+        receipt_file.write_text(
+            json.dumps(
+                {
+                    "success": False,
+                    "claimed_done": False,
+                    "exit_reason": "IN_PROGRESS",
+                    "total_steps": 2,
+                    "step_latencies_sec": [1.1, 2.2],
+                    "plan_source": "farmed",
+                    "farmed_plan_id": 7,
+                    "fast_path_steps": 1,
+                    "parasite_invocations": 1,
+                    "parasite_status": "HARVEST_TIMEOUT",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return _FakeProc()
+
+    monkeypatch.setattr(run_benchmark.subprocess, "Popen", _fake_popen)
+    task = {
+        "id": "L1-01",
+        "name": "Launch Notepad",
+        "tier": 1,
+        "level": "L1",
+        "prompt": "Open Notepad",
+        "setup": "clean_workspace",
+        "verifier": "verify_window_open",
+        "max_steps": 10,
+        "timeout_sec": 0,
+    }
+    res = run_benchmark.run_single_task(
+        task=task,
+        python_exe="python",
+        results_dir=tmp_path,
+        brain_mode="mock",
+        headless=True,
+    )
+    assert len(popen_calls) == 1
+    assert res["timed_out"] is True
+    assert res["exit_reason"] == "TIMEOUT"
+    assert res["total_steps"] == 2
+    assert res["step_latencies_sec"] == [1.1, 2.2]
+    assert res["plan_source"] == "farmed"
+    assert res["farmed_plan_id"] == 7
+    assert res["fast_path_steps"] == 1
+    assert res["parasite_invocations"] == 1
+    assert res["parasite_status"] == "HARVEST_TIMEOUT"
+    log_path = tmp_path / "logs" / "L1-01.log"
+    assert log_path.exists()
+    assert "chunk of stdout log" in log_path.read_text(encoding="utf-8")

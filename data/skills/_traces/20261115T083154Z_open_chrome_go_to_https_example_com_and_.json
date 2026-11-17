@@ -1,0 +1,406 @@
+{
+  "goal": "Open Chrome, go to https://example.com, and write the main heading text into Notepad",
+  "captured_at": "2026-11-15T08:31:54.138039+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04147810570987654,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "chrome [https://example.com](https://example.com)",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.0420997299382716,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Chrome browser is open, but it's currently in the \"Who's using Chrome?\" interface. To proceed with the task, I need to click on the address bar to activate it and then type in the URL \"https://example.com\".",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        964,
+        217
+      ],
+      "pre_window": "Google Chrome (chrome.exe)",
+      "post_window": "Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.706875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Chrome browser is open, but it's currently in the \"Who's using Chrome?\" interface. To proceed with the task, I need to close this window and open a new tab to access the desired website. I will click the close button in the upper right corner of the window to close the current Chrome window.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1458,
+        139
+      ],
+      "pre_window": "Google Chrome (chrome.exe)",
+      "post_window": "chrome.exe",
+      "success": true,
+      "screen_diff": 0.830625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, and I can see the Chrome icon. To proceed with the task of opening Chrome and navigating to example.com, I need to click on the Chrome icon in the Start menu. This will launch the browser, allowing me to continue with the next steps.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        562,
+        529
+      ],
+      "pre_window": "chrome.exe",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.66875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu is open, and the Chrome icon is right there. To continue with the task of opening Chrome and navigating to example.com, I need to click on the Chrome icon in the Start menu. This will launch the browser, allowing me to proceed with the next steps.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        30,
+        919
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.683125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu is open, and the Chrome icon is right there. To continue with the task of opening the browser, I need to click on the Chrome icon in the Start menu. This will allow me to launch the browser and proceed with the next steps. [Upgraded to double-click]",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        30,
+        919
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu is open, and the Chrome icon is right there. To continue with the task of opening Chrome, I need to click on the Chrome icon in the Start menu. This will allow me to launch the browser and proceed with the next steps.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        30,
+        919
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Chrome Remote Desktop (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.8125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, and I can see the Chrome icon. To proceed with the task of opening Chrome, I need to click on the Chrome icon in the Start menu. This will launch the browser and allow me to continue with the task of navigating to example.com and recording the heading text into Notepad.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        135,
+        96
+      ],
+      "pre_window": "Chrome Remote Desktop (chrome.exe)",
+      "post_window": "Chrome Remote Desktop (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.008746141975308642,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Chrome Remote Desktop window is open, but it's not the application we need. To proceed with the task, I need to close this window first. I'll click the close button in the upper right corner of the window to shut it down, and then we can open the correct Chrome browser to continue with the task.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        950,
+        48
+      ],
+      "pre_window": "Chrome Remote Desktop (chrome.exe)",
+      "post_window": "chrome.exe",
+      "success": true,
+      "screen_diff": 0.77375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 11,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Start menu is open, and the Chrome icon is right there. To continue with the task of opening Chrome, I need to click on the Chrome icon in the Start menu. This will allow me to launch the browser and proceed with the next steps of the task.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        135,
+        919
+      ],
+      "pre_window": "chrome.exe",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.263125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, but I can't see the Chrome icon. I need to close this menu and try again. Let me click on a blank area of the desktop to close the Start menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1049,
+        588
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.011164158950617283,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 13,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I see that the Start menu is open, but I can't find the Chrome icon. I need to close this menu and try again. Let me press the Esc key to dismiss the current menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 14,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I see that the Start menu is open, but I can't find the Chrome icon. I need to close this menu and try again. Let me press the Esc key to close the menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 15,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I see that the Start menu is open, but I can't find the Chrome icon. I need to close this menu and try again. Let me press the Esc key to close the menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 16,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I see that the Start menu is open, but I can't find the Chrome icon. I need to close this menu and try again. Let me press the Esc key to close the menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 18,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I've been repeatedly pressing the Esc key, which is clearly not the right approach. The screen is showing the Program Manager window, and I need to close it before I can proceed. Let me press the Esc key once more to close this window, so I can continue with the task of launching Chrome.",
+      "target_label": "Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 19,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I've been repeatedly pressing the Esc key, which is clearly not the right approach. The screen is showing the Program Manager window, and I need to close it to proceed. Let me press the Esc key once more to close this window and then rethink how to launch the browser.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 20,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I've been repeatedly pressing the Esc key, which is clearly not the right approach. The Start menu is still open, and I need to close it before I can proceed. Let me press the Esc key once more to close the Start menu, so I can continue with the next steps.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 21,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I see that the Start menu is open, but I can't find the Chrome icon. I need to close this menu and rethink my approach. Let me press the Esc key to close the Start menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 22,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I see the Start menu is open, but I can't find the Chrome icon. I need to close this menu first. Let me press the Esc key to dismiss the Start menu, and then I'll look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 23,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "I've been repeatedly pressing the Esc key, which is clearly not the right approach. The Start menu is open, but I can't find the Chrome icon. I need to close this menu and rethink my next steps. Let me press the Esc key again to close the menu and then figure out how to locate Chrome.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 24,
+      "verb": "HOTKEY",
+      "keys": [
+        "esc"
+      ],
+      "text": null,
+      "reasoning": "The Start menu is open, but I can't find the Chrome icon. I need to close this menu and try again. Let me press the Esc key to close the Start menu and then look for the Chrome icon again.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "USER_OVERRIDE",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

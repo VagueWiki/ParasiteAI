@@ -1,0 +1,369 @@
+{
+  "goal": "Compute 25 * 4 in Calculator, write 'Total: 100' in Notepad, and save to C:\\ParasiteAI\\benchmarks\\workspace\\total.txt",
+  "captured_at": "2026-11-15T18:15:59.609750+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.041357542438271604,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "calc",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog input text field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.039920910493827164,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "25*4=",
+      "reasoning": "Directive fast-path TYPE (step 3)",
+      "target_label": "Calculator application",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.39086087712602935,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 4)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04340567129629629,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 5)",
+      "target_label": "Run dialog input text field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6971624266144814,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Total: 100",
+      "reasoning": "Directive fast-path TYPE (step 6)",
+      "target_label": "Notepad text editing area",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+s (step 7)",
+      "target_label": "Notepad save shortcut",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace\\total.txt",
+      "reasoning": "Directive fast-path TYPE (step 8)",
+      "target_label": "Save As file name input field",
+      "coordinates": null,
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.23119804112954798,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 9,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have finished entering the content in Notepad, and now I need to save the file. I notice that the Notepad window is already open, so I will click on the File menu in the top left corner to access the save options.",
+      "target_label": "Save As file name input field",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will allow me to save the file with the content I just entered.",
+      "target_label": "Save As file name input field",
+      "coordinates": [
+        365,
+        196
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.590625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will allow me to save the file with the specified file name and path.",
+      "target_label": "Save As file name input field",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will allow me to save the file with the content I entered earlier.",
+      "target_label": "Save As file name input field",
+      "coordinates": [
+        361,
+        196
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.584375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the File menu and select the Save option.",
+      "target_label": "Save As file name input field",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the File menu to access the save options.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will allow me to save the file with the content \"Total: 100\" to the specified location.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        365,
+        196
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.590625,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 17,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the File menu to close it.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 18,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will save the file with the content \"Total: 100\" to the specified location.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        367,
+        196
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.596875,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 19,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will allow me to save the file with the content \"Total: 100\" to the specified location.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 20,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will save the file with the content \"Total: 100\" to the specified location.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        365,
+        196
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.590625,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 21,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will allow me to save the file with the content \"Total: 100\" to the specified location.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        338,
+        107
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.441875,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 22,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the File menu is expanded. To save the file, I need to click on the \"Save\" option in the File menu. This will ensure that the file is saved with the correct name and path.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        365,
+        196
+      ],
+      "pre_window": "total.txt - Notepad (notepad.exe)",
+      "post_window": "total.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.590625,
+      "tier": "USER_OVERRIDE",
+      "risk_level": "GREEN"
+    }
+  ]
+}

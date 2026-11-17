@@ -28,7 +28,7 @@
      - **L2 Pass Rate**: `>= 40%` (3/7 tasks)
      - **False-DONE Rate**: `<= 5%` (`<= 1/20` tasks)
      - **Median Step Latency**: `<= 5.0s`
-7. **D6 — Strict Stint Cadence & Result-Oriented Verification (`.agents/rules/strict_stint_cadence.md`)**:
+7. **D6 — Strict Stint Cadence, Release Integrity & Verification (`.agents/rules/engineering_cadence.md`)**:
    - Every stint requires an approved implementation plan before code execution, a post-stint walkthrough verification gate, and objective OS outcome tests (processes, windows, files, exit codes) rather than mocked internal plumbing.
 
 ---
@@ -91,7 +91,7 @@
 C:\ParasiteAI\
 ├── .agents/
 │   └── rules/
-│       └── strict_stint_cadence.md   # Workspace rule: 1 stint per turn, plan/walkthrough gates
+│       └── engineering_cadence.md    # Workspace rule: 1 stint per turn, plan/walkthrough & changelog gates
 ├── benchmarks/
 │   ├── suite.yaml                    # 20-task Windows 10 benchmark definition (v1.1)
 │   ├── verifiers.py                  # Objective OS setup hooks & ground-truth verifiers

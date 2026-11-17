@@ -23,8 +23,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QPoint, Qt
-from PyQt6.QtWidgets import QApplication
 
 from parasite_ai.config import AppConfig, load_config
 from parasite_ai.hands.keyboard import KeyboardDriver, MockInputBackend
@@ -50,22 +48,10 @@ from parasite_ai.safety.interrupt_guard import (
 )
 from parasite_ai.safety.window_guard import WindowGuard, WindowInfo
 from parasite_ai.ui.bridge import UIBridge
-from parasite_ai.ui.companion_dock import CompanionDock
 from parasite_ai.ui.dpi import init_high_dpi_awareness
-from parasite_ai.ui.ghost_hud import GhostHUD
 from parasite_ai.ui.types import UIElement
 from parasite_ai.vision.capture import ScreenCapture
 from parasite_ai.vision.grounding import ScreenGrounder
-
-
-@pytest.fixture(scope="module")
-def qapp() -> Generator[QApplication, None, None]:
-    """Ensures QApplication exists in offscreen mode for all tests."""
-    os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
 
 
 # ===========================================================================
@@ -89,12 +75,12 @@ class TestScenario1CleanStartup:
         assert "Clean dry-run initialization completed successfully" in proc.stdout
         assert elapsed < 5.0, f"Dry-run startup took {elapsed:.2f}s (budget: <5.0s)"
 
-    def test_programmatic_bootstrap_health_checks(self, qapp: QApplication) -> None:
-        """Verifies programmatic instantiation and health of all 12 core subsystems."""
+    def test_programmatic_bootstrap_health_checks(self) -> None:
+        """Verifies programmatic instantiation and health of core subsystems."""
         dpi_ok = init_high_dpi_awareness()
         assert isinstance(dpi_ok, bool)
 
-        args = parse_args(["--headless", "--brain-mode", "mock"])
+        args = parse_args(["--headless", "--simulation", "--brain-mode", "mock"])
         app = ParasiteApp(args)
         try:
             # 1. UIBridge
@@ -117,10 +103,6 @@ class TestScenario1CleanStartup:
             assert app.runtime.brain_manager is not None
             # 10. EpisodicMemory
             assert app.runtime.memory is not None
-            # 11. CompanionDock
-            assert app.dock is not None
-            # 12. GhostHUD
-            assert app.hud is not None
         finally:
             app.shutdown()
 
@@ -141,7 +123,7 @@ class TestScenario1CleanStartup:
 class TestScenario2GoalExecutionCycle:
     """Verifies complete closed-loop cycle from goal input to telemetry update."""
 
-    def test_full_goal_to_telemetry_flow(self, qapp: QApplication) -> None:
+    def test_full_goal_to_telemetry_flow(self) -> None:
         """Verifies SoM visual grounding, thought/speech, reticle, movement, and telemetry."""
         bridge = UIBridge()
         config = AppConfig()
@@ -159,9 +141,6 @@ class TestScenario2GoalExecutionCycle:
         bridge.sig_speech_updated.connect(lambda s: received_speeches.append(s))
         bridge.sig_reticle_requested.connect(lambda x, y, dur, tid, lbl: received_reticles.append((x, y, dur)))
         bridge.sig_telemetry_updated[str].connect(lambda t: received_telemetries.append(t))
-
-        dock = CompanionDock(config=config.ui.dock, bridge=bridge)
-        hud = GhostHUD(config=config.ui.hud, bridge=bridge, enable_win32_styles=False)
 
         runtime = RuntimeOrchestrator(
             config=config,
@@ -200,8 +179,6 @@ class TestScenario2GoalExecutionCycle:
                     override_action=override_action,
                 )
 
-            QApplication.processEvents()
-
             # 3. Assert execution results
             assert step_record.success is True
             assert step_record.action.action == ActionType.CLICK
@@ -231,8 +208,6 @@ class TestScenario2GoalExecutionCycle:
 
         finally:
             runtime.stop()
-            dock.close()
-            hud.close()
 
 
 # ===========================================================================
@@ -257,12 +232,11 @@ class TestScenario3HardwareInterruptPreemption:
         assert not guard.is_interrupted()
         assert not token.is_set()
 
-    def test_physical_touch_preemption_under_2ms(self, qapp: QApplication) -> None:
-        """Verifies physical hardware touch aborts in strictly < 2ms and updates dock."""
+    def test_physical_touch_preemption_under_2ms(self) -> None:
+        """Verifies physical hardware touch aborts in strictly < 2ms and emits bridge signal."""
         bridge = UIBridge()
-        dock_states: list[str] = []
-        bridge.sig_state_changed.connect(lambda s, m: dock_states.append(s))
-        dock = CompanionDock(bridge=bridge)
+        bridge_states: list[str] = []
+        bridge.sig_state_changed.connect(lambda s, m: bridge_states.append(s))
 
         guard = InterruptGuard(
             cooldown_seconds=1.0,
@@ -282,10 +256,8 @@ class TestScenario3HardwareInterruptPreemption:
         assert guard.is_interrupted(), "Interrupt guard must report interrupted"
         assert t_elapsed < 0.002, f"Preemption latency {t_elapsed*1000:.3f}ms exceeded 2ms budget"
 
-        QApplication.processEvents()
         # Verify UI state switched to USER_OVERRIDE
-        assert "USER_OVERRIDE" in dock_states
-        dock.close()
+        assert "USER_OVERRIDE" in bridge_states
 
     def test_mouse_driver_aborts_immediately_on_interrupt(self) -> None:
         """Verifies in-flight mouse movement aborts immediately when token is tripped."""
@@ -305,11 +277,11 @@ class TestScenario3HardwareInterruptPreemption:
 class TestScenario4SensitiveWindowPrivacyBlackout:
     """Verifies WindowGuard password manager detection, privacy blackout, and action pausing."""
 
-    def test_sensitive_window_blocks_pipeline(self, qapp: QApplication) -> None:
+    def test_sensitive_window_blocks_pipeline(self) -> None:
         """Verifies sensitive window pauses actions, sets PROTECTED, and masks vision."""
         bridge = UIBridge()
-        dock = CompanionDock(bridge=bridge)
-        hud = GhostHUD(bridge=bridge, enable_win32_styles=False)
+        bridge_states: list[tuple[str, str]] = []
+        bridge.sig_state_changed.connect(lambda s, m: bridge_states.append((s, m)))
 
         config = AppConfig()
         config.brain.mode = "mock"
@@ -344,18 +316,11 @@ class TestScenario4SensitiveWindowPrivacyBlackout:
                 assert step_record.action.action == ActionType.WAIT
                 assert "sensitive window" in step_record.error_message.lower()
 
-                # Process Qt queue so queued connections update dock
-                QApplication.processEvents()
-
-                # CompanionDock must be in PROTECTED state and perception masked
-                assert dock._current_state == "PROTECTED"
-                assert dock._is_masked is True
-                assert "PAUSED — SENSITIVE" in dock.grounding_badge.text()
+                # UIBridge must have received PROTECTED state
+                assert any(s[0] == "PROTECTED" for s in bridge_states)
 
         finally:
             runtime.stop()
-            dock.close()
-            hud.close()
 
     def test_safe_window_restoration(self) -> None:
         """Verifies returning to a safe window restores is_safe_to_operate to True."""
@@ -488,10 +453,9 @@ class TestScenario6VisibleBrowserBrainOffload:
         # GUARANTEE: User's original clipboard content is STILL 100% restored!
         assert clipboard.get_text() == user_original_document
 
-    def test_visible_browser_offloader_full_cycle(self, qapp: QApplication) -> None:
+    def test_visible_browser_offloader_full_cycle(self) -> None:
         """Verifies offloader state machine transitions through visible focus and prompt entry."""
         bridge = UIBridge()
-        dock = CompanionDock(bridge=bridge)
 
         clipboard = MockClipboardBackend(initial_text="User draft text")
         window_mgr = MockBrowserWindowBackend(existing_hwnd=7788)
@@ -515,5 +479,3 @@ class TestScenario6VisibleBrowserBrainOffload:
             assert "42" in answer
             assert offloader.state == OffloaderState.COMPLETED
             assert 7788 in window_mgr.focused_hwnds
-
-        dock.close()

@@ -1,0 +1,85 @@
+{
+  "goal": "Open Calculator",
+  "captured_at": "2026-11-14T18:16:25.374744+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Calculator",
+      "reasoning": "The Start menu is open, and I can see the search bar at the top. To launch the Calculator, I need to type \"Calculator\" into the search bar. This will allow me to quickly locate and open the Calculator application.",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter for 'calculator' after repetitive typing loop",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Calculator",
+      "reasoning": "The Start menu is open, and I can see the search bar at the top. To launch the Calculator app, I need to type \"Calculator\" into the search bar. This will allow me to quickly locate and open the Calculator application.",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter for 'calculator' after repetitive typing loop",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Calculator",
+      "reasoning": "The Start menu is open, and I can see the search bar at the top. To launch the Calculator app, I need to type \"Calculator\" into the search bar. This is the most straightforward way to find and open the Calculator app.",
+      "target_label": "Calculator",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

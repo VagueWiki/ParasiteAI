@@ -102,6 +102,49 @@ def hamming_distance(hash_a: str, hash_b: str) -> int:
         return 64
 
 
+def _build_dct_matrix(n: int = 32) -> np.ndarray:
+    """Builds an NxN orthonormal 2D DCT-II transform matrix without SciPy."""
+    k = np.arange(n, dtype=np.float64)[:, None]
+    x = np.arange(n, dtype=np.float64)[None, :]
+    scale = np.full((n, 1), np.sqrt(2.0 / n), dtype=np.float64)
+    scale[0, 0] = np.sqrt(1.0 / n)
+    return scale * np.cos((np.pi * k * (2.0 * x + 1.0)) / (2.0 * n))
+
+
+_DCT_32: np.ndarray = _build_dct_matrix(32)
+
+
+def compute_phash(image: Union[np.ndarray, Image.Image]) -> str:
+    """
+    Calculates a 64-bit DCT perceptual hash (pHash) returned as a 16-char hex string.
+    Uses a precomputed 32x32 orthonormal DCT-II matrix on an L-channel LANCZOS resize.
+    """
+    try:
+        if isinstance(image, np.ndarray):
+            if image.size == 0 or image.ndim < 2 or image.shape[0] == 0 or image.shape[1] == 0:
+                return "0000000000000000"
+            pil_img = Image.fromarray(image).convert("L")
+        elif isinstance(image, Image.Image):
+            if image.width == 0 or image.height == 0:
+                return "0000000000000000"
+            pil_img = image.convert("L")
+        else:
+            return "0000000000000000"
+    except Exception:
+        return "0000000000000000"
+
+    resized = pil_img.resize((32, 32), Image.Resampling.LANCZOS)
+    pixels = np.asarray(resized, dtype=np.float64)
+    dct = _DCT_32 @ pixels @ _DCT_32.T
+    low_freq = dct[:8, :8].flatten()
+    median_ac = float(np.median(low_freq[1:]))
+
+    hash_val = 0
+    for bit in (low_freq > median_ac):
+        hash_val = (hash_val << 1) | int(bool(bit))
+    return f"{hash_val:016x}"
+
+
 # ---------------------------------------------------------------------------
 # Action Plans & Episodic Models
 # ---------------------------------------------------------------------------
@@ -267,6 +310,7 @@ class ActionType(str, Enum):
     CLICK = "CLICK"
     DOUBLE_CLICK = "DOUBLE_CLICK"
     RIGHT_CLICK = "RIGHT_CLICK"
+    DRAG = "DRAG"
     CLICK_AND_TYPE = "CLICK_AND_TYPE"
     TYPE = "TYPE"
     HOTKEY = "HOTKEY"
@@ -278,18 +322,21 @@ class ActionType(str, Enum):
     OFFLOAD_WEB_AI = "OFFLOAD_WEB_AI"
     DONE = "DONE"
     RUN_CLI_COMMAND = "RUN_CLI_COMMAND"
+    BURST = "BURST"
 
 
 INTERACTIVE_ACTION_TYPES: Set[ActionType] = {
     ActionType.CLICK,
     ActionType.DOUBLE_CLICK,
     ActionType.RIGHT_CLICK,
+    ActionType.DRAG,
     ActionType.CLICK_AND_TYPE,
     ActionType.TYPE,
     ActionType.HOTKEY,
     ActionType.SCROLL,
     ActionType.MINIMIZE_WINDOW,
     ActionType.CLOSE_WINDOW,
+    ActionType.BURST,
 }
 
 # Mapping of common LLM verb variations & synonyms to canonical ActionType enums
@@ -313,6 +360,10 @@ VERB_SYNONYMS: Dict[str, ActionType] = {
     "CONTEXT_CLICK": ActionType.RIGHT_CLICK,
     "RIGHT_SINGLE": ActionType.RIGHT_CLICK,
     "RIGHTCLICK": ActionType.RIGHT_CLICK,
+    # Drag variants
+    "DRAG": ActionType.DRAG,
+    "MOUSE_DRAG": ActionType.DRAG,
+    "DRAG_AND_DROP": ActionType.DRAG,
     # Type variants
     "TYPE_TEXT": ActionType.TYPE,
     "INPUT": ActionType.TYPE,
@@ -333,6 +384,10 @@ VERB_SYNONYMS: Dict[str, ActionType] = {
     "PAUSE": ActionType.WAIT,
     "SLEEP": ActionType.WAIT,
     "IDLE": ActionType.WAIT,
+    # Burst / compound variants
+    "BURST": ActionType.BURST,
+    "SEQUENCE": ActionType.BURST,
+    "CHAIN": ActionType.BURST,
 }
 
 
@@ -343,6 +398,7 @@ class ActionPlan(BaseModel):
     action: ActionType = ActionType.WAIT
     target_id: Optional[int] = Field(default=None, description="1-based Set-of-Mark target index.")
     coordinates: Optional[Tuple[int, int]] = Field(default=None, description="Explicit [x, y] coordinates.")
+    end_coordinates: Optional[Tuple[int, int]] = Field(default=None, description="Explicit [x, y] end coordinates for DRAG.")
     text: Optional[str] = Field(default=None, description="Text string for typing.")
     submit: bool = Field(default=False, description="Whether to send Enter after typing.")
     clear_first: bool = Field(default=True, description="Whether to clear existing text before typing.")
@@ -352,6 +408,7 @@ class ActionPlan(BaseModel):
     wait_ms: int = Field(default=500, ge=0, le=30000)
     reasoning: str = Field(default="", description="Planner justification.")
     cli_command: Optional[str] = Field(default=None, description="CLI command string for headless execution.")
+    burst_actions: Optional[List[ActionPlan]] = Field(default=None, description="Ordered sub-actions for BURST execution.")
 
     @model_validator(mode="before")
     @classmethod
@@ -406,6 +463,9 @@ class ActionPlan(BaseModel):
         return data
 
 
+ActionPlan.model_rebuild()
+
+
 class DiffResult(BaseModel):
     """Result of screen difference calculation between pre- and post-action frames."""
     model_config = ConfigDict(extra="ignore", validate_default=True)
@@ -437,12 +497,16 @@ class StepRecord(BaseModel):
     is_strike: bool = False
     consecutive_strikes: int = 0
     tier_level: CadenceTier = Field(default=CadenceTier.TIER_1_LOCAL, description="Active escalation tier level")
+    pre_window: Optional[str] = None
+    post_window: Optional[str] = None
+    screen_size: Tuple[int, int] = (1920, 1080)
 
     def to_summary(self, duration_sec: float = 0.0) -> StepRecordSummary:
         """Projects this detailed step record into a compact summary for episode receipts."""
         label = None
         if self.target_info:
             label = self.target_info.get("label") or self.target_info.get("name")
+        burst_count = len(self.action.burst_actions) if self.action.burst_actions else None
         return StepRecordSummary(
             step_id=self.step_id,
             action_type=self.action.action.value,
@@ -455,6 +519,7 @@ class StepRecord(BaseModel):
             screen_diff=self.screen_diff,
             error_message=self.error_message,
             duration_sec=duration_sec,
+            burst_count=burst_count,
         )
 
 
@@ -473,6 +538,7 @@ class StepRecordSummary(BaseModel):
     screen_diff: float
     error_message: Optional[str] = None
     duration_sec: float = 0.0
+    burst_count: Optional[int] = None
 
 
 class EpisodeReceipt(BaseModel):
@@ -485,7 +551,7 @@ class EpisodeReceipt(BaseModel):
     total_steps: int
     max_steps: int = 15
     duration_sec: float
-    exit_reason: str  # "DONE", "MAX_STEPS", "PANIC", "LOOP_STAGNATION", "ERROR", "TIMEOUT"
+    exit_reason: str  # "DONE", "MAX_STEPS", "PANIC", "LOOP_STAGNATION", "ERROR", "TIMEOUT", "IN_PROGRESS"
     step_latencies_sec: List[float] = Field(default_factory=list)
     total_strikes: int = 0
     highest_tier_reached: str = "TIER_1_LOCAL"
@@ -494,6 +560,14 @@ class EpisodeReceipt(BaseModel):
     steps: List[StepRecordSummary] = Field(default_factory=list)
     error: Optional[str] = None
     timestamp: float = Field(default_factory=time.time)
+    plan_source: str = "local"
+    skill_id: Optional[str] = None
+    farmed_plan_id: Optional[int] = None
+    fast_path_steps: int = 0
+    parasite_invocations: int = 0
+    parasite_status: Optional[str] = None
+    veto_count: int = 0
+    fast_path_abort_reason: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -526,10 +600,12 @@ class EpisodeReceipt(BaseModel):
         return self.model_dump_json(indent=indent)
 
     def save(self, path: Union[str, Path]) -> None:
-        """Writes receipt to specified file path, creating parent directories as needed."""
+        """Atomically writes receipt to specified file path, creating parent directories as needed."""
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(self.to_json(), encoding="utf-8")
+        tmp = p.with_suffix(f"{p.suffix}.tmp")
+        tmp.write_text(self.to_json(), encoding="utf-8")
+        tmp.replace(p)
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +647,9 @@ class EpisodicMemory:
         post_hash: Optional[str] = None,
         error_message: Optional[str] = None,
         tier_level: Optional[CadenceTier] = None,
+        pre_window: Optional[str] = None,
+        post_window: Optional[str] = None,
+        screen_size: Tuple[int, int] = (1920, 1080),
     ) -> StepRecord:
         """
         Records an executed step into the episodic ring buffer, evaluates strike eligibility,
@@ -615,6 +694,9 @@ class EpisodicMemory:
                 is_strike=is_strike,
                 consecutive_strikes=self._consecutive_strikes,
                 tier_level=resolved_tier,
+                pre_window=pre_window,
+                post_window=post_window,
+                screen_size=screen_size,
             )
 
             self._buffer.append(step_record)
@@ -637,6 +719,16 @@ class EpisodicMemory:
             if reset_escalation:
                 self.escalation_sm.reset()
 
+    @property
+    def history(self) -> List[StepRecord]:
+        """Returns a thread-safe chronological snapshot of buffered StepRecords."""
+        with self._lock:
+            return list(self._buffer)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._buffer)
+
     def get_recent_history(self, n: int = 5) -> List[StepRecord]:
         """Returns the most recent n step records in chronological order."""
         with self._lock:
@@ -649,27 +741,107 @@ class EpisodicMemory:
         including failure strike warnings if loops are developing.
         """
         with self._lock:
-            history = self.get_recent_history(n)
-            if not history:
+            all_records = list(self._buffer)
+            if not all_records:
                 return "No previous actions recorded in this session."
 
+            history = all_records[-n:] if n < len(all_records) else all_records
+            older_records = all_records[:-n] if n < len(all_records) else []
+
             lines = ["### Recent Action History & Visual Outcomes:"]
+
+            # Milestone compression for earlier steps beyond the detailed window
+            if older_records:
+                milestones: List[str] = []
+                for o_rec in older_records:
+                    o_act = o_rec.action
+                    o_status = "SUCCESS" if o_rec.success else "FAILED"
+                    o_act_desc = o_act.action.value
+                    if o_act.action == ActionType.HOTKEY and o_act.keys:
+                        o_act_desc += f" [{'+'.join(o_act.keys)}]"
+                    elif o_act.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE) and o_act.text:
+                        short_text = (o_act.text[:15] + "…") if len(o_act.text) > 15 else o_act.text
+                        o_act_desc += f" '{short_text}'"
+                        if o_act.submit:
+                            o_act_desc += " [Enter]"
+                    elif o_act.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK):
+                        if o_rec.target_info and (o_rec.target_info.get("label") or o_rec.target_info.get("name")):
+                            lbl = o_rec.target_info.get("label") or o_rec.target_info.get("name")
+                            o_act_desc += f" on '{lbl}'"
+                        elif o_act.target_id is not None:
+                            o_act_desc += f" target [#{o_act.target_id}]"
+                    elif o_act.action == ActionType.BURST and o_act.burst_actions:
+                        o_act_desc += f" [{len(o_act.burst_actions)} sub-actions]"
+
+                    dest = ""
+                    if o_rec.post_window:
+                        # Extract short window title
+                        w_short = o_rec.post_window.split(" (")[0]
+                        dest = f" -> {w_short}"
+                    milestones.append(f"#{o_rec.step_id} {o_act_desc} ({o_status}{dest})")
+
+                start_id = older_records[0].step_id
+                end_id = older_records[-1].step_id
+                id_range = f"Step #{start_id}" if start_id == end_id else f"Steps #{start_id}-#{end_id}"
+                lines.append(f"- Completed Milestones ({id_range}): {'; '.join(milestones)}")
+
             for rec in history:
                 act = rec.action
                 target_desc = ""
                 if act.target_id is not None:
                     target_desc = f" target [#{act.target_id}]"
                 elif act.coordinates:
-                    target_desc = f" at {act.coordinates}"
+                    cx, cy = act.coordinates
+                    target_desc = f" at ({cx}, {cy})"
+
+                if rec.target_info:
+                    role = rec.target_info.get("role")
+                    label = rec.target_info.get("label") or rec.target_info.get("name")
+                    if role and label:
+                        target_desc += f" on {role} '{label}'"
+                    elif label:
+                        target_desc += f" on '{label}'"
 
                 text_desc = f' text="{act.text}"' if act.text else ""
+                if act.keys:
+                    text_desc += f" keys={act.keys}"
+                if act.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE):
+                    text_desc += " (Enter pressed)" if act.submit else " (Enter NOT pressed)"
+                if act.action == ActionType.BURST and act.burst_actions:
+                    sub_types = [sub.action.value for sub in act.burst_actions]
+                    text_desc += f" [actions: {', '.join(sub_types)}]"
+
                 diff_pct = f"{rec.screen_diff * 100:.1f}%"
                 status_str = "SUCCESS" if rec.success else "FAILED"
                 strike_str = f" [Strike {rec.consecutive_strikes}/{self.strike_limit}]" if rec.is_strike else ""
+                if rec.is_strike:
+                    if rec.screen_diff >= self.screen_diff_threshold:
+                        outcome_tag = (
+                            " [LOOP STRIKE - repeated/oscillating cycle; stop repeating and emit "
+                            "finished() if goal is complete or choose a different action]"
+                        )
+                    else:
+                        outcome_tag = " [NO SCREEN CHANGE - try an alternative action, keyboard shortcut, or double-click]"
+                else:
+                    outcome_tag = " [Screen changed]"
+                reason_tag = f" | Reason: {rec.error_message}" if rec.error_message else ""
+
+                window_tag = ""
+                if rec.pre_window and rec.post_window and rec.pre_window != rec.post_window:
+                    window_tag = f" | Window: {rec.pre_window} -> {rec.post_window}"
+                elif rec.post_window:
+                    window_tag = f" | Window: {rec.post_window}"
+
+                thought_tag = ""
+                if rec.persona_thought:
+                    clean_thought = " ".join(rec.persona_thought.split())
+                    if len(clean_thought) > 90:
+                        clean_thought = clean_thought[:87] + "..."
+                    thought_tag = f' | Thought: "{clean_thought}"'
 
                 lines.append(
                     f"- Step #{rec.step_id}: {act.action.value}{target_desc}{text_desc} "
-                    f"-> Screen Diff: {diff_pct} ({status_str}){strike_str}"
+                    f"-> Screen Diff: {diff_pct} ({status_str}){strike_str}{outcome_tag}{reason_tag}{window_tag}{thought_tag}"
                 )
 
             if self._consecutive_strikes >= self.strike_limit:
@@ -679,9 +851,19 @@ class EpisodicMemory:
                     f"You MUST change your strategy or re-ground the desktop before acting!"
                 )
             elif self._consecutive_strikes > 0:
-                lines.append(
-                    f"\nNotice: {self._consecutive_strikes} consecutive action strike(s) detected."
-                )
+                last_rec = all_records[-1]
+                if last_rec.is_strike and last_rec.screen_diff >= self.screen_diff_threshold:
+                    lines.append(
+                        f"\nNotice: {self._consecutive_strikes} consecutive loop strike(s) detected. "
+                        f"[WARNING: Repeated/alternating action cycle detected; stop repeating that cycle. "
+                        f"If the requested task is already complete on screen emit finished(), otherwise pick a new approach.]"
+                    )
+                else:
+                    lines.append(
+                        f"\nNotice: {self._consecutive_strikes} consecutive action strike(s) detected. "
+                        f"[WARNING: Last action produced NO screen change. Do NOT repeat the same action; "
+                        f"try an alternative approach, keyboard shortcut, or double-click instead.]"
+                    )
 
             return "\n".join(lines)
 

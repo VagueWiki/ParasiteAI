@@ -13,17 +13,21 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
+import dataclasses
 import json
 import logging
+import os
 import re
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from parasite_ai.config import AppConfig, WindowRulesConfig
+from parasite_ai.config import AppConfig, ReflexConfig, WindowRulesConfig
+from parasite_ai.hands.reflex import ReflexBurstDispatcher, ReflexBurstResult
+from parasite_ai.vision.debug_capture import DebugScreenshotRecorder
 from parasite_ai.mind.affordance import (
     ActionAffordance,
     AffordanceAssessment,
@@ -43,9 +47,16 @@ from parasite_ai.mind.memory import (
     compute_dhash,
     compute_pixel_diff,
 )
+from parasite_ai.mind.parasite_protocol import (
+    ParasiteFailure,
+    ParasitePhase,
+    ParasiteRequest,
+    RecoveryTrigger,
+)
 from parasite_ai.mind.plan import (
     LivingPlan,
     PlanStep,
+    StepDirective,
     StepIntent,
     StepStatus,
     check_and_insert_contingencies,
@@ -54,10 +65,24 @@ from parasite_ai.mind.plan import (
     verify_step_completion,
 )
 from parasite_ai.mind.resolver import PrecisionAppMatcher, UniversalAppResolver
+from parasite_ai.mind.skills import (
+    SkillMatch,
+    SkillRegistry,
+    SkillType,
+    TraceRecorder,
+    verify_and_resolve_reflex_skill,
+)
+from parasite_ai.mind.verifier import RuntimeGoalVerifier
 from parasite_ai.ui.bridge import UIBridge
 from parasite_ai.ui.types import BoundingBox, UIElement
-from parasite_ai.vision.foveated import FoveatedFrame, FoveatedVisionEngine
-from parasite_ai.vision.vlm_grounder import VLMGrounder, parse_vlm_coordinates
+from parasite_ai.vision.foveated import (
+    FoveatedFrame,
+    FoveatedVisionEngine,
+    PreClickOpticalVerifier,
+    extract_target_glyph_hint,
+)
+from parasite_ai.vision.grounding import CentroidSnapper
+from parasite_ai.vision.vlm_grounder import VLMGrounder, encode_image_to_base64, parse_vlm_coordinates
 
 logger = logging.getLogger(__name__)
 
@@ -384,8 +409,8 @@ def extract_action_target_roi(
             return matched.pad(padding_px=padding_px, bounds=bounds)
         return BoundingBox(x=cx, y=cy, width=0, height=0).pad(padding_px=padding_px, bounds=bounds)
 
-    # 3. Active window resolution for ungrounded typing or scrolling
-    if active_window_rect and action.action in (ActionType.TYPE, ActionType.SCROLL):
+    # 3. Active window resolution for ungrounded typing, scrolling, or compound reflex bursts
+    if active_window_rect and action.action in (ActionType.TYPE, ActionType.SCROLL, ActionType.BURST):
         wx, wy, ww, wh = active_window_rect
         if ww > 0 and wh > 0:
             return BoundingBox(x=wx, y=wy, width=ww, height=wh).pad(padding_px=padding_px, bounds=bounds)
@@ -593,9 +618,30 @@ def evaluate_window_disposition(
     return "NEED_SOON_MINIMIZE"
 
 
+def _is_real_win32_window_mutation_blocked() -> bool:
+    """
+    Returns True on non-Win32 platforms or when running under pytest without mocked user32
+    so automated test runs never move, resize, or alter real desktop windows.
+    """
+    if sys.platform != "win32":
+        return True
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    try:
+        u32 = ctypes.windll.user32
+        if type(u32).__name__ in ("MagicMock", "Mock", "NonCallableMagicMock"):
+            return False
+        for attr in ("SetWindowPos", "ShowWindow", "EnumWindows", "GetForegroundWindow", "SetForegroundWindow"):
+            if type(getattr(u32, attr, None)).__name__ in ("MagicMock", "Mock", "NonCallableMagicMock"):
+                return False
+    except Exception:
+        return True
+    return True
+
+
 def get_companion_dock_rect() -> Optional[Tuple[int, int, int, int]]:
     """Returns (left, top, right, bottom) of visible CompanionDock window if present and not minimized."""
-    if sys.platform != "win32":
+    if _is_real_win32_window_mutation_blocked():
         return None
     try:
         user32 = ctypes.windll.user32
@@ -607,9 +653,9 @@ def get_companion_dock_rect() -> Optional[Tuple[int, int, int, int]]:
                 return True
             cbuf = ctypes.create_unicode_buffer(128)
             user32.GetClassNameW(hwnd, cbuf, 128)
-            tbuf = ctypes.create_unicode_buffer(128)
-            user32.GetWindowTextW(hwnd, tbuf, 128)
-            if "companiondock" in cbuf.value.lower() or "parasite" in tbuf.value.lower():
+            # Match ONLY actual CompanionDock windows by Win32 class name — never user File Explorer,
+            # CMD/PowerShell, or IDE windows whose title merely contains 'Parasite'.
+            if "companiondock" in cbuf.value.lower():
                 r = wintypes.RECT()
                 if user32.GetWindowRect(hwnd, ctypes.byref(r)):
                     if (r.right - r.left) > 50 and (r.bottom - r.top) > 40:
@@ -625,8 +671,132 @@ def get_companion_dock_rect() -> Optional[Tuple[int, int, int, int]]:
 
 
 # ---------------------------------------------------------------------------
-# Pass 2: Action Dispatcher
+# Pass 2: Action Dispatcher & Monitor Relocation Guard
 # ---------------------------------------------------------------------------
+
+def relocate_window_to_monitor(hwnd: int, target_mon_idx: int = 1) -> bool:
+    """
+    Checks if window hwnd is wholly outside the target monitor (e.g. Right Monitor x >= 1920)
+    and relocates it to the target monitor via SetWindowPos. Never touches windows during
+    unmocked pytest runs, never moves windows that already overlap the target monitor, and
+    never moves protected shell, File Explorer, terminal, or IDE windows.
+    """
+    if not hwnd or _is_real_win32_window_mutation_blocked():
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        if not user32.IsWindow(hwnd):
+            return False
+
+        # Protect our own process / parent console PID
+        protected_pids = {os.getpid()}
+        try:
+            if os.getppid():
+                protected_pids.add(os.getppid())
+        except Exception:
+            pass
+        hwnd_pid = wintypes.DWORD()
+        try:
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(hwnd_pid))
+            if int(hwnd_pid.value or 0) in protected_pids:
+                return False
+        except Exception:
+            pass
+
+        # Exclude shell surfaces, File Explorer, terminals, IDEs, and runner console windows
+        cbuf = ctypes.create_unicode_buffer(128)
+        user32.GetClassNameW(hwnd, cbuf, 128)
+        cls_lower = cbuf.value.lower()
+        if cls_lower in (
+            "progman",
+            "workerw",
+            "shell_traywnd",
+            "shell_secondarytraywnd",
+            "openshell.cmenucontainer",
+            "classicmenu.cmenucontainer",
+            "dv2controlhost",
+            "windows.ui.core.corewindow",
+            "consolewindowclass",
+            "cascadia_hosting_window_class",
+            "cabinetwclass",
+            "explorewclass",
+        ):
+            return False
+
+        proc_lower = ActionDispatcher._get_process_name_for_hwnd(hwnd)
+        if proc_lower in (
+            "cmd.exe",
+            "powershell.exe",
+            "pwsh.exe",
+            "windowsterminal.exe",
+            "conhost.exe",
+            "explorer.exe",
+            "code.exe",
+            "antigravity.exe",
+            "python.exe",
+            "pythonw.exe",
+        ):
+            return False
+
+        tbuf = ctypes.create_unicode_buffer(256)
+        user32.GetWindowTextW(hwnd, tbuf, 256)
+        title_lower = tbuf.value.lower()
+        if any(
+            k in title_lower
+            for k in (
+                "benchmark runner",
+                "parasiteai stage",
+                "parasiteai benchmark",
+                "antigravity",
+                "command prompt",
+                "powershell",
+                "windows terminal",
+            )
+        ):
+            return False
+
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            return False
+
+        cx = (rect.left + rect.right) // 2
+        from parasite_ai.vision.capture import get_monitor_bounds
+        try:
+            ml, mt, mw, mh = get_monitor_bounds(target_mon_idx)
+        except Exception:
+            ml, mt, mw, mh = (0, 0, 1920, 1080)
+        if mw <= 0 or mh <= 0:
+            ml, mt, mw, mh = (0, 0, 1920, 1080)
+
+        # Already on or overlapping target monitor -> leave user window geometry untouched
+        if rect.left < (ml + mw) and rect.right > ml:
+            return False
+
+        # Compute safe window geometry on target monitor
+        curr_w = rect.right - rect.left
+        curr_h = rect.bottom - rect.top
+        w = max(600, min(mw - 100, curr_w)) if curr_w > 0 else 1000
+        h = max(400, min(mh - 100, curr_h)) if curr_h > 0 else 700
+        new_x = ml + 100
+        new_y = mt + 100
+
+        # SWP_NOZORDER = 0x0004
+        user32.SetWindowPos(hwnd, 0, new_x, new_y, w, h, 0x0004)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+
+        logger.info(
+            "[MONITOR RELOCATION GUARD] Window HWND %d ('%s') was on Monitor %s (cx=%d). "
+            "Relocated to Monitor %d at (%d, %d, %d, %d).",
+            hwnd, cls_lower, "2" if cx >= 1920 else "out-of-bounds", cx, target_mon_idx, new_x, new_y, w, h
+        )
+        return True
+    except Exception as exc:
+        logger.debug("[MONITOR RELOCATION GUARD] Error relocating window HWND %s: %s", hwnd, exc)
+        return False
+
 
 class ActionDispatcher:
     """
@@ -640,12 +810,76 @@ class ActionDispatcher:
         keyboard_driver: Optional[Any] = None,
         bridge: Optional[UIBridge] = None,
         config: Optional[AppConfig] = None,
+        centroid_snapper: Optional[CentroidSnapper] = None,
+        optical_verifier: Optional[PreClickOpticalVerifier] = None,
+        vlm_glance_fn: Optional[Callable[[np.ndarray, str], str]] = None,
+        enable_uia_point_probe: Optional[bool] = None,
+        window_guard: Optional[Any] = None,
+        desktop_uia_probe_fn: Optional[Callable[[int, int, str, str], Optional[Tuple[int, int, str]]]] = None,
     ) -> None:
         self.mouse_driver = mouse_driver
         self.keyboard_driver = keyboard_driver
         self.bridge = bridge
         self.config = config
+        self.window_guard = window_guard
+        self.desktop_uia_probe_fn = desktop_uia_probe_fn
         self.window_rules = getattr(config, "window_rules", None) or _DEFAULT_WINDOW_RULES
+        if enable_uia_point_probe is None:
+            is_mock_mouse = (
+                mouse_driver is None
+                or "Mock" in type(mouse_driver).__name__
+                or getattr(type(mouse_driver), "__module__", "").startswith("unittest.mock")
+            )
+            sim_mode = getattr(mouse_driver, "simulation_mode", None)
+            enable_uia_point_probe = (
+                sys.platform == "win32"
+                and not is_mock_mouse
+                and sim_mode is False
+            )
+        self.centroid_snapper = centroid_snapper or CentroidSnapper(
+            enable_uia_point_probe=bool(enable_uia_point_probe),
+        )
+        self.optical_verifier = optical_verifier or PreClickOpticalVerifier()
+        self.vlm_glance_fn = vlm_glance_fn
+        self.last_refinement: Optional[Dict[str, Any]] = None
+
+        reflex_cfg = getattr(getattr(config, "hands", None), "reflex", None) or ReflexConfig()
+        self.reflex_dispatcher = ReflexBurstDispatcher(
+            mouse_driver=self.mouse_driver,
+            keyboard_driver=self.keyboard_driver,
+            config=reflex_cfg,
+            target_refiner=self._refine_burst_sub_target,
+            coordinate_validator=self.validate_coordinates,
+            dock_evader=self._evade_companion_dock_if_needed,
+            window_activator=self._activate_target_window_if_needed,
+            release_fn=self._release_all,
+        )
+
+    def _refine_burst_sub_target(
+        self,
+        coords: Tuple[int, int],
+        action: ActionPlan,
+    ) -> Tuple[Tuple[int, int], Optional[str]]:
+        """Applies CentroidSnapper to burst sub-targets (omitting optical glance to prevent multi-button mismatch)."""
+        rx, ry = coords
+        snap_res = self.centroid_snapper.snap_with_details(
+            x=rx,
+            y=ry,
+            elements=[],
+            use_uia_point=True,
+        )
+        if snap_res.snapped and self.validate_coordinates(snap_res.x, snap_res.y):
+            logger.info(
+                "[BURST CENTROID SNAP] Snapped sub-target (%d, %d) -> (%d, %d) via %s (label=%r)",
+                rx,
+                ry,
+                snap_res.x,
+                snap_res.y,
+                snap_res.strategy,
+                snap_res.matched_label,
+            )
+            return (snap_res.x, snap_res.y), None
+        return (rx, ry), None
 
     def validate_coordinates(self, x: int, y: int) -> bool:
         """Validates that click/move coordinates reside within the configured monitor or virtual desktop boundaries."""
@@ -716,7 +950,7 @@ class ActionDispatcher:
         If so, minimizes/collapses CompanionDock and waits briefly so the physical
         click lands on the underlying desktop icon or window instead of our own GUI.
         """
-        if coords is None:
+        if getattr(self.config, "headless", False) or coords is None or self._is_simulated_mode() or _is_real_win32_window_mutation_blocked():
             return False
         cx, cy = coords
         valid_excl = (
@@ -760,11 +994,7 @@ class ActionDispatcher:
                         r = wintypes.RECT()
                         if not user32.GetWindowRect(hwnd, ctypes.byref(r)):
                             return True
-                        is_dock_hwnd = (
-                            "companiondock" in cbuf.value.lower()
-                            or "parasite" in tbuf.value.lower()
-                            or (abs(r.left - dl) <= 12 and abs(r.top - dt) <= 12 and abs(r.right - dr) <= 12)
-                        )
+                        is_dock_hwnd = "companiondock" in cbuf.value.lower()
                         if is_dock_hwnd:
                             if (r.left - pad) <= cx <= (r.right + pad) and (r.top - pad) <= cy <= (r.bottom + pad):
                                 # Move to top-left or opposite quadrant away from (cx, cy)
@@ -790,14 +1020,814 @@ class ActionDispatcher:
             return True
         return False
 
+    @staticmethod
+    def _get_process_name_for_hwnd(hwnd: int) -> str:
+        """Returns lowercase executable basename for a Win32 HWND, or '' on failure."""
+        if sys.platform != "win32" or not hwnd:
+            return ""
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+            pid = wintypes.DWORD(0)
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if not pid.value:
+                return ""
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            h_proc = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+            if not h_proc:
+                return ""
+            try:
+                buf = ctypes.create_unicode_buffer(512)
+                size = wintypes.DWORD(512)
+                if kernel32.QueryFullProcessImageNameW(h_proc, 0, buf, ctypes.byref(size)):
+                    return Path(buf.value).name.lower()
+            finally:
+                kernel32.CloseHandle(h_proc)
+        except Exception:
+            pass
+        return ""
+
+    def _is_simulated_mode(self) -> bool:
+        """
+        Returns True when running under pytest or with simulated/mocked drivers,
+        unless Win32 user32 functions are explicitly patched by unit tests.
+        """
+        try:
+            u32 = ctypes.windll.user32
+            if type(u32).__name__ in ("MagicMock", "Mock", "NonCallableMagicMock"):
+                return False
+            for attr in ("WindowFromPoint", "ShowWindow", "GetForegroundWindow"):
+                fn = getattr(u32, attr, None)
+                if type(fn).__name__ in ("MagicMock", "Mock", "NonCallableMagicMock"):
+                    return False
+        except Exception:
+            pass
+
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return True
+
+        mouse_sim = bool(getattr(self.mouse_driver, "simulation_mode", False))
+        mouse_mock = self.mouse_driver is None or type(self.mouse_driver).__name__ in ("MagicMock", "Mock")
+        kbd_mock = self.keyboard_driver is None or type(self.keyboard_driver).__name__ in ("MagicMock", "Mock")
+        kbd_backend = getattr(self.keyboard_driver, "backend", None)
+        kbd_sim = kbd_backend is not None and type(kbd_backend).__name__ == "MockInputBackend"
+        return bool((mouse_sim or mouse_mock) and (kbd_sim or kbd_mock))
+
+    @staticmethod
+    def _protected_win32_context() -> Tuple[set[int], Tuple[str, ...], Tuple[str, ...]]:
+        protected_pids = {os.getpid()}
+        try:
+            ppid = os.getppid()
+            if ppid:
+                protected_pids.add(ppid)
+        except Exception:
+            pass
+        protected_titles = (
+            "benchmark runner",
+            "parasiteai stage",
+            "parasiteai benchmark",
+            "parasiteai launcher",
+        )
+        shell_classes = ("progman", "workerw", "shell_traywnd", "shell_secondarytraywnd")
+        return protected_pids, protected_titles, shell_classes
+
+    @staticmethod
+    def _normalize_hotkey_set(keys: List[str]) -> Tuple[List[str], set[str]]:
+        norm = [str(k).strip().lower() for k in keys if str(k).strip()]
+        alias_map = {
+            "control": "ctrl",
+            "menu": "alt",
+            "windows": "win",
+            "lwin": "win",
+            "rwin": "win",
+            "super": "win",
+            "meta": "win",
+        }
+        return norm, {alias_map.get(k, k) for k in norm}
+
+    def _recover_monitor_window_focus(
+        self,
+        keys: List[str],
+        target_process: Optional[str] = None,
+    ) -> bool:
+        """
+        Recovers foreground focus onto a safe Monitor-1 target window before hotkey dispatch
+        when foreground is missing, on a Windows shell surface, or off-monitor.
+        Prioritizes visible Monitor-1 #32770 modals, then matching target_process, then
+        topmost non-destructive Monitor-1 app window (non-destructive hotkeys only).
+        """
+        if sys.platform != "win32" or self._is_simulated_mode():
+            return False
+
+        norm, norm_set = self._normalize_hotkey_set(keys)
+        if not norm_set:
+            return False
+
+        is_global_launch = (
+            norm_set == {"win"}
+            or norm_set == {"win", "r"}
+            or norm_set == {"win", "s"}
+        )
+        is_alt_tab = "alt" in norm_set and "tab" in norm_set
+        if is_global_launch or is_alt_tab:
+            return False
+
+        is_close_or_destruct = (
+            ("alt" in norm_set and "f4" in norm_set)
+            or ("win" in norm_set and "down" in norm_set)
+            or ("ctrl" in norm_set and "w" in norm_set)
+            or ("ctrl" in norm_set and "f4" in norm_set)
+            or ("alt" in norm_set and "space" in norm_set)
+        )
+
+        try:
+            user32 = ctypes.windll.user32
+            mon_idx = getattr(getattr(self.config, "vision", None), "monitor_index", 0) if self.config is not None else 0
+            ml, mt, mw, mh = (0, 0, 0, 0)
+            if isinstance(mon_idx, int) and mon_idx >= 1:
+                from parasite_ai.vision.capture import get_monitor_bounds
+                ml, mt, mw, mh = get_monitor_bounds(mon_idx)
+
+            protected_pids, protected_titles, shell_classes = self._protected_win32_context()
+            fg = user32.GetForegroundWindow()
+            needs_recovery = not fg
+            if fg:
+                cbuf = ctypes.create_unicode_buffer(128)
+                user32.GetClassNameW(fg, cbuf, 128)
+                cls_lower = (cbuf.value or "").lower()
+                is_shell = cls_lower in shell_classes
+                is_off_monitor = False
+                if isinstance(mon_idx, int) and mon_idx >= 1 and mw > 0 and not is_shell:
+                    fg_rect = wintypes.RECT()
+                    if user32.GetWindowRect(fg, ctypes.byref(fg_rect)) and fg_rect.right > fg_rect.left:
+                        is_off_monitor = not (fg_rect.left < ml + mw and fg_rect.right > ml)
+                needs_recovery = is_shell or is_off_monitor
+
+            if not needs_recovery:
+                return False
+
+            skip_classes = set(shell_classes) | {
+                "companiondock",
+                "windows.ui.core.corewindow",
+                "xamlislandroot",
+                "dv2controlhost",
+                "notifyiconoverflowwindow",
+                "openshell.cmenucontainer",
+                "classicmenu.cmenucontainer",
+            }
+            modal_candidates: List[int] = []
+            proc_candidates: List[int] = []
+            app_candidates: List[int] = []
+
+            enum_proc_t = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+            def _enum_cb(hwnd: int, _lparam: int) -> bool:
+                try:
+                    vis = user32.IsWindowVisible(hwnd)
+                    if vis is False or vis == 0:
+                        return True
+                    iconic = user32.IsIconic(hwnd)
+                    if isinstance(iconic, (bool, int)) and bool(iconic):
+                        return True
+
+                    rect = wintypes.RECT()
+                    if not user32.GetWindowRect(hwnd, ctypes.byref(rect)) or rect.right <= rect.left or rect.bottom <= rect.top:
+                        return True
+                    if isinstance(mon_idx, int) and mon_idx >= 1 and mw > 0:
+                        if not (rect.left < ml + mw and rect.right > ml):
+                            return True
+
+                    c_buf = ctypes.create_unicode_buffer(128)
+                    user32.GetClassNameW(hwnd, c_buf, 128)
+                    c_low = (c_buf.value or "").lower()
+                    if c_low in skip_classes:
+                        return True
+
+                    t_buf = ctypes.create_unicode_buffer(256)
+                    user32.GetWindowTextW(hwnd, t_buf, 256)
+                    t_str = t_buf.value or ""
+                    t_low = t_str.lower()
+                    if not t_str.strip() and c_low != "#32770":
+                        return True
+
+                    pid_val = wintypes.DWORD(0)
+                    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_val))
+                    if int(pid_val.value or 0) in protected_pids or any(pt in t_low for pt in protected_titles):
+                        return True
+
+                    proc = self._get_process_name_for_hwnd(hwnd)
+                    if self.window_guard is not None and hasattr(self.window_guard, "evaluate_sensitivity"):
+                        is_sens, _ = self.window_guard.evaluate_sensitivity(
+                            title=t_str,
+                            process_name=proc,
+                            hwnd=hwnd,
+                            can_open_process=True,
+                        )
+                        if is_sens is True:
+                            return True
+
+                    if c_low == "#32770":
+                        modal_candidates.append(int(hwnd))
+                    elif target_process and SkillRegistry.process_matches_window(proc, target_process, t_str):
+                        proc_candidates.append(int(hwnd))
+                    else:
+                        app_candidates.append(int(hwnd))
+                except Exception:
+                    pass
+                return True
+
+            user32.EnumWindows(enum_proc_t(_enum_cb), 0)
+            pool = modal_candidates or proc_candidates or ([] if is_close_or_destruct else app_candidates)
+            if not pool:
+                return False
+
+            chosen_hwnd = pool[0]
+            logger.info(
+                "[FOCUS RECOVERY] Restoring Monitor-1 foreground focus to HWND %d for hotkey %s (target_proc=%s).",
+                chosen_hwnd, norm, target_process,
+            )
+            return self._activate_target_window_if_needed(target_hwnd=chosen_hwnd)
+        except Exception as exc:
+            logger.debug("[FOCUS RECOVERY] Recovery skipped due to error: %s", exc)
+            return False
+
+    def _check_host_window_click_safety(self, coords: Tuple[int, int]) -> Optional[str]:
+        """
+        Blocks clicks targeting the agent's own host/test-runner console window
+        (e.g. clicking [X] on the running batch console) to prevent self-termination.
+        """
+        if sys.platform != "win32" or self._is_simulated_mode():
+            return None
+        try:
+            user32 = ctypes.windll.user32
+            if os.environ.get("PYTEST_CURRENT_TEST") and isinstance(user32, ctypes.WinDLL):
+                return None
+            pt = wintypes.POINT(int(coords[0]), int(coords[1]))
+            hwnd = user32.WindowFromPoint(pt)
+            if not hwnd:
+                return None
+            root_hwnd = user32.GetAncestor(hwnd, 2) or hwnd  # GA_ROOT = 2
+
+            kernel32 = ctypes.windll.kernel32
+            console_hwnd = 0
+            try:
+                console_hwnd = int(kernel32.GetConsoleWindow() or 0)
+            except Exception:
+                console_hwnd = 0
+            if console_hwnd and int(root_hwnd) == console_hwnd:
+                return "Blocked click on ParasiteAI host console window to prevent self-termination."
+
+            hwnd_pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(root_hwnd, ctypes.byref(hwnd_pid))
+            pid_val = int(hwnd_pid.value or 0)
+            if pid_val and pid_val in _get_protected_host_pids():
+                return f"Blocked click on protected host process window (PID {pid_val}) to prevent self-termination."
+
+            cbuf = ctypes.create_unicode_buffer(128)
+            user32.GetClassNameW(root_hwnd, cbuf, 128)
+            cls_lower = cbuf.value.lower()
+            tbuf = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(root_hwnd, tbuf, 256)
+            title_lower = tbuf.value.lower()
+            if cls_lower in ("consolewindowclass", "cascadia_hosting_window_class") and any(
+                k in title_lower
+                for k in ("parasiteai stage", "parasiteai benchmark", "benchmark runner", "smoke probe")
+            ):
+                return f"Blocked click on ParasiteAI test runner console ('{tbuf.value}') to prevent self-termination."
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _goal_requests_desktop_background_double_click(user_goal: str) -> bool:
+        gl = (user_goal or "").lower()
+        return any(
+            kw in gl
+            for kw in ("empty space", "empty desktop", "blank desktop", "desktop background", "hide icons", "hide desktop icons")
+        )
+
+    def _is_desktop_surface_at_point(self, coords: Tuple[int, int]) -> bool:
+        """Returns True if (x, y) is over the Windows desktop / Fences shell surface."""
+        if self.window_guard is not None:
+            winfo = None
+            if hasattr(self.window_guard, "get_window_at_point"):
+                try:
+                    winfo = self.window_guard.get_window_at_point(int(coords[0]), int(coords[1]))
+                except Exception:
+                    winfo = None
+            if winfo is None and hasattr(self.window_guard, "get_active_window_info"):
+                try:
+                    winfo = self.window_guard.get_active_window_info()
+                except Exception:
+                    winfo = None
+            if winfo is not None:
+                proc = (getattr(winfo, "process_name", "") or "").lower()
+                title = (getattr(winfo, "title", "") or "").lower()
+                if proc == "explorer.exe" and (
+                    title in ("program manager", "workerw", "desktop", "") or "fences" in title
+                ):
+                    return True
+                if "fences" in title:
+                    return True
+                if proc and proc != "explorer.exe":
+                    return False
+
+        if sys.platform != "win32":
+            return False
+        try:
+            user32 = ctypes.windll.user32
+            if os.environ.get("PYTEST_CURRENT_TEST") and isinstance(user32, ctypes.WinDLL):
+                return False
+            pt = wintypes.POINT(int(coords[0]), int(coords[1]))
+            hwnd = user32.WindowFromPoint(pt)
+            if not hwnd:
+                return False
+            cbuf = ctypes.create_unicode_buffer(128)
+            user32.GetClassNameW(hwnd, cbuf, 128)
+            cls_lower = cbuf.value.lower()
+            if cls_lower in ("progman", "workerw", "shelldll_defview", "syslistview32"):
+                return True
+            root_hwnd = user32.GetAncestor(hwnd, 2) or hwnd
+            user32.GetClassNameW(root_hwnd, cbuf, 128)
+            root_cls = cbuf.value.lower()
+            tbuf = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(root_hwnd, tbuf, 256)
+            root_title = tbuf.value.lower()
+            return root_cls in ("progman", "workerw") or "fences" in root_title
+        except Exception:
+            return False
+
+    def _probe_desktop_icon_uia(
+        self,
+        x: int,
+        y: int,
+        reasoning: str,
+        user_goal: str,
+    ) -> Optional[Tuple[int, int, str]]:
+        """
+        Verifies whether (x, y) hits a desktop ListItem icon via UIA, or locates a
+        matching desktop ListItem icon by name from reasoning/goal tokens.
+        """
+        if self.desktop_uia_probe_fn is not None:
+            return self.desktop_uia_probe_fn(x, y, reasoning, user_goal)
+
+        if sys.platform != "win32" or self._is_simulated_mode() or os.environ.get("PYTEST_CURRENT_TEST"):
+            return None
+
+        try:
+            import uiautomation as auto
+
+            ctrl = auto.ControlFromPoint(int(x), int(y))
+            if ctrl is not None:
+                ctype = str(getattr(ctrl, "ControlTypeName", "") or "")
+                if ctype in ("ListItemControl", "ButtonControl", "MenuItemControl"):
+                    rect = getattr(ctrl, "BoundingRectangle", None)
+                    if rect is not None:
+                        w = int(rect.right - rect.left)
+                        h = int(rect.bottom - rect.top)
+                        if 16 <= w <= 280 and 16 <= h <= 280:
+                            cx = int((rect.left + rect.right) // 2)
+                            cy = int((rect.top + rect.bottom) // 2)
+                            return (cx, cy, str(getattr(ctrl, "Name", "") or "Desktop Icon"))
+
+            # Point was not on a ListItem (e.g. empty desktop/Fence background).
+            # Search visible desktop ListItem icons matching reasoning/goal tokens.
+            stop_words = {
+                "the", "and", "then", "open", "launch", "start", "double", "click",
+                "icon", "desktop", "shortcut", "located", "section", "window", "app",
+                "game", "program", "turn", "activate", "will", "need", "see", "this",
+            }
+            raw_tokens = re.findall(r"[a-z0-9]{3,}", f"{reasoning} {user_goal}".lower())
+            tokens = [t for t in dict.fromkeys(raw_tokens) if t not in stop_words]
+            if not tokens:
+                return None
+
+            root = auto.GetRootControl()
+            best_score = 0
+            best_hit: Optional[Tuple[int, int, str]] = None
+            for win in (root.GetChildren() or []):
+                wcls = str(getattr(win, "ClassName", "") or "").lower()
+                wname = str(getattr(win, "Name", "") or "").lower()
+                if wcls not in ("progman", "workerw") and "fences" not in wname:
+                    continue
+                queue = [(win, 0)]
+                visited = 0
+                while queue and visited < 250:
+                    node, depth = queue.pop(0)
+                    visited += 1
+                    ntype = str(getattr(node, "ControlTypeName", "") or "")
+                    if ntype == "ListItemControl":
+                        name = str(getattr(node, "Name", "") or "").strip()
+                        name_l = name.lower()
+                        score = sum(1 for t in tokens if t in name_l)
+                        if score > best_score:
+                            rect = getattr(node, "BoundingRectangle", None)
+                            if rect is not None and rect.right > rect.left and rect.bottom > rect.top:
+                                cx = int((rect.left + rect.right) // 2)
+                                cy = int((rect.top + rect.bottom) // 2)
+                                if self.validate_coordinates(cx, cy):
+                                    best_score = score
+                                    best_hit = (cx, cy, name)
+                    if depth < 5:
+                        try:
+                            for ch in (node.GetChildren() or []):
+                                queue.append((ch, depth + 1))
+                        except Exception:
+                            pass
+            return best_hit
+        except Exception:
+            return None
+
+    def _check_desktop_double_click_safety(
+        self,
+        action: ActionPlan,
+        coords: Tuple[int, int],
+        user_goal: str = "",
+    ) -> Tuple[Tuple[int, int], Optional[str]]:
+        """
+        Prevents accidental double-clicks on empty desktop/Fences background (which hide
+        all desktop icons) by snapping to a verified UIA ListItem icon or failing closed.
+        """
+        is_dbl = action.action == ActionType.DOUBLE_CLICK or (
+            action.action == ActionType.CLICK and int(getattr(action, "clicks", 1) or 1) >= 2
+        )
+        if not is_dbl:
+            return coords, None
+        if self._is_simulated_mode() and self.desktop_uia_probe_fn is None:
+            return coords, None
+        if not self._is_desktop_surface_at_point(coords):
+            return coords, None
+        if self._goal_requests_desktop_background_double_click(user_goal):
+            return coords, None
+
+        icon_hit = self._probe_desktop_icon_uia(coords[0], coords[1], action.reasoning or "", user_goal)
+        if icon_hit is not None:
+            nx, ny, icon_name = icon_hit
+            if (nx, ny) != coords and self.validate_coordinates(nx, ny):
+                logger.info(
+                    "[DESKTOP ICON SNAP] Snapped DOUBLE_CLICK from %s to (%d, %d) on UIA icon %r",
+                    coords,
+                    nx,
+                    ny,
+                    icon_name,
+                )
+                return (nx, ny), None
+            return coords, None
+
+        return (
+            coords,
+            "Blocked double-click on empty desktop background (no desktop icon at target; "
+            "prevents hiding icons in Fences). Target the icon directly or launch via Start Menu / Win+R.",
+        )
+
+    def _check_foreground_hotkey_safety(self, keys: List[str]) -> Optional[str]:
+        """
+        Blocks destructive or window-management hotkeys (e.g. alt+f4, win+down, ctrl+w)
+        when foreground focus belongs to ParasiteAI/Benchmark Runner, Desktop/Taskbar shell,
+        or an off-monitor window outside the target monitor.
+        """
+        if sys.platform != "win32" or self._is_simulated_mode():
+            return None
+
+        norm, norm_set = self._normalize_hotkey_set(keys)
+        if not norm:
+            return None
+
+        is_close_or_destruct = (
+            ("alt" in norm_set and "f4" in norm_set)
+            or ("win" in norm_set and "down" in norm_set)
+            or ("ctrl" in norm_set and "w" in norm_set)
+            or ("ctrl" in norm_set and "f4" in norm_set)
+            or ("alt" in norm_set and "space" in norm_set)
+            or ("alt" in norm_set and "tab" in norm_set)
+        )
+        is_global_launch = (
+            norm_set == {"win"}
+            or norm_set == {"win", "r"}
+            or norm_set == {"win", "s"}
+        )
+
+        try:
+            user32 = ctypes.windll.user32
+            fg = user32.GetForegroundWindow()
+            if not fg:
+                if is_close_or_destruct:
+                    return "Blocked destructive/window-management hotkey with no active foreground window"
+                return None
+
+            cbuf = ctypes.create_unicode_buffer(128)
+            user32.GetClassNameW(fg, cbuf, 128)
+            cls_lower = (cbuf.value or "").lower()
+
+            tbuf = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(fg, tbuf, 256)
+            title_lower = (tbuf.value or "").lower()
+
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+            fg_pid = int(pid.value or 0)
+
+            protected_pids, protected_titles, shell_classes = self._protected_win32_context()
+
+            if is_close_or_destruct:
+                if fg_pid in protected_pids or any(pt in title_lower for pt in protected_titles):
+                    return (
+                        f"Blocked self-closing/disruptive hotkey {norm} on protected ParasiteAI/runner "
+                        f"window '{tbuf.value}' (pid={fg_pid})"
+                    )
+                if ("alt" in norm_set and "f4" in norm_set) or ("win" in norm_set and "down" in norm_set):
+                    if cls_lower in shell_classes:
+                        return f"Blocked {norm} on Windows Desktop/Taskbar shell ('{cls_lower}')"
+
+            if not is_global_launch and cls_lower not in ("progman", "workerw"):
+                mon_idx = getattr(getattr(self.config, "vision", None), "monitor_index", 0) if self.config is not None else 0
+                if isinstance(mon_idx, int) and mon_idx >= 1:
+                    rect = wintypes.RECT()
+                    if user32.GetWindowRect(fg, ctypes.byref(rect)) and rect.right > rect.left:
+                        from parasite_ai.vision.capture import get_monitor_bounds
+                        ml, mt, mw, mh = get_monitor_bounds(mon_idx)
+                        if mw > 0 and mh > 0:
+                            if not (rect.left < ml + mw and rect.right > ml):
+                                return (
+                                    f"Blocked off-monitor hotkey {norm} on foreground window "
+                                    f"'{tbuf.value}' rect=({rect.left},{rect.top},{rect.right},{rect.bottom}) "
+                                    f"outside Monitor {mon_idx} [{ml}..{ml + mw})"
+                                )
+        except Exception as exc:
+            logger.debug("[HOTKEY SAFETY GUARD] Inspection error: %s", exc)
+
+        return None
+
+    def _activate_target_window_if_needed(
+        self,
+        coords: Optional[Tuple[int, int]] = None,
+        target_hwnd: Optional[int] = None,
+    ) -> bool:
+        """
+        Asserts that the window at target coordinates (or target_hwnd) is the active foreground window.
+        If it is in the background, brings it to the foreground before dispatching clicks or typing,
+        preventing dropped clicks and unfocused input.
+        """
+        if sys.platform != "win32" or self._is_simulated_mode():
+            return False
+        try:
+            import ctypes
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+
+            hwnd_to_activate = target_hwnd
+            if not hwnd_to_activate and coords is not None:
+                x, y = coords
+                # Taskbar strip guard: clicks inside the bottom taskbar band (y >= 1032 on 1080p)
+                # target the Start button or taskbar and must never activate a background window behind it.
+                if y >= 1032:
+                    return False
+                pt = wintypes.POINT(x, y)
+                hit_hwnd = user32.WindowFromPoint(pt)
+                if hit_hwnd:
+                    # Resolve to root top-level application window (GA_ROOT = 2)
+                    hwnd_to_activate = user32.GetAncestor(hit_hwnd, 2) or hit_hwnd
+
+            if not hwnd_to_activate or not user32.IsWindow(hwnd_to_activate):
+                return False
+
+            fg_hwnd = user32.GetForegroundWindow()
+            if hwnd_to_activate == fg_hwnd:
+                return True
+
+            shell_and_flyout_classes = {
+                "progman",
+                "workerw",
+                "shell_traywnd",
+                "shell_secondarytraywnd",
+                "openshell.cmenucontainer",
+                "classicmenu.cmenucontainer",
+                "dv2controlhost",
+                "windows.ui.core.corewindow",
+                "xamlislandroot",
+                "notifyiconoverflowwindow",
+                "#32768",
+            }
+            active_flyout_classes = shell_and_flyout_classes - {"progman", "workerw"}
+            active_flyout_processes = {
+                "startmenuexperiencehost.exe",
+                "searchapp.exe",
+                "searchhost.exe",
+                "shellexperiencehost.exe",
+            }
+
+            # Check if active foreground window is a modal dialog (#32770) or an open Start Menu / shell flyout
+            if fg_hwnd and user32.IsWindow(fg_hwnd):
+                fg_cbuf = ctypes.create_unicode_buffer(128)
+                user32.GetClassNameW(fg_hwnd, fg_cbuf, 128)
+                fg_cls_lower = fg_cbuf.value.lower()
+                if fg_cls_lower == "#32770":
+                    # An active modal dialog captures input; parent window input is disabled by Windows
+                    logger.info(
+                        "[MODAL DIALOG GUARD] Active modal dialog HWND %d (#32770) is capturing input. "
+                        "Preserving dialog focus for user dismissal rather than forcing background activation.",
+                        fg_hwnd
+                    )
+                    return True
+                fg_proc_lower = self._get_process_name_for_hwnd(fg_hwnd)
+                if fg_cls_lower in active_flyout_classes or fg_proc_lower in active_flyout_processes:
+                    # An open Start Menu, Search flyout, or popup menu is currently in the foreground;
+                    # calling SetForegroundWindow on a background window would collapse the menu before the click.
+                    logger.info(
+                        "[SHELL FLYOUT GUARD] Active shell flyout/menu HWND %d ('%s', proc='%s') is open. "
+                        "Skipping background window activation to preserve menu state.",
+                        fg_hwnd, fg_cls_lower, fg_proc_lower
+                    )
+                    return False
+
+            cbuf = ctypes.create_unicode_buffer(128)
+            user32.GetClassNameW(hwnd_to_activate, cbuf, 128)
+            cls_lower = cbuf.value.lower()
+            if cls_lower in shell_and_flyout_classes:
+                return False
+
+            # If window is minimized (iconic), restore it
+            if user32.IsIconic(hwnd_to_activate):
+                user32.ShowWindow(hwnd_to_activate, 9)  # SW_RESTORE
+
+            logger.info(
+                "[WINDOW FOCUS ACTIVATION] Target at %s belongs to background window HWND %d ('%s'). Bringing to foreground.",
+                coords, hwnd_to_activate, cls_lower
+            )
+
+            # Standard Win32 foreground activation sequence
+            user32.ShowWindow(hwnd_to_activate, 5)  # SW_SHOW
+            user32.BringWindowToTop(hwnd_to_activate)
+            user32.SetForegroundWindow(hwnd_to_activate)
+
+            # If SetForegroundWindow didn't take due to Windows foreground lock, attach thread input
+            cur_fg = user32.GetForegroundWindow()
+            if cur_fg != hwnd_to_activate and cur_fg != 0:
+                kernel32 = ctypes.windll.kernel32
+                cur_thread = kernel32.GetCurrentThreadId()
+                fg_thread = user32.GetWindowThreadProcessId(cur_fg, None)
+                target_thread = user32.GetWindowThreadProcessId(hwnd_to_activate, None)
+                if fg_thread and target_thread and cur_thread:
+                    attached = bool(user32.AttachThreadInput(cur_thread, target_thread, True))
+                    try:
+                        user32.SetForegroundWindow(hwnd_to_activate)
+                        user32.BringWindowToTop(hwnd_to_activate)
+                    finally:
+                        if attached:
+                            user32.AttachThreadInput(cur_thread, target_thread, False)
+
+            # Monitor Relocation Guard: ensure activated window is snapped to target monitor
+            mon_idx = getattr(getattr(self.config, "vision", None), "monitor_index", 1) if self.config is not None else 1
+            relocate_window_to_monitor(hwnd_to_activate, mon_idx)
+
+            time.sleep(0.06)  # Brief settle for WM_ACTIVATE
+            return True
+        except Exception as exc:
+            logger.debug("[WINDOW FOCUS ACTIVATION] Error activating target window: %s", exc)
+            return False
+
+    def _refine_click_target(
+        self,
+        coords: Tuple[int, int],
+        action: ActionPlan,
+        som_elements: List[UIElement],
+        frame: Optional[np.ndarray] = None,
+        frame_origin: Tuple[int, int] = (0, 0),
+        cua_mode: bool = False,
+    ) -> Tuple[Tuple[int, int], Optional[str]]:
+        """
+        Applies CentroidSnapper (sub-millimeter button centering for <=120x120 px controls)
+        and Pre-Click Optical Zoom verification (Hybrid Option C).
+        Returns (refined_coords, mismatch_error_or_None).
+        """
+        rx, ry = coords
+        orig_coords = (rx, ry)
+        snap_strategy = "none"
+        matched_label = ""
+        optical_tier: Optional[str] = None
+        target_glyph: Optional[str] = None
+
+        # 1. Centroid Button Snapping (when target_id wasn't already centered by SoM lookup)
+        if action.target_id is None:
+            contour_frame = (
+                frame
+                if action.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK)
+                else None
+            )
+            snap_res = self.centroid_snapper.snap_with_details(
+                x=rx,
+                y=ry,
+                elements=som_elements,
+                frame=contour_frame,
+                frame_origin=frame_origin,
+                use_uia_point=bool(cua_mode and not som_elements),
+            )
+            snap_strategy = snap_res.strategy
+            matched_label = snap_res.matched_label or ""
+            if snap_res.snapped and self.validate_coordinates(snap_res.x, snap_res.y):
+                logger.info(
+                    "[CENTROID SNAPPING] Snapped target from (%d, %d) to (%d, %d) via %s (delta: %+d, %+d, label=%r)",
+                    rx,
+                    ry,
+                    snap_res.x,
+                    snap_res.y,
+                    snap_res.strategy,
+                    snap_res.delta_x,
+                    snap_res.delta_y,
+                    matched_label,
+                )
+                rx, ry = snap_res.x, snap_res.y
+            else:
+                logger.debug(
+                    "[CENTROID NO-SNAP] (%d, %d) strategy=%s label=%r",
+                    rx,
+                    ry,
+                    snap_strategy,
+                    matched_label,
+                )
+
+        # 2. Pre-Click Optical Zoom Verification (128x128 native crop, Hybrid Option C)
+        if (
+            frame is not None
+            and action.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK)
+        ):
+            target_glyph = extract_target_glyph_hint(action.reasoning)
+            if target_glyph:
+                opt_res = self.optical_verifier.verify_and_nudge(
+                    x=rx,
+                    y=ry,
+                    frame=frame,
+                    target_glyph=target_glyph,
+                    frame_origin=frame_origin,
+                    vlm_glance_fn=self.vlm_glance_fn if cua_mode else None,
+                )
+                optical_tier = opt_res.tier_used
+                if not opt_res.verified:
+                    self.last_refinement = {
+                        "raw_coords": orig_coords,
+                        "final_coords": (rx, ry),
+                        "snap_strategy": snap_strategy,
+                        "matched_label": matched_label,
+                        "optical_tier": optical_tier,
+                        "target_glyph": target_glyph,
+                    }
+                    logger.warning(
+                        "[PRE-CLICK MISMATCH] Optical verifier rejected click at (%d, %d) for target %r: %s",
+                        rx,
+                        ry,
+                        target_glyph,
+                        opt_res.mismatch_reason,
+                    )
+                    return (rx, ry), f"Pre-click optical mismatch for '{target_glyph}': {opt_res.mismatch_reason}"
+                if (opt_res.nudge_dx != 0 or opt_res.nudge_dy != 0) and self.validate_coordinates(opt_res.x, opt_res.y):
+                    logger.info(
+                        "[OPTICAL ZOOM NUDGE] Refined (%d, %d) -> (%d, %d) via %s (target=%r, delta: %+d, %+d)",
+                        rx,
+                        ry,
+                        opt_res.x,
+                        opt_res.y,
+                        opt_res.tier_used,
+                        target_glyph,
+                        opt_res.nudge_dx,
+                        opt_res.nudge_dy,
+                    )
+                    rx, ry = opt_res.x, opt_res.y
+                else:
+                    logger.debug(
+                        "[OPTICAL ZOOM] (%d, %d) verified via %s (target=%r, no nudge)",
+                        rx,
+                        ry,
+                        opt_res.tier_used,
+                        target_glyph,
+                    )
+
+        self.last_refinement = {
+            "raw_coords": orig_coords,
+            "final_coords": (rx, ry),
+            "snap_strategy": snap_strategy,
+            "matched_label": matched_label,
+            "optical_tier": optical_tier,
+            "target_glyph": target_glyph,
+        }
+        return (rx, ry), None
+
     def dispatch(
         self,
         action: ActionPlan,
         som_elements: List[UIElement],
         cancellation_token: Optional[threading.Event] = None,
         excluded_rect: Optional[Tuple[int, int, int, int]] = None,
+        cua_mode: bool = False,
+        frame: Optional[np.ndarray] = None,
+        frame_origin: Tuple[int, int] = (0, 0),
+        target_process: Optional[str] = None,
+        user_goal: str = "",
     ) -> ActionResult:
         """Dispatches action command to physical mouse/keyboard drivers."""
+        self.last_refinement = None
         logger.info(
             "[ACTION DISPATCH] Action: %s | Target: %s | Coords: %s | Text: %r | Keys: %s | Reasoning: %s",
             action.action.value,
@@ -825,6 +1855,7 @@ class ActionDispatcher:
             ActionType.CLICK,
             ActionType.DOUBLE_CLICK,
             ActionType.RIGHT_CLICK,
+            ActionType.DRAG,
             ActionType.CLICK_AND_TYPE,
         )
 
@@ -849,8 +1880,46 @@ class ActionDispatcher:
                     resolved_coordinates=coords,
                     action_executed=action,
                 )
-            resolved_coords = coords
+            refined_coords, mismatch_err = self._refine_click_target(
+                coords=coords,
+                action=action,
+                som_elements=som_elements,
+                frame=frame,
+                frame_origin=frame_origin,
+                cua_mode=cua_mode,
+            )
+            if mismatch_err:
+                return ActionResult(
+                    success=False,
+                    error=mismatch_err,
+                    resolved_coordinates=refined_coords,
+                    action_executed=action,
+                )
+            resolved_coords = refined_coords
+            host_click_err = self._check_host_window_click_safety(resolved_coords)
+            if host_click_err:
+                logger.warning("[HOST CLICK GUARD] %s (coords=%s)", host_click_err, resolved_coords)
+                return ActionResult(
+                    success=False,
+                    error=host_click_err,
+                    resolved_coordinates=resolved_coords,
+                    action_executed=action,
+                )
+            resolved_coords, desktop_guard_err = self._check_desktop_double_click_safety(
+                action=action,
+                coords=resolved_coords,
+                user_goal=user_goal,
+            )
+            if desktop_guard_err:
+                logger.warning("[DESKTOP CLICK GUARD] %s (coords=%s)", desktop_guard_err, resolved_coords)
+                return ActionResult(
+                    success=False,
+                    error=desktop_guard_err,
+                    resolved_coordinates=resolved_coords,
+                    action_executed=action,
+                )
             self._evade_companion_dock_if_needed(resolved_coords, excluded_rect=excluded_rect)
+            self._activate_target_window_if_needed(coords=resolved_coords)
 
         if self.bridge:
             self.bridge.notify_telemetry(f"Executing {action.action.value}")
@@ -920,6 +1989,34 @@ class ActionDispatcher:
                         action_executed=action,
                     )
 
+            elif action.action == ActionType.DRAG:
+                end_coords = action.end_coordinates or resolved_coords
+                if not self.validate_coordinates(end_coords[0], end_coords[1]):
+                    return ActionResult(
+                        success=False,
+                        error=f"Drag end coordinates {end_coords} out of desktop bounds",
+                        resolved_coordinates=resolved_coords,
+                        action_executed=action,
+                    )
+                if not self.mouse_driver:
+                    return ActionResult(success=True, resolved_coordinates=resolved_coords, action_executed=action)
+                ok = self.mouse_driver.drag_and_drop(
+                    resolved_coords[0],
+                    resolved_coords[1],
+                    end_coords[0],
+                    end_coords[1],
+                    cancellation_token=cancellation_token,
+                )
+                if not ok:
+                    interrupted = bool(cancellation_token and cancellation_token.is_set())
+                    return ActionResult(
+                        success=False,
+                        interrupted=interrupted,
+                        error="Drag was cancelled or interrupted",
+                        resolved_coordinates=resolved_coords,
+                        action_executed=action,
+                    )
+
             elif action.action == ActionType.CLICK_AND_TYPE:
                 if self.keyboard_driver:
                     ok = self.keyboard_driver.click_and_type(
@@ -947,6 +2044,7 @@ class ActionDispatcher:
                 if action.target_id is not None or action.coordinates is not None:
                     coords, err = self.resolve_target(action, som_elements)
                     if coords and self.validate_coordinates(coords[0], coords[1]) and self.keyboard_driver:
+                        self._activate_target_window_if_needed(coords=coords)
                         ok = self.keyboard_driver.click_and_type(
                             x=coords[0],
                             y=coords[1],
@@ -970,7 +2068,7 @@ class ActionDispatcher:
                             resolved_coordinates=coords,
                             action_executed=action,
                         )
-                # Guard: never blindly type into CompanionDock's own input box
+                # Guard: ensure target application has foreground focus and never blindly type into CompanionDock
                 try:
                     import ctypes
                     user32 = ctypes.windll.user32
@@ -978,6 +2076,14 @@ class ActionDispatcher:
                     if fg:
                         cbuf = ctypes.create_unicode_buffer(128)
                         user32.GetClassNameW(fg, cbuf, 128)
+                        cls = cbuf.value.lower()
+                        if cls in ("progman", "workerw", "shell_traywnd", "shell_secondarytraywnd"):
+                            app_el = next(
+                                (e for e in som_elements if e.is_active_window and (e.process_name or "").lower() not in ("explorer.exe", "")),
+                                None,
+                            )
+                            if app_el:
+                                self._activate_target_window_if_needed(coords=(app_el.center_x, app_el.center_y))
                         if cbuf.value == "CompanionDock":
                             edit_elem = next(
                                 (e for e in som_elements if e.role in ("Edit", "Document")),
@@ -1007,12 +2113,31 @@ class ActionDispatcher:
                 except Exception:
                     pass
 
-                # Caret focus verification prior to typing (exempt console host windows which use console buffer cursors)
+                # Caret focus verification prior to typing:
+                # 1. Console host windows use console buffer cursors, not standard Win32 blinking carets.
+                # 2. Windows shell search, Run dialogs, and UWP apps (StartMenuExperienceHost, SearchApp, CalculatorApp)
+                #    do not report a standard Win32 GUI_CARETBLINKING caret.
+                # 3. Under CUA mode (single-pass multimodal VLM), the model directly decides typing context;
+                #    if a window has focus or desktop is targeted, we allow physical typing rather than aborting.
                 is_console_target = any(
                     e.is_active_window and (e.process_name or "").strip().lower() in ("conhost.exe", "cmd.exe", "powershell.exe", "windowsterminal.exe")
                     for e in som_elements
                 )
-                if not is_console_target and not self.verify_caret_focus(cancellation_token=cancellation_token):
+                is_shell_or_uwp_target = any(
+                    e.is_active_window and (e.process_name or "").strip().lower() in (
+                        "searchapp.exe",
+                        "searchui.exe",
+                        "searchhost.exe",
+                        "startmenuexperiencehost.exe",
+                        "calculatorapp.exe",
+                        "calculator.exe",
+                        "applicationframehost.exe",
+                    )
+                    for e in som_elements
+                )
+                exempt_caret_check = is_console_target or is_shell_or_uwp_target or cua_mode
+
+                if not exempt_caret_check and not self.verify_caret_focus(cancellation_token=cancellation_token):
                     interrupted = bool(cancellation_token and cancellation_token.is_set())
                     err_msg = "Interrupted by physical input" if interrupted else "Caret focus not detected"
                     logger.warning("[ACTION MISFIRE] Typing aborted: %s. Keystrokes suppressed to prevent unfocused input.", err_msg)
@@ -1041,6 +2166,15 @@ class ActionDispatcher:
             elif action.action == ActionType.HOTKEY:
                 if self.keyboard_driver:
                     keys = action.keys or [k.strip() for k in (action.text or "").split("+") if k.strip()]
+                    self._recover_monitor_window_focus(keys, target_process=target_process)
+                    safety_err = self._check_foreground_hotkey_safety(keys)
+                    if safety_err:
+                        logger.warning("[HOTKEY SAFETY GUARD] %s", safety_err)
+                        return ActionResult(
+                            success=False,
+                            error=safety_err,
+                            action_executed=action,
+                        )
                     ok = self.keyboard_driver.hotkey(*keys, cancellation_token=cancellation_token)
                     if not ok:
                         interrupted = bool(cancellation_token and cancellation_token.is_set())
@@ -1136,9 +2270,18 @@ class ActionDispatcher:
                         resolved_coordinates=coords,
                         action_executed=action,
                     )
-                # 2. Fallback: minimize foreground window via ShowWindow(SW_MINIMIZE) ONLY if it is not the Windows Desktop/Shell
+                # 2. Fallback: minimize foreground window via ShowWindow(SW_MINIMIZE) ONLY if safe & non-shell
+                self._recover_monitor_window_focus(["win", "down"], target_process=target_process)
+                safety_err = self._check_foreground_hotkey_safety(["win", "down"])
+                if safety_err:
+                    logger.warning("[MINIMIZE SAFETY GUARD] %s", safety_err)
+                    return ActionResult(
+                        success=False,
+                        error=safety_err,
+                        action_executed=action,
+                    )
                 try:
-                    if sys.platform == "win32":
+                    if sys.platform == "win32" and not self._is_simulated_mode():
                         user32 = ctypes.windll.user32
                         fg = user32.GetForegroundWindow()
                         if fg:
@@ -1215,6 +2358,15 @@ class ActionDispatcher:
                     )
                 # 2. Fallback: close foreground window via Alt+F4
                 if self.keyboard_driver:
+                    self._recover_monitor_window_focus(["alt", "f4"], target_process=target_process)
+                    safety_err = self._check_foreground_hotkey_safety(["alt", "f4"])
+                    if safety_err:
+                        logger.warning("[CLOSE SAFETY GUARD] %s", safety_err)
+                        return ActionResult(
+                            success=False,
+                            error=safety_err,
+                            action_executed=action,
+                        )
                     ok = self.keyboard_driver.hotkey("alt", "f4", cancellation_token=cancellation_token)
                     return ActionResult(
                         success=ok,
@@ -1270,6 +2422,41 @@ class ActionDispatcher:
                         action_executed=action,
                         returncode=-1,
                     )
+
+            elif action.action == ActionType.BURST:
+                for sub in action.burst_actions or []:
+                    if sub.action == ActionType.HOTKEY:
+                        sub_keys = sub.keys or [k.strip() for k in (sub.text or "").split("+") if k.strip()]
+                        self._recover_monitor_window_focus(sub_keys, target_process=target_process)
+                        safety_err = self._check_foreground_hotkey_safety(sub_keys)
+                        if safety_err:
+                            logger.warning("[BURST HOTKEY SAFETY GUARD] %s", safety_err)
+                            return ActionResult(
+                                success=False,
+                                error=safety_err,
+                                action_executed=action,
+                            )
+                burst_res = self.reflex_dispatcher.execute_burst(
+                    burst_action=action,
+                    cancellation_token=cancellation_token,
+                )
+                final_res_coords = burst_res.resolved_coordinates_list[-1] if burst_res.resolved_coordinates_list else None
+                self.last_refinement = {
+                    "raw_coords": action.coordinates,
+                    "final_coords": final_res_coords,
+                    "snap_strategy": "reflex_burst",
+                    "matched_label": f"{burst_res.executed_count}/{burst_res.total_count} executed",
+                    "optical_tier": None,
+                    "target_glyph": None,
+                    "burst_coords": burst_res.resolved_coordinates_list,
+                }
+                return ActionResult(
+                    success=burst_res.success,
+                    interrupted=burst_res.interrupted,
+                    error=burst_res.error,
+                    resolved_coordinates=final_res_coords,
+                    action_executed=action,
+                )
 
             elif action.action in (ActionType.DONE, ActionType.OFFLOAD_WEB_AI):
                 return ActionResult(success=True, action_executed=action, returncode=0)
@@ -1477,6 +2664,77 @@ class DualChannelRouter:
         return " ".join(text.split()).strip()
 
 
+_OPEN_ENDED_MULTI_CUES: Tuple[str, ...] = (
+    " then ",
+    " after that ",
+    " compare ",
+    " choose ",
+    " decide ",
+    " best ",
+    " convert ",
+    " organize ",
+    " whichever ",
+    " or ",
+)
+
+
+def is_single_window_mgmt_goal(user_goal: str) -> bool:
+    """Returns True for simple single-window close/minimize/dismiss goals."""
+    g = (user_goal or "").lower().strip()
+    return bool(
+        re.match(r"^(?:please\s+)?(?:close|minimize|minimise|hide|dismiss|exit|quit)\b", g)
+        and "," not in g
+        and " and " not in g
+        and not any(cue in g for cue in _OPEN_ENDED_MULTI_CUES)
+    )
+
+
+def should_trigger_proactive_plan(
+    user_goal: str,
+    target_app: Optional[str],
+    affordance: ActionAffordance,
+    has_active_skill: bool,
+    parasite_skill: Any,
+    config: Optional[AppConfig] = None,
+) -> bool:
+    """
+    Pure general gate (§7.3 compliant, zero app heuristics) deciding whether to invoke
+    ParasiteSkill upfront for open-ended program selection and multi-stage planning.
+    """
+    if parasite_skill is None or not callable(getattr(parasite_skill, "is_available", None)):
+        return False
+    if not parasite_skill.is_available():
+        return False
+
+    ps_cfg = getattr(config, "parasite_skill", None) if config is not None else getattr(parasite_skill, "config", None)
+    if ps_cfg is None:
+        return False
+    if not bool(getattr(ps_cfg, "proactive_planning", True)):
+        return False
+
+    mode = str(getattr(ps_cfg, "proactive_mode", "open_ended") or "open_ended").lower().strip()
+    if mode == "off" or has_active_skill:
+        return False
+    if mode == "always":
+        return True
+
+    # open_ended mode:
+    if affordance == ActionAffordance.STRATEGIC_ADVISOR:
+        return True
+    g = (user_goal or "").lower().strip()
+    is_single_window_mgmt = is_single_window_mgmt_goal(user_goal)
+    if target_app is None and affordance != ActionAffordance.LOCAL_DEVELOPER_TOOL and not is_single_window_mgmt:
+        return True
+
+    if any(cue in g for cue in _OPEN_ENDED_MULTI_CUES):
+        return True
+    if g.count(",") >= 2 or (
+        g.count(" and ") >= 2 and affordance != ActionAffordance.LOCAL_DEVELOPER_TOOL
+    ):
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # End-to-End Orchestrator: DualMindPipeline
 # ---------------------------------------------------------------------------
@@ -1502,9 +2760,13 @@ class DualMindPipeline:
         config: Optional[AppConfig] = None,
         escalation_sm: Optional[EscalationStateMachine] = None,
         affordance_evaluator: Optional[AffordanceEvaluator] = None,
+        skill_registry: Optional[SkillRegistry] = None,
+        parasite_skill: Optional[Any] = None,
+        trace_recorder: Optional[TraceRecorder] = None,
+        app_memory: Optional[Any] = None,
     ) -> None:
         self.brain_manager = brain_manager
-        self.memory = memory or EpisodicMemory()
+        self.memory = memory if memory is not None else EpisodicMemory()
         self.escalation_sm = escalation_sm or (
             getattr(self.memory, "escalation_sm", None) or EscalationStateMachine()
         )
@@ -1519,27 +2781,398 @@ class DualMindPipeline:
         self.config = config
         self.window_rules = getattr(config, "window_rules", None) or _DEFAULT_WINDOW_RULES
         self.affordance_evaluator = affordance_evaluator or AffordanceEvaluator()
+        self.skill_registry = skill_registry
+        self.parasite_skill = parasite_skill
+        self.trace_recorder = trace_recorder
+        self.app_memory = app_memory
 
         self.persona_engine = PersonaEngine(
             brain_manager=self.brain_manager,
             config=self.config,
             bridge=self.bridge,
         )
+        enable_micro_glance = bool(getattr(getattr(self.config, "vision", None), "enable_vlm_micro_glance", False))
         self.action_dispatcher = ActionDispatcher(
             mouse_driver=self.mouse_driver,
             keyboard_driver=self.keyboard_driver,
             bridge=self.bridge,
             config=self.config,
+            vlm_glance_fn=self._vlm_micro_glance if enable_micro_glance else None,
+            window_guard=self.window_guard,
         )
         self.dual_channel_router = DualChannelRouter(
             bridge=self.bridge,
             persona_engine=self.persona_engine,
         )
         self.resolver = UniversalAppResolver()
+        self.goal_verifier = RuntimeGoalVerifier()
         self.foveated_engine = FoveatedVisionEngine(capturer=self.capturer)
         self.vlm_grounder = VLMGrounder(backend=self.brain_manager)
         self.last_foveated_frame: Optional[FoveatedFrame] = None
         self.active_plan: Optional[LivingPlan] = None
+        sys_cfg = getattr(self.config, "system", None)
+        self.screenshot_recorder = DebugScreenshotRecorder(
+            base_dir=getattr(sys_cfg, "data_dir", "data") if sys_cfg is not None else "data",
+            enabled=bool(getattr(sys_cfg, "save_debug_screenshots", False)),
+            max_episodes=int(getattr(sys_cfg, "max_screenshot_episodes", 20)) if sys_cfg is not None else 20,
+        )
+        self.consent_handler: Optional[Callable[[Any], bool]] = None
+        self._debug_step_counter: int = 0
+        self._active_skill_match: Optional[SkillMatch] = None
+        self._stale_skill_match: Optional[SkillMatch] = None
+        self._episode_skill_id: Optional[str] = None
+        self._drift_checked_skill_id: Optional[str] = None
+        self._last_strike_cause: RecoveryTrigger = RecoveryTrigger.CONSECUTIVE_STRIKES
+        self._episode_fast_path_steps: int = 0
+        self._fast_pathed_step_ids: set[int] = set()
+        self._directive_wait_retries: Dict[int, int] = {}
+        self._episode_farmed_plan_id: Optional[int] = None
+        self._episode_plan_source: str = "local"
+        self._episode_expected_process: Optional[str] = None
+        self._episode_parasite_invocations: int = 0
+        self._episode_parasite_status: Optional[str] = None
+        self._episode_veto_count: int = 0
+        self._consecutive_vetoed_dones: int = 0
+        self._consecutive_idle_waits: int = 0
+        self._episode_fast_path_abort_reason: Optional[str] = None
+        self._episode_consult_exhausted: bool = False
+        self._cua_loop_warning: Optional[str] = None
+        self._denied_risk_signatures: Set[Tuple[Any, ...]] = set()
+        self._pending_course_correction: Optional[str] = None
+        self._active_operator_steering: Optional[str] = None
+        self._active_operator_steering_ttl: int = 0
+        self._force_parasite_consult: bool = False
+        self._force_parasite_hint: Optional[str] = None
+        self._operator_lock = threading.RLock()
+
+    def request_course_correction(self, instruction: str) -> None:
+        """Queues a live operator steering instruction for the next step and resets strikes."""
+        cleaned = str(instruction or "").strip()
+        if not cleaned:
+            return
+        with self._operator_lock:
+            self._pending_course_correction = cleaned
+            self.escalation_sm.local_strikes = 0
+            if self.memory:
+                self.memory.reset_loop_detector()
+        logger.info("[COURSE CORRECTION] Queued operator steering: %s", cleaned)
+
+    def request_parasite_consult(self, hint: Optional[str] = None) -> None:
+        """Forces an immediate Tier-2 ParasiteSkill (Gemini) consultation on the next step."""
+        with self._operator_lock:
+            self._force_parasite_consult = True
+            self._force_parasite_hint = str(hint).strip() if hint else None
+            self._episode_consult_exhausted = False
+            self.escalation_sm.current_tier = CadenceTier.TIER_2_CONSULT
+            if self.memory:
+                self.memory.reset_loop_detector()
+            if self.parasite_skill is not None and hasattr(self.parasite_skill, "reset_circuit_breaker"):
+                self.parasite_skill.reset_circuit_breaker()
+        logger.info("[PARASITE IT] Immediate Gemini consultation requested (hint=%r).", self._force_parasite_hint)
+
+    @staticmethod
+    def _normalize_expected_process(prog: Optional[str]) -> Optional[str]:
+        """Normalizes app/command strings (e.g. 'Notepad', 'calc', 'notepad.exe') to executable names."""
+        if not isinstance(prog, str):
+            return None
+        raw = prog.strip()
+        cleaned = raw.lower()
+        if not cleaned:
+            return None
+        aliases = {
+            "notepad": "notepad.exe",
+            "notepad.exe": "notepad.exe",
+            "calc": "CalculatorApp.exe",
+            "calc.exe": "CalculatorApp.exe",
+            "calculator": "CalculatorApp.exe",
+            "windows calculator": "CalculatorApp.exe",
+            "calculatorapp": "CalculatorApp.exe",
+            "calculatorapp.exe": "CalculatorApp.exe",
+            "paint": "mspaint.exe",
+            "mspaint": "mspaint.exe",
+            "mspaint.exe": "mspaint.exe",
+            "microsoft paint": "mspaint.exe",
+            "cmd": "cmd.exe",
+            "cmd.exe": "cmd.exe",
+            "command prompt": "cmd.exe",
+            "powershell": "powershell.exe",
+            "powershell.exe": "powershell.exe",
+            "explorer": "explorer.exe",
+            "explorer.exe": "explorer.exe",
+            "file explorer": "explorer.exe",
+        }
+        if cleaned in aliases:
+            return aliases[cleaned]
+        if cleaned.endswith(".exe"):
+            return raw
+        return None
+
+    def _are_skills_enabled(self) -> bool:
+        """Checks whether local skill matching is active (defaults off in AppConfig unless explicitly enabled)."""
+        if self.skill_registry is None:
+            return False
+        if self.config is None:
+            return True
+        skills_cfg = getattr(self.config, "skills", None)
+        if skills_cfg is None:
+            return False
+        return bool(getattr(skills_cfg, "enabled", False))
+
+    def start_debug_episode(self, goal: str = "") -> Optional[Any]:
+        """Resets per-episode debug screenshot folder, step counter, and P4.4 cognitive trackers."""
+        self._debug_step_counter = 0
+        self._active_skill_match = None
+        self._stale_skill_match = None
+        self._episode_skill_id = None
+        self._drift_checked_skill_id = None
+        self._last_strike_cause = RecoveryTrigger.CONSECUTIVE_STRIKES
+        self._episode_fast_path_steps = 0
+        self._fast_pathed_step_ids.clear()
+        self._directive_wait_retries.clear()
+        self._episode_farmed_plan_id = None
+        self._episode_plan_source = "local"
+        self._episode_expected_process = None
+        self._episode_parasite_invocations = 0
+        self._episode_parasite_status = None
+        self._episode_veto_count = 0
+        self._consecutive_vetoed_dones = 0
+        self._consecutive_idle_waits = 0
+        self._episode_fast_path_abort_reason = None
+        self._episode_consult_exhausted = False
+        self._cua_loop_warning = None
+        with self._operator_lock:
+            self._denied_risk_signatures.clear()
+            self._pending_course_correction = None
+            self._force_parasite_consult = False
+            self._force_parasite_hint = None
+        if self.parasite_skill is not None and hasattr(self.parasite_skill, "reset_episode_budget"):
+            self.parasite_skill.reset_episode_budget()
+        if self.trace_recorder is not None:
+            self.trace_recorder.reset()
+        if self.screenshot_recorder.enabled:
+            return self.screenshot_recorder.start_episode(goal=goal)
+        return None
+
+    def _try_directive_fast_path(
+        self,
+        step: Optional[PlanStep],
+        active_window: Optional[Any],
+        expected_process: Optional[str],
+        token: Optional[threading.Event],
+    ) -> Optional[Tuple[str, ActionPlan]]:
+        """Deterministic fast path for keyboard/wait StepDirectives (skips VLM when all gates pass)."""
+        if step is None or getattr(step, "directive", None) is None:
+            return None
+        if step.step_id in self._fast_pathed_step_ids:
+            return None
+        if token is not None and token.is_set():
+            return None
+
+        directive = step.directive
+        assert directive is not None
+        if directive.verb not in ("HOTKEY", "WAIT", "TYPE"):
+            return None
+
+        if self.window_guard and hasattr(self.window_guard, "is_safe_to_operate"):
+            try:
+                if not bool(self.window_guard.is_safe_to_operate()):
+                    return None
+            except Exception:
+                return None
+
+        fg_proc = (getattr(active_window, "process_name", None) or "").strip().lower() if active_window is not None else ""
+        fg_title = (getattr(active_window, "title", None) or "").strip() if active_window is not None else ""
+        eff_expected_proc = self._normalize_expected_process(expected_process)
+        if step.intent == StepIntent.LAUNCH_OR_ACTIVATE and directive.verb == "HOTKEY":
+            norm_keys = [str(k).strip().lower() for k in (directive.keys or [])]
+            if norm_keys == ["alt", "tab"] and active_window is not None:
+                tab_expected_proc = eff_expected_proc
+                if tab_expected_proc is None:
+                    desc_l = f"{step.target_description or ''} {step.description or ''}".lower()
+                    for kw, proc_name in (
+                        ("notepad", "notepad.exe"),
+                        ("calculator", "CalculatorApp.exe"),
+                        ("mspaint", "mspaint.exe"),
+                        ("paint", "mspaint.exe"),
+                        ("explorer", "explorer.exe"),
+                        ("powershell", "powershell.exe"),
+                        ("cmd", "cmd.exe"),
+                    ):
+                        if kw in desc_l:
+                            tab_expected_proc = proc_name
+                            break
+                    if tab_expected_proc is None and re.search(r"\bcalc\b", desc_l):
+                        tab_expected_proc = "CalculatorApp.exe"
+                if tab_expected_proc and SkillRegistry.process_matches_window(
+                    fg_proc, tab_expected_proc, fg_title
+                ):
+                    self._fast_pathed_step_ids.add(step.step_id)
+                    self._episode_fast_path_steps += 1
+                    wait_plan = ActionPlan(
+                        action=ActionType.WAIT,
+                        wait_ms=100,
+                        reasoning=(
+                            f"Target window ({tab_expected_proc}) already focused; skipping alt+tab (step {step.step_id})"
+                        ),
+                    )
+                    return (
+                        f"Target window ({tab_expected_proc}) already focused; skipping alt+tab.",
+                        wait_plan,
+                    )
+        in_shell_launcher = fg_proc in (
+            "explorer.exe",
+            "searchapp.exe",
+            "searchhost.exe",
+            "startmenuexperiencehost.exe",
+        )
+        is_shell_launch_input = (
+            step.step_id <= 2
+            and directive.verb == "TYPE"
+            and bool(directive.submit)
+            and in_shell_launcher
+        )
+        if step.intent == StepIntent.LAUNCH_OR_ACTIVATE and directive.verb == "TYPE" and not in_shell_launcher:
+            self._episode_fast_path_abort_reason = (
+                f"step_{step.step_id}_launch_type_non_shell:{fg_proc or 'unknown'}"
+            )
+            logger.info(
+                "[FAST-PATH SKIP] Refusing launch TYPE %r on non-shell foreground %r (step %d).",
+                directive.text,
+                fg_proc,
+                step.step_id,
+            )
+            return None
+        is_launch_step = (
+            step.intent == StepIntent.LAUNCH_OR_ACTIVATE
+            or (step.rationale or "").startswith("launch:")
+            or is_shell_launch_input
+        )
+        is_conclude_wait = (step.intent == StepIntent.CONCLUDE and directive.verb == "WAIT")
+        proc_mismatch = bool(
+            not is_launch_step
+            and not is_conclude_wait
+            and eff_expected_proc
+            and active_window is not None
+            and not SkillRegistry.process_matches_window(fg_proc, eff_expected_proc, fg_title)
+        )
+        is_calculator_target = bool(
+            active_window is not None
+            and SkillRegistry.process_matches_window(fg_proc, "CalculatorApp.exe", fg_title)
+        )
+        already_waited_caret = bool(
+            self._fast_pathed_step_ids
+            and self._directive_wait_retries.get(step.step_id, 0) >= 1
+            and eff_expected_proc is not None
+            and active_window is not None
+            and SkillRegistry.process_matches_window(fg_proc, eff_expected_proc, fg_title)
+        )
+        caret_missing = bool(
+            directive.verb == "TYPE"
+            and not is_launch_step
+            and (step.rationale or "") != "launch:submit_search"
+            and not is_calculator_target
+            and not already_waited_caret
+            and not check_caret_focus()
+        )
+        if proc_mismatch or caret_missing:
+            # After prior fast-path launch steps, allow up to 2 short settles before VLM fallback
+            if self._fast_pathed_step_ids and self._directive_wait_retries.get(step.step_id, 0) < 2:
+                self._directive_wait_retries[step.step_id] = (
+                    self._directive_wait_retries.get(step.step_id, 0) + 1
+                )
+                reason = "window process focus" if proc_mismatch else "caret focus"
+                wait_plan = ActionPlan(
+                    action=ActionType.WAIT,
+                    wait_ms=1000,
+                    reasoning=f"Waiting for post-launch {reason} readiness (step {step.step_id})",
+                )
+                return f"Waiting for post-launch {reason} readiness (step {step.step_id}).", wait_plan
+            self._episode_fast_path_abort_reason = (
+                f"step_{step.step_id}_{'proc_mismatch' if proc_mismatch else 'caret_missing'}:{fg_proc or 'unknown'}"
+            )
+            return None
+
+        if directive.verb == "TYPE":
+            action_plan = ActionPlan(
+                action=ActionType.TYPE,
+                text=directive.text or "",
+                submit=bool(directive.submit),
+                clear_first=bool(getattr(directive, "clear_first", False)),
+                reasoning=f"Directive fast-path TYPE (step {step.step_id})",
+            )
+            thought = f"Executing directive fast-path TYPE (step {step.step_id})."
+        elif directive.verb == "HOTKEY":
+            keys = list(directive.keys or [])
+            if not keys:
+                return None
+            action_plan = ActionPlan(
+                action=ActionType.HOTKEY,
+                keys=keys,
+                reasoning=f"Directive fast-path HOTKEY {'+'.join(keys)} (step {step.step_id})",
+            )
+            thought = f"Executing directive fast-path HOTKEY {'+'.join(keys)} (step {step.step_id})."
+        elif is_conclude_wait:
+            action_plan = ActionPlan(
+                action=ActionType.DONE,
+                reasoning=f"Directive fast-path CONCLUDE (step {step.step_id})",
+            )
+            thought = f"Executing directive fast-path CONCLUDE (step {step.step_id})."
+        else:
+            wait_ms = directive.wait_ms if directive.wait_ms > 0 else 500
+            action_plan = ActionPlan(
+                action=ActionType.WAIT,
+                wait_ms=wait_ms,
+                reasoning=f"Directive fast-path WAIT {wait_ms}ms (step {step.step_id})",
+            )
+            thought = f"Executing directive fast-path WAIT {wait_ms}ms (step {step.step_id})."
+
+        self._fast_pathed_step_ids.add(step.step_id)
+        self._episode_fast_path_steps += 1
+        return thought, action_plan
+
+    def _vlm_micro_glance(self, crop: np.ndarray, target_glyph: str) -> str:
+        """
+        Hybrid Option C Tier 2 fallback: sends a 128x128 pre-click crop (~20-36 visual tokens)
+        to the local VLM with max_tokens=8 to confirm or refine ambiguous visual targets.
+        Uses abstract symbolic placeholder OFFSET(dx, dy) only (Cadence Section 8).
+        """
+        if not bool(getattr(getattr(self.config, "vision", None), "enable_vlm_micro_glance", False)):
+            return ""
+        if (
+            self.brain_manager is None
+            or type(self.brain_manager).__name__ == "MagicMock"
+            or not getattr(self.brain_manager, "supports_vision", lambda: False)()
+            or not hasattr(self.brain_manager, "generate")
+        ):
+            return ""
+        try:
+            b64_crop = encode_image_to_base64(crop, format="JPEG", quality=85)
+            prompt = (
+                f"Target control: '{target_glyph}'. Inspect this 128x128 crop centered on the cursor. "
+                "Is the cursor on the target? Reply only YES, MISMATCH, or OFFSET(dx, dy)."
+            )
+            return self.brain_manager.generate(
+                prompt=prompt,
+                max_tokens=8,
+                temperature=0.0,
+                image_base64=b64_crop,
+            )
+        except Exception as exc:
+            logger.debug("VLM micro-glance fallback skipped: %s", exc)
+            return ""
+
+    def _resolve_frame_bounds(self, frame: Optional[np.ndarray]) -> Tuple[int, int, int, int]:
+        """Resolves (left, top, width, height) matching the captured frame's coordinate space."""
+        from parasite_ai.vision.capture import get_monitor_bounds, get_virtual_screen_bounds
+        mon_idx = getattr(getattr(self.config, "vision", None), "monitor_index", 0) if self.config is not None else 0
+        if isinstance(mon_idx, int) and mon_idx >= 1 and frame is not None:
+            try:
+                mbounds = get_monitor_bounds(mon_idx)
+                if frame.shape[1] == mbounds[2] and frame.shape[0] == mbounds[3]:
+                    return mbounds
+            except Exception:
+                pass
+        return get_virtual_screen_bounds()
 
     def evaluate_goal_affordance(
         self,
@@ -1554,18 +3187,108 @@ class DualMindPipeline:
         if (
             self.active_plan is not None
             and self.active_plan.user_goal == user_goal
-            and not self.active_plan.is_completed()
         ):
             return self.active_plan
 
+        self._active_skill_match = None
+        self._stale_skill_match = None
+        self._episode_skill_id = None
+        self._drift_checked_skill_id = None
+        self._last_strike_cause = RecoveryTrigger.CONSECUTIVE_STRIKES
+        self._episode_fast_path_steps = 0
+        self._fast_pathed_step_ids.clear()
+        self._directive_wait_retries.clear()
+        self._episode_farmed_plan_id = None
+        self._episode_plan_source = "local"
+        self._episode_expected_process = None
+        self._episode_parasite_invocations = 0
+        self._episode_parasite_status = None
+        self._episode_veto_count = 0
+        self._consecutive_vetoed_dones = 0
+        self._consecutive_idle_waits = 0
+        self._episode_fast_path_abort_reason = None
+        self._episode_consult_exhausted = False
+        self._cua_loop_warning = None
+        with self._operator_lock:
+            self._denied_risk_signatures.clear()
+            self._pending_course_correction = None
+            self._force_parasite_consult = False
+            self._force_parasite_hint = None
+
         active_title = ""
+        active_proc: Optional[str] = None
         if self.window_guard and hasattr(self.window_guard, "get_active_window_info"):
             try:
                 winfo = self.window_guard.get_active_window_info()
-                if winfo and hasattr(winfo, "title"):
-                    active_title = winfo.title
+                if winfo:
+                    t = getattr(winfo, "title", "")
+                    p = getattr(winfo, "process_name", None)
+                    if isinstance(t, str):
+                        active_title = t
+                    if isinstance(p, str) and p.strip():
+                        active_proc = p.strip()
             except Exception:
                 pass
+
+        # P4.4 Layer 1: Deterministic local SkillRegistry match (zero model calls)
+        if self._are_skills_enabled():
+            match = self.skill_registry.match(user_goal, active_process=active_proc)
+            if match is not None:
+                skill = match.skill
+                drift_ok = True
+                target_proc = (skill.preconditions.container_process or "").lower().strip()
+                cur_proc = (active_proc or "").lower().strip()
+                if (
+                    skill.type == SkillType.REFLEX_MICRO_SKILL
+                    and skill.invalidation.visual_anchors
+                    and (not target_proc or cur_proc == target_proc)
+                ):
+                    verdict = self.skill_registry.check_visual_drift(skill)
+                    self._drift_checked_skill_id = skill.id
+                    if verdict.checked and verdict.drifted:
+                        self.skill_registry.quarantine(skill.id, verdict.reason)
+                        drift_ok = False
+                if drift_ok:
+                    self._active_skill_match = match
+                    self._episode_skill_id = skill.id
+                    self._episode_plan_source = "skill"
+                    self._episode_expected_process = self._normalize_expected_process(
+                        skill.preconditions.container_process
+                    )
+                    plan = self.skill_registry.compile_to_living_plan(
+                        match, user_goal, active_process=active_proc, active_title=active_title
+                    )
+                    self.active_plan = plan
+                    return plan
+            else:
+                self._stale_skill_match = self.skill_registry.find_stale_match(
+                    user_goal, active_process=active_proc
+                )
+
+        # P4.5 Layer 1.5: Persistent SQLite AppMemory farmed-plan cache (zero Gemini calls)
+        if self.app_memory is not None and not is_single_window_mgmt_goal(user_goal):
+            try:
+                cached = self.app_memory.lookup_farmed_plan(user_goal, active_process=active_proc)
+                if cached is not None:
+                    plan_id, cached_plan = cached
+                    first_dir = cached_plan.steps[0].action if getattr(cached_plan, "steps", None) else None
+                    first_keys = [str(k).strip().lower() for k in (getattr(first_dir, "keys", None) or [])]
+                    starts_with_alt_tab = bool(
+                        first_dir is not None
+                        and getattr(first_dir, "verb", None) == "HOTKEY"
+                        and first_keys == ["alt", "tab"]
+                    )
+                    if not starts_with_alt_tab:
+                        self._episode_farmed_plan_id = plan_id
+                        self._episode_plan_source = "farmed"
+                        self._episode_expected_process = self._normalize_expected_process(
+                            getattr(cached_plan, "selected_program", None)
+                        )
+                        plan = cached_plan.to_living_plan(user_goal)
+                        self.active_plan = plan
+                        return plan
+            except Exception as exc:
+                logger.debug("AppMemory Layer 1.5 lookup failed: %s", exc)
 
         affordance_assessment = self.affordance_evaluator.evaluate(user_goal, active_title)
         if affordance_assessment.affordance == ActionAffordance.LOCAL_DEVELOPER_TOOL:
@@ -1576,41 +3299,171 @@ class DualMindPipeline:
             route = "GUI"
 
         target_app = self.resolver.extract_target_app(user_goal)
+
+        # P4.4 Layer 4: Proactive Open-Ended ParasiteSkill Planning (Gemini Web)
+        if should_trigger_proactive_plan(
+            user_goal=user_goal,
+            target_app=target_app,
+            affordance=affordance_assessment.affordance,
+            has_active_skill=(self._active_skill_match is not None),
+            parasite_skill=self.parasite_skill,
+            config=self.config,
+        ):
+            if self.bridge:
+                self.bridge.notify_state("OFFLOADING", "Focused")
+            cancel_tok = (
+                self.interrupt_guard.get_cancellation_token()
+                if self.interrupt_guard and hasattr(self.interrupt_guard, "get_cancellation_token")
+                else None
+            )
+            self._episode_parasite_invocations += 1
+            try:
+                res = self.parasite_skill.invoke(
+                    ParasiteRequest(
+                        phase=ParasitePhase.PROACTIVE_PLAN,
+                        user_goal=user_goal,
+                        recent_history=self.memory.format_for_prompt() if self.memory else "",
+                        include_screenshot=True,
+                    ),
+                    cancellation_token=cancel_tok,
+                )
+            except Exception as exc:
+                logger.warning("Proactive ParasiteSkill invocation raised unexpectedly: %s", exc)
+                res = None
+
+            if res is not None and res.ok and res.plan is not None:
+                self._episode_parasite_status = "OK"
+            elif res is not None and res.failure is not None:
+                self._episode_parasite_status = res.failure.value
+            else:
+                self._episode_parasite_status = "ERROR"
+
+            if res is not None:
+                if res.failure == ParasiteFailure.INTERRUPTED:
+                    self.escalation_sm.on_hardware_interrupt()
+                elif res.ok and res.plan is not None:
+                    if self.app_memory is not None:
+                        try:
+                            self._episode_farmed_plan_id = self.app_memory.store_farmed_plan(
+                                user_goal, res.plan, source="proactive"
+                            )
+                        except Exception as exc:
+                            logger.debug("AppMemory store_farmed_plan failed: %s", exc)
+                    self._episode_plan_source = "proactive_gemini"
+                    self._episode_expected_process = self._normalize_expected_process(
+                        getattr(res.plan, "selected_program", None)
+                    )
+                    plan = res.plan.to_living_plan(user_goal)
+                    self.active_plan = plan
+                    return plan
+
+        self._episode_plan_source = "local"
+
         steps: List[PlanStep] = []
         step_id = 1
 
+        _win_r_launch_aliases: Dict[str, Tuple[str, str]] = {
+            "notepad": ("notepad", "notepad.exe"),
+            "calc": ("calc", "CalculatorApp.exe"),
+            "calculator": ("calc", "CalculatorApp.exe"),
+            "windows calculator": ("calc", "CalculatorApp.exe"),
+            "paint": ("mspaint", "mspaint.exe"),
+            "mspaint": ("mspaint", "mspaint.exe"),
+            "microsoft paint": ("mspaint", "mspaint.exe"),
+            "cmd": ("cmd", "cmd.exe"),
+            "command prompt": ("cmd", "cmd.exe"),
+            "powershell": ("powershell", "powershell.exe"),
+            "explorer": ("explorer", "explorer.exe"),
+            "file explorer": ("explorer", "explorer.exe"),
+        }
+
+        payload_desc = user_goal
+        is_pure_launch = False
         if target_app:
+            launch_strip_re = re.compile(
+                rf"(?i)^\s*(?:open|launch|start|run)\s+(?:up\s+)?(?:the\s+|a\s+|an\s+)?{re.escape(target_app)}(?:\s*(?:,|and|then)\s*|\s*$)"
+            )
+            stripped = launch_strip_re.sub("", user_goal).strip()
+            if stripped != user_goal.strip():
+                payload_desc = stripped
+                is_pure_launch = not bool(stripped)
+            else:
+                for prefix in (f"open {target_app} and ", f"launch {target_app} and ", f"start {target_app} and "):
+                    if payload_desc.lower().startswith(prefix.lower()):
+                        payload_desc = payload_desc[len(prefix):].strip()
+
+            win_r_enabled = self._are_skills_enabled() or bool(
+                getattr(getattr(self.config, "skills", None), "enabled", False)
+            )
+            win_r_entry = _win_r_launch_aliases.get(target_app.strip().lower())
+            if win_r_entry is not None:
+                self._episode_expected_process = win_r_entry[1]
+            else:
+                self._episode_expected_process = self._normalize_expected_process(target_app)
+            already_active = bool(
+                active_proc
+                and win_r_entry is not None
+                and SkillRegistry.process_matches_window(active_proc, win_r_entry[1], active_title)
+            )
+            if win_r_enabled and win_r_entry is not None and not already_active:
+                launch_query = win_r_entry[0]
+                steps.append(
+                    PlanStep(
+                        step_id=step_id,
+                        intent=StepIntent.NAVIGATE,
+                        description="Open Windows Run Dialog",
+                        target_description="Open Windows Run Dialog",
+                        success_criteria="Run dialog input is open",
+                        rationale="launch:open_start",
+                        status=StepStatus.IN_PROGRESS,
+                        tool_route="GUI",
+                        directive=StepDirective(verb="HOTKEY", keys=["win", "r"]),
+                    )
+                )
+                step_id += 1
+                steps.append(
+                    PlanStep(
+                        step_id=step_id,
+                        intent=StepIntent.LAUNCH_OR_ACTIVATE,
+                        description=f"Launch {launch_query}",
+                        target_description=launch_query,
+                        success_criteria=f"Application '{launch_query}' is visible and active",
+                        rationale="launch:submit_search",
+                        status=StepStatus.PENDING,
+                        tool_route="GUI",
+                        directive=StepDirective(verb="TYPE", text=launch_query, submit=True),
+                    )
+                )
+                step_id += 1
+            else:
+                steps.append(
+                    PlanStep(
+                        step_id=step_id,
+                        intent=StepIntent.LAUNCH_OR_ACTIVATE,
+                        description=f"Launch or focus target application: {target_app}",
+                        target_description=target_app,
+                        success_criteria=f"Application '{target_app}' is visible and active on desktop",
+                        tool_route="GUI",
+                    )
+                )
+                step_id += 1
+
+        if not (is_pure_launch and (
+            self._are_skills_enabled()
+            or bool(getattr(getattr(self.config, "skills", None), "enabled", False))
+        )):
             steps.append(
                 PlanStep(
                     step_id=step_id,
-                    intent=StepIntent.LAUNCH_OR_ACTIVATE,
-                    description=f"Launch or focus target application: {target_app}",
-                    target_description=target_app,
-                    success_criteria=f"Application '{target_app}' is visible and active on desktop",
-                    tool_route="GUI",
+                    intent=StepIntent.INPUT_DATA
+                    if any(k in user_goal.lower() for k in ("write", "type", "enter", "input", "fill"))
+                    else StepIntent.NAVIGATE,
+                    description=f"Execute objective: {payload_desc}",
+                    success_criteria="Objective actions executed and changes visible",
+                    tool_route=route,
                 )
             )
             step_id += 1
-
-        payload_desc = user_goal
-        if target_app:
-            # Strip redundant launch phrases from the subsequent payload step
-            for prefix in (f"open {target_app} and ", f"launch {target_app} and ", f"start {target_app} and "):
-                if payload_desc.lower().startswith(prefix):
-                    payload_desc = payload_desc[len(prefix):].strip()
-
-        steps.append(
-            PlanStep(
-                step_id=step_id,
-                intent=StepIntent.INPUT_DATA
-                if any(k in user_goal.lower() for k in ("write", "type", "enter", "input", "fill"))
-                else StepIntent.NAVIGATE,
-                description=f"Execute objective: {payload_desc}",
-                success_criteria="Objective actions executed and changes visible",
-                tool_route=route,
-            )
-        )
-        step_id += 1
 
         steps.append(
             PlanStep(
@@ -1631,11 +3484,54 @@ class DualMindPipeline:
         self.active_plan = plan
         return plan
 
-    def _get_effective_active_window(self) -> Any:
+    def _is_cua_mode_active(self, override_action: Optional[ActionPlan] = None) -> bool:
+        """Determines if single-pass multimodal CUA mode is active for the current step."""
+        if override_action is not None:
+            return False
+        supports_vis = getattr(self.brain_manager, "supports_vision", None)
+        if not (callable(supports_vis) and supports_vis() is True):
+            return False
+        if not hasattr(self.brain_manager, "generate_cua_step"):
+            return False
+        # Guard against unconfigured MagicMocks in legacy tests
+        if type(self.brain_manager).__name__ == "MagicMock":
+            cua_attr = getattr(self.brain_manager, "generate_cua_step", None)
+            if (
+                cua_attr is not None
+                and getattr(cua_attr, "_mock_return_value", None) is not None
+                and isinstance(cua_attr.return_value, (tuple, list))
+                and len(cua_attr.return_value) == 2
+            ):
+                return True
+            return False
+        return True
+
+    @staticmethod
+    def _goal_requests_web_ai(user_goal: str) -> bool:
+        """Checks if the user explicitly requested external browser AI or Gemini consultation."""
+        if not user_goal:
+            return False
+        g = user_goal.lower()
+        return any(kw in g for kw in ("gemini", "web ai", "offload", "browser ai", "chatgpt", "claude", "ask ai", "ask browser"))
+
+    @staticmethod
+    def _goal_requests_save_or_close(user_goal: str) -> bool:
+        """Checks if the user explicitly asked to save, export, write to a file path, or close."""
+        if not user_goal:
+            return False
+        g = user_goal.lower()
+        if any(kw in g for kw in ("save", "export", "close", "exit", "quit", "write to file", "to a file")):
+            return True
+        return bool(re.search(r"[a-z]:\\", g))
+
+    def _get_effective_active_window(self, user_goal: Optional[str] = None) -> Any:
         """
         Returns the active window on the configured target monitor.
         If the OS foreground window is on a different monitor (e.g. Right Monitor x >= 1920),
-        falls back to the topmost visible window on the target monitor identified by ScreenGrounder.
+        when user_goal is provided only relocates it onto the target monitor when user_goal is
+        non-empty AND evaluate_window_disposition classifies the window as 'TARGET'. Otherwise
+        leaves off-monitor windows undisturbed and falls back to Monitor 1 context.
+        (When user_goal is omitted as None by legacy direct callers, preserves direct relocation.)
         """
         cur_win = self.window_guard.get_active_window() if self.window_guard else None
         mon_idx = getattr(getattr(self.config, "vision", None), "monitor_index", 0) if self.config is not None else 0
@@ -1679,16 +3575,107 @@ class DualMindPipeline:
                     w_cx = (rl + right_edge) // 2
                     w_cy = (rt + bottom_edge) // 2
                     if not (ml <= w_cx < mr and mt <= w_cy < mb):
-                        # OS foreground window is on another monitor (e.g. Right Monitor);
-                        # use topmost visible window on the target monitor from ScreenGrounder
+                        # OS foreground window is on another monitor (e.g. Right Monitor).
+                        # When goal context is provided, only relocate onto target monitor when
+                        # user_goal is non-empty AND evaluate_window_disposition flags 'TARGET'.
+                        if user_goal is None:
+                            should_relocate = True
+                            disp = "UNSCOPED"
+                        else:
+                            goal_clean = user_goal.strip()
+                            should_relocate = False
+                            disp = "NEED_SOON_MINIMIZE"
+                            if goal_clean:
+                                target_app = (
+                                    self.resolver.extract_target_app(goal_clean)
+                                    if hasattr(self, "resolver") and self.resolver is not None
+                                    else None
+                                )
+                                disp = evaluate_window_disposition(
+                                    window_title=getattr(cur_win, "title", "") or "",
+                                    process_name=getattr(cur_win, "process_name", "") or "",
+                                    user_goal=goal_clean,
+                                    target_app=target_app,
+                                    window_rules=self.window_rules,
+                                )
+                                should_relocate = disp == "TARGET"
+
+                        if should_relocate:
+                            fg_hwnd = getattr(cur_win, "hwnd", 0)
+                            if not fg_hwnd and sys.platform == "win32":
+                                try:
+                                    import ctypes
+                                    fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                                except Exception:
+                                    pass
+                            if fg_hwnd and relocate_window_to_monitor(fg_hwnd, mon_idx):
+                                new_rect = (
+                                    ml + 100,
+                                    mt + 100,
+                                    ml + 100 + max(600, min(mw - 100, right_edge - rl)),
+                                    mt + 100 + max(400, min(mh - 100, bottom_edge - rt)),
+                                )
+                                if dataclasses.is_dataclass(cur_win):
+                                    try:
+                                        cur_win = dataclasses.replace(cur_win, rect=new_rect)
+                                    except Exception:
+                                        from types import SimpleNamespace
+                                        cur_win = SimpleNamespace(
+                                            title=getattr(cur_win, "title", ""),
+                                            process_name=getattr(cur_win, "process_name", ""),
+                                            rect=new_rect,
+                                            hwnd=fg_hwnd,
+                                        )
+                                elif hasattr(cur_win, "rect"):
+                                    try:
+                                        cur_win.rect = new_rect
+                                    except Exception:
+                                        from types import SimpleNamespace
+                                        cur_win = SimpleNamespace(
+                                            title=getattr(cur_win, "title", ""),
+                                            process_name=getattr(cur_win, "process_name", ""),
+                                            rect=new_rect,
+                                            hwnd=fg_hwnd,
+                                        )
+                                return cur_win
+                        else:
+                            logger.debug(
+                                "[MONITOR GUARD] Leaving non-target off-monitor window undisturbed (%r / %r, disp=%s).",
+                                getattr(cur_win, "title", ""),
+                                getattr(cur_win, "process_name", ""),
+                                disp,
+                            )
+
+                        # Fallback to topmost visible window on target monitor (or Monitor 1 Desktop shell)
+                        from types import SimpleNamespace
                         if isinstance(sg_title, str) or isinstance(sg_proc, str):
-                            from types import SimpleNamespace
                             return SimpleNamespace(
                                 title=sg_title if isinstance(sg_title, str) else "",
                                 process_name=sg_proc if isinstance(sg_proc, str) else "",
                                 rect=sg_rect if (isinstance(sg_rect, (tuple, list)) and len(sg_rect) == 4) else (ml, mt, mr, mb),
                             )
+                        return SimpleNamespace(
+                            title="Desktop",
+                            process_name="explorer.exe",
+                            rect=(ml, mt, mr, mb),
+                        )
         return cur_win
+
+    @staticmethod
+    def _format_window_label(win_obj: Any) -> Optional[str]:
+        """
+        Safely extracts and formats a human-readable window label 'Title (process.exe)'.
+        Tolerates MagicMock objects in unit tests by asserting strict str types.
+        """
+        if win_obj is None:
+            return None
+        title = getattr(win_obj, "title", None)
+        proc = getattr(win_obj, "process_name", None)
+        title_str = title.strip() if isinstance(title, str) else ""
+        proc_str = proc.strip() if isinstance(proc, str) else ""
+        if title_str and proc_str:
+            return f"{title_str} ({proc_str})"
+        return title_str or proc_str or None
 
     def step(
         self,
@@ -1711,6 +3698,8 @@ class DualMindPipeline:
         if self.interrupt_guard and hasattr(self.interrupt_guard, "is_interrupted"):
             if self.interrupt_guard.is_interrupted():
                 self.escalation_sm.on_hardware_interrupt()
+                if self.trace_recorder is not None:
+                    self.trace_recorder.had_user_override = True
                 if self.active_plan:
                     self.active_plan.escalation_tier = self.escalation_sm.current_tier
                     self.active_plan.tier_strikes = self.escalation_sm.current_strikes
@@ -1726,6 +3715,8 @@ class DualMindPipeline:
                 )
 
         if self.escalation_sm.current_tier == CadenceTier.USER_OVERRIDE:
+            if self.trace_recorder is not None:
+                self.trace_recorder.had_user_override = True
             if self.active_plan:
                 self.active_plan.escalation_tier = self.escalation_sm.current_tier
                 self.active_plan.tier_strikes = self.escalation_sm.current_strikes
@@ -1742,6 +3733,8 @@ class DualMindPipeline:
 
         if self.window_guard and hasattr(self.window_guard, "is_safe_to_operate"):
             if not self.window_guard.is_safe_to_operate():
+                if self.trace_recorder is not None:
+                    self.trace_recorder.had_sensitive_window = True
                 if self.bridge:
                     self.bridge.notify_state("PROTECTED", "Cautious")
                 return self.memory.record_step(
@@ -1761,83 +3754,232 @@ class DualMindPipeline:
             except Exception as exc:
                 logger.debug("Failed capturing screen frame: %s", exc)
 
+        # Check CUA single-pass active status early to avoid unnecessary UIA tree walks and HUD SoM clutter
+        use_cua_single_pass = self._is_cua_mode_active(override_action)
+
         elements = grounded_elements
         if elements is None and self.screen_grounder:
-            try:
-                goal_kws = [
-                    w.lower()
-                    for w in re.findall(r"[a-zA-Z0-9_\-\+#]+", user_goal or "")
-                    if len(w) >= 3 and w.lower() not in {
-                        "the", "and", "open", "launch", "start", "run", "play", "some", "with", "for", "please", "into", "from"
-                    }
-                ]
-                elements = self.screen_grounder.ground(
-                    image_override=current_frame,
-                    goal_keywords=goal_kws,
-                )
-            except Exception as exc:
-                logger.debug("Failed grounding screen elements: %s", exc)
+            # Under CUA single-pass mode, UI-TARS perceives screen pixels directly;
+            # bypass the high-cost (400ms-2500ms) synchronous UIA tree walk unless legacy 2-pass is active.
+            if not use_cua_single_pass:
+                try:
+                    goal_kws = [
+                        w.lower()
+                        for w in re.findall(r"[a-zA-Z0-9_\-\+#]+", user_goal or "")
+                        if len(w) >= 3 and w.lower() not in {
+                            "the", "and", "open", "launch", "start", "run", "play", "some", "with", "for", "please", "into", "from"
+                        }
+                    ]
+                    elements = self.screen_grounder.ground(
+                        image_override=current_frame,
+                        goal_keywords=goal_kws,
+                    )
+                except Exception as exc:
+                    logger.debug("Failed grounding screen elements: %s", exc)
+                    elements = []
+            else:
                 elements = []
 
         elements = elements or []
 
         if self.bridge:
-            self.bridge.set_hud_targets(elements)
+            if not use_cua_single_pass:
+                self.bridge.set_hud_targets(elements)
             if current_frame is not None:
                 self.bridge.notify_perception(current_frame, elements)
 
         pre_hash = compute_dhash(current_frame) if current_frame is not None else None
-
-        # 2b. Foveated VLM Frame & Set-of-Mark Visual Composite Preparation
-        vlm_image_b64: Optional[str] = None
-        foveated_frame: Optional[FoveatedFrame] = None
-        has_active_app_win = False
-        if current_frame is not None and isinstance(current_frame, np.ndarray) and current_frame.size > 0:
-            try:
-                eff_win = self._get_effective_active_window()
-                active_rect_xywh: Optional[Tuple[int, int, int, int]] = None
-                if eff_win is not None:
-                    ew_title = (getattr(eff_win, "title", "") or "").strip().lower()
-                    ew_rect = getattr(eff_win, "rect", None)
-                    if (
-                        ew_title not in ("program manager", "workerw", "desktop", "taskbar", "")
-                        and isinstance(ew_rect, (tuple, list))
-                        and len(ew_rect) == 4
-                    ):
-                        rl, rt, rr, rb = (int(v) for v in ew_rect)
-                        rw = (rr - rl) if rr > rl else rr
-                        rh = (rb - rt) if rb > rt else rb
-                        if rw > 50 and rh > 50:
-                            active_rect_xywh = (rl, rt, rw, rh)
-                            has_active_app_win = True
-
-                foveated_frame = self.foveated_engine.capture_foveated(
-                    active_window_rect=active_rect_xywh,
-                    full_frame_override=current_frame,
-                    force=True,
-                )
-                self.last_foveated_frame = foveated_frame
-
-                supports_vis = getattr(self.brain_manager, "supports_vision", None)
-                if callable(supports_vis) and supports_vis() is True:
-                    vlm_image_b64 = self.foveated_engine.build_vlm_composite(
-                        frame=foveated_frame,
-                        elements=elements,
-                        use_fovea=has_active_app_win,
-                        max_dim=512,
-                        quality=80,
-                    )
-            except Exception as fov_exc:
-                logger.debug("Foveated VLM frame preparation skipped: %s", fov_exc)
+        pre_win_label = self._format_window_label(self._get_effective_active_window(user_goal=user_goal))
 
         # Living Plan initialization and modal contingency check
         active_plan = self._initialize_or_update_plan(user_goal)
+
+        # Deferred visual drift verification once container window becomes active
+        # Restricted to coordinate-bound reflex_micro_skills; coordinate-free workflows
+        # naturally vary in window size/canvas pixels without breaking keyboard shortcuts.
+        if (
+            self._active_skill_match is not None
+            and self._are_skills_enabled()
+            and self._active_skill_match.skill.type == SkillType.REFLEX_MICRO_SKILL
+            and self._drift_checked_skill_id != self._active_skill_match.skill.id
+            and self._active_skill_match.skill.invalidation.visual_anchors
+        ):
+            matched_skill = self._active_skill_match.skill
+            eff_win_now = self._get_effective_active_window(user_goal=user_goal)
+            eff_proc_now = getattr(eff_win_now, "process_name", "") if eff_win_now else ""
+            eff_proc_str = eff_proc_now.lower().strip() if isinstance(eff_proc_now, str) else ""
+            target_proc = (matched_skill.preconditions.container_process or "").lower().strip()
+            if not target_proc or eff_proc_str == target_proc:
+                verdict = self.skill_registry.check_visual_drift(matched_skill)
+                self._drift_checked_skill_id = matched_skill.id
+                if verdict.checked and verdict.drifted:
+                    logger.warning("[SKILL DRIFT] Quarantining drifted skill '%s': %s", matched_skill.id, verdict.reason)
+                    self.skill_registry.quarantine(matched_skill.id, verdict.reason)
+                    self._active_skill_match = None
+                    self._episode_skill_id = None
+                    self.active_plan = None
+                    active_plan = self._initialize_or_update_plan(user_goal)
+
         active_plan.escalation_tier = self.escalation_sm.current_tier
         active_plan.tier_strikes = self.escalation_sm.current_strikes
 
-        # Tier 2: Deep Strategic Gemini Consultation
+        # Consume operator steering / forced ParasiteIt consultation flags
+        with self._operator_lock:
+            course_correction = self._pending_course_correction
+            self._pending_course_correction = None
+            force_parasite = self._force_parasite_consult
+            force_parasite_hint = self._force_parasite_hint
+            self._force_parasite_consult = False
+            self._force_parasite_hint = None
+
+        if course_correction:
+            self._active_operator_steering = course_correction
+            self._active_operator_steering_ttl = 3
+
+        if force_parasite:
+            self._episode_consult_exhausted = False
+            self.escalation_sm.current_tier = CadenceTier.TIER_2_CONSULT
+
+        # Tier 2: Deep Strategic Gemini Consultation (ParasiteSkill takes precedence when enabled)
         if self.escalation_sm.current_tier == CadenceTier.TIER_2_CONSULT:
-            if self.offloader is None:
+            if self._episode_consult_exhausted:
+                self.escalation_sm.current_tier = CadenceTier.TIER_1_LOCAL
+                self.escalation_sm.local_strikes = 0
+                self.memory.reset_loop_detector()
+            ps_reactive_ok = (
+                not self._episode_consult_exhausted
+                and self.parasite_skill is not None
+                and self.parasite_skill.is_available()
+                and (
+                    force_parasite
+                    or self.config is None
+                    or bool(getattr(getattr(self.config, "parasite_skill", None), "reactive_recovery", True))
+                )
+                and override_action is None
+            )
+            if ps_reactive_ok:
+                consult_action = ActionPlan(
+                    action=ActionType.WAIT,
+                    wait_ms=500,
+                    reasoning="Tier 2 ParasiteSkill Consultation: Invoking Gemini Web for semantic recovery.",
+                )
+                if self.bridge:
+                    self.bridge.notify_state("OFFLOADING", "Focused")
+
+                cancel_tok = (
+                    self.interrupt_guard.get_cancellation_token()
+                    if self.interrupt_guard and hasattr(self.interrupt_guard, "get_cancellation_token")
+                    else None
+                )
+                hist_str = self.memory.format_for_prompt()
+                if force_parasite_hint:
+                    hist_str = f"{hist_str}\n[Operator Hint]: {force_parasite_hint}"
+                req = ParasiteRequest(
+                    phase=ParasitePhase.REACTIVE_RECOVERY,
+                    user_goal=user_goal,
+                    trigger=self._last_strike_cause,
+                    recent_history=hist_str,
+                    include_screenshot=True,
+                )
+                self._episode_parasite_invocations += 1
+                try:
+                    ps_res = self.parasite_skill.invoke(req, cancellation_token=cancel_tok)
+                except Exception as exc:
+                    logger.warning("Tier 2 ParasiteSkill consultation raised unexpectedly: %s", exc)
+                    ps_res = None
+
+                if ps_res is not None and ps_res.ok:
+                    self._episode_parasite_status = "OK"
+                elif ps_res is not None and ps_res.failure is not None:
+                    self._episode_parasite_status = ps_res.failure.value
+                else:
+                    self._episode_parasite_status = "ERROR"
+
+                if ps_res is not None and ps_res.failure == ParasiteFailure.INTERRUPTED:
+                    self.escalation_sm.on_hardware_interrupt()
+                    self.memory.reset_loop_detector()
+                    consult_success = False
+                    speech = "Physical interrupt during Gemini consultation; yielding control."
+                    thought = f"ParasiteSkill recovery interrupted ({self._last_strike_cause.value})."
+                elif ps_res is not None and ps_res.ok and (ps_res.plan is not None or ps_res.action is not None):
+                    if ps_res.plan is not None:
+                        updated_plan = ps_res.plan.to_living_plan(user_goal)
+                    else:
+                        updated_plan = self.active_plan or LivingPlan(
+                            user_goal=user_goal,
+                            overall_strategy="ParasiteSkill semantic recovery",
+                            consulted_gemini=True,
+                        )
+                    if ps_res.action is not None:
+                        updated_plan.insert_contingency_step(
+                            ps_res.action.to_contingency_step(step_id=len(updated_plan.steps) + 1)
+                        )
+                    self.active_plan = updated_plan
+                    self.escalation_sm.on_consultation_success()
+                    self.memory.reset_loop_detector()
+                    consult_success = True
+                    speech = "Consulted Gemini and updated semantic recovery plan. Resuming local execution."
+                    thought = f"ParasiteSkill recovery succeeded ({self._last_strike_cause.value})."
+                elif ps_res is not None and ps_res.failure in (
+                    ParasiteFailure.BUDGET_EXHAUSTED,
+                    ParasiteFailure.BREAKER_OPEN,
+                    ParasiteFailure.PREFLIGHT_SENSITIVE_WINDOW,
+                ):
+                    self.escalation_sm.current_tier = CadenceTier.TIER_1_LOCAL
+                    self.escalation_sm.local_strikes = 0
+                    self.memory.reset_loop_detector()
+                    consult_success = False
+                    speech = "ParasiteSkill budget/breaker paused; falling back to local UI-TARS."
+                    thought = f"ParasiteSkill deferred cleanly ({ps_res.failure.value}); resuming TIER_1_LOCAL."
+                else:
+                    self.escalation_sm.on_consultation_failure()
+                    self.memory.reset_loop_detector()
+                    consult_success = False
+                    fail_tag = ps_res.failure.value if (ps_res and ps_res.failure) else "error"
+                    if self.escalation_sm.current_tier == CadenceTier.USER_OVERRIDE:
+                        self._episode_consult_exhausted = True
+                        self.escalation_sm.current_tier = CadenceTier.TIER_1_LOCAL
+                        self.escalation_sm.local_strikes = 0
+                        speech = "Strategic Gemini recovery exhausted; continuing locally with UI-TARS."
+                        thought = (
+                            f"ParasiteSkill recovery exhausted ({fail_tag}); "
+                            "disabling further consultations for this episode and resuming TIER_1_LOCAL."
+                        )
+                    else:
+                        speech = "Strategic Gemini recovery unavailable or timed out; falling back cleanly."
+                        thought = f"ParasiteSkill recovery failed ({fail_tag}): {ps_res.detail if ps_res else 'exception'}."
+
+                if self.escalation_sm.current_tier == CadenceTier.USER_OVERRIDE and self.bridge:
+                    self.bridge.notify_state("USER_OVERRIDE", "Curious")
+
+                if self.active_plan:
+                    self.active_plan.escalation_tier = self.escalation_sm.current_tier
+                    self.active_plan.tier_strikes = self.escalation_sm.current_strikes
+
+                return self.memory.record_step(
+                    action=consult_action,
+                    success=consult_success,
+                    screen_diff=0.0,
+                    user_goal=user_goal,
+                    persona_thought=thought,
+                    persona_speech=speech,
+                    tier_level=self.escalation_sm.current_tier,
+                    pre_window=pre_win_label,
+                )
+
+            if use_cua_single_pass and not self._goal_requests_web_ai(user_goal):
+                logger.info("[TIER 2 SUPPRESSED] Local CUA mode active; suppressing external browser consultation and resetting escalation.")
+                self._cua_loop_warning = (
+                    "Action loop / alternating cycle detected without net progress. "
+                    "Stop repeating the previous shortcut/dialog cycle; if the requested task is already complete on screen emit finished(), otherwise pick a new approach."
+                )
+                self.escalation_sm.current_tier = CadenceTier.TIER_1_LOCAL
+                self.escalation_sm.local_strikes = 0
+                self.memory.reset_loop_detector()
+                if self.active_plan:
+                    self.active_plan.escalation_tier = CadenceTier.TIER_1_LOCAL
+                    self.active_plan.tier_strikes = 0
+            elif self.offloader is None:
                 logger.info("No offloader configured for Tier 2 consultation; recording consultation failure.")
                 self.escalation_sm.on_consultation_failure()
                 self.memory.reset_loop_detector()
@@ -1970,912 +4112,460 @@ class DualMindPipeline:
                 )
                 current_plan_step = active_plan.get_current_step()
 
-        # 3. Decision Pipeline: Single-Pass CUA vs Legacy 2-Pass
-        use_cua_single_pass = False
+        # 3. Decision Pipeline: §7.6 Gated Reflex Skill -> Single-Pass CUA vs Legacy 2-Pass
+        reflex_dispatched = False
         if (
             override_action is None
-            and getattr(self.brain_manager, "supports_vision", None)
-            and callable(self.brain_manager.supports_vision)
-            and self.brain_manager.supports_vision() is True
-            and hasattr(self.brain_manager, "generate_cua_step")
-            and (self.escalation_sm.current_tier != CadenceTier.TIER_1_LOCAL or not self.memory.is_in_loop())
+            and self._active_skill_match is not None
+            and self._are_skills_enabled()
+            and self._active_skill_match.skill.type == SkillType.REFLEX_MICRO_SKILL
         ):
-            # Guard against unconfigured MagicMocks in legacy tests
-            if type(self.brain_manager).__name__ == "MagicMock":
-                cua_attr = getattr(self.brain_manager, "generate_cua_step", None)
-                if (
-                    cua_attr is not None
-                    and getattr(cua_attr, "_mock_return_value", None) is not None
-                    and isinstance(cua_attr.return_value, (tuple, list))
-                    and len(cua_attr.return_value) == 2
-                ):
-                    use_cua_single_pass = True
-            else:
-                use_cua_single_pass = True
-
-        if use_cua_single_pass:
-            memory_context = self.memory.format_for_prompt()
-            sw, sh = (1920, 1080)
-            if current_frame is not None and isinstance(current_frame, np.ndarray) and current_frame.ndim >= 2:
-                sh, sw = current_frame.shape[:2]
-
-            thought, action_plan = self.brain_manager.generate_cua_step(
-                user_goal=user_goal,
-                screen_frame=current_frame,
-                image_base64=vlm_image_b64,
-                screen_width=sw,
-                screen_height=sh,
-                candidate_elements=elements,
-                memory_context=memory_context,
+            reflex_skill = self._active_skill_match.skill
+            reflex_res = verify_and_resolve_reflex_skill(
+                skill=reflex_skill,
+                window_probe=self.skill_registry.window_probe if self.skill_registry else None,
+                capturer=self.capturer,
+                parameters=self._active_skill_match.parameters,
             )
-            persona_out = PersonaOutput(thought=thought, speech=thought)
-            if self.bridge:
-                self.bridge.notify_speech(thought)
-        else:
-            # Legacy 2-Pass: Pass 1 Persona Monologue + Pass 2 Action Planning
-            current_mood = self.persona_engine.derive_mood(self.memory, state="THINKING")
-            if self.screen_grounder and hasattr(self.screen_grounder, "format_concise_scene_summary"):
-                scene_summary = self.screen_grounder.format_concise_scene_summary(elements)
-            elif self.screen_grounder and hasattr(self.screen_grounder, "format_som_summary"):
-                scene_summary = self.screen_grounder.format_som_summary(elements)
+            if reflex_res.ok and reflex_res.action_plan is not None:
+                action_plan = reflex_res.action_plan
+                thought = (
+                    f"Executing §7.6 gated reflex skill '{reflex_skill.id}' "
+                    f"({len(action_plan.burst_actions or [])} actions)."
+                )
+                persona_out = PersonaOutput(
+                    thought=thought,
+                    speech=f"Running verified reflex burst for {reflex_skill.name}.",
+                )
+                self._active_skill_match = None
+                reflex_dispatched = True
             else:
-                scene_summary = f"{len(elements)} targets detected"
-            if current_plan_step:
-                scene_summary = f"[Active Step {current_plan_step.step_id}]: {current_plan_step.description}\n{scene_summary}"
+                logger.warning(
+                    "[REFLEX GATE ABORT] Falling back to UIA/VLM for '%s': %s",
+                    reflex_skill.id,
+                    reflex_res.reason,
+                )
+                if reflex_res.drifted and self.skill_registry is not None:
+                    self.skill_registry.quarantine(reflex_skill.id, reflex_res.reason)
+                self._active_skill_match = None
+                self._episode_skill_id = None
 
-            memory_context = self.memory.format_for_prompt()
-
-            persona_out = self.persona_engine.generate_monologue(
-                user_goal=user_goal,
-                scene_summary=scene_summary,
-                memory_context=memory_context,
-                mood_override=current_mood,
-                state="THINKING",
-                image_base64=vlm_image_b64,
+        directive_dispatched = False
+        if not reflex_dispatched and override_action is None and current_plan_step is not None:
+            expected_proc = (
+                self._active_skill_match.skill.preconditions.container_process
+                if self._active_skill_match is not None
+                else self._episode_expected_process
             )
-
-            # 4. Pass 2: Action Planning
-            if override_action is not None:
-                action_plan = override_action
-            elif self.escalation_sm.current_tier == CadenceTier.TIER_1_LOCAL and self.memory.is_in_loop():
-                # Detected cognitive failure loop! Trigger emergency strategy switch
-                action_plan = ActionPlan(
-                    action=ActionType.PANIC,
-                    reasoning="Detected 3-strike failure loop. Initiating panic/strategy reset.",
-                )
-            else:
-                som_dicts = [
-                    {
-                        "id": e.id,
-                        "role": e.role,
-                        "label": e.label,
-                        "x": e.x,
-                        "y": e.y,
-                        "width": e.width,
-                        "height": e.height,
-                        **({"app": e.process_name} if getattr(e, "process_name", None) else {}),
-                        **({"window": e.window_title} if getattr(e, "window_title", None) else {}),
-                    }
-                    for e in elements
-                ]
-                # Bound persona thought to a concise string (max 300 chars) for Pass 2 intent
-                clean_thought = (persona_out.thought or "").strip()
-                if len(clean_thought) > 300:
-                    clean_thought = clean_thought[:297] + "..."
-
-                step_desc = f"Active Step: {current_plan_step.description}\n" if current_plan_step else ""
-                try:
-                    raw_action = self.brain_manager.generate_action(
-                        persona_intent=f"{step_desc}User Goal: {user_goal}\nIntent: {clean_thought}",
-                        som_elements=som_dicts,
-                        memory_context=memory_context,
-                        image_base64=vlm_image_b64,
+            if self.active_plan is not None and getattr(self.active_plan, "steps", None):
+                for prev_step in self.active_plan.steps:
+                    if prev_step.step_id >= current_plan_step.step_id:
+                        break
+                    prev_dir = getattr(prev_step, "directive", None)
+                    is_prev_launch = (
+                        prev_step.intent == StepIntent.LAUNCH_OR_ACTIVATE
+                        or (prev_step.rationale or "") == "launch:submit_search"
                     )
-                except TypeError:
-                    raw_action = self.brain_manager.generate_action(
-                        persona_intent=f"{step_desc}User Goal: {user_goal}\nIntent: {clean_thought}",
-                        som_elements=som_dicts,
-                        memory_context=memory_context,
-                    )
-                action_plan = ActionPlan.model_validate(raw_action)
-
-            # 4a. VLM Coordinate & Hybrid Snapping Resolution (Legacy 2-pass mode):
-            # If the VLM emitted Qwen2.5-VL bounding box / coordinate tags in reasoning or thought,
-            # or returned a click action without target_id/coordinates, resolve via VLMGrounder.
-            if (
-                not use_cua_single_pass
-                and action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK, ActionType.CLICK_AND_TYPE)
-                and action_plan.target_id is None
-                and action_plan.coordinates is None
-                and foveated_frame is not None
-            ):
-                crop_img = foveated_frame.fovea_image if has_active_app_win else foveated_frame.macro_image
-                crop_offset = (foveated_frame.fovea_rect[0], foveated_frame.fovea_rect[1]) if has_active_app_win else (0, 0)
-                ch, cw = crop_img.shape[:2]
-                vlm_coords = (
-                    parse_vlm_coordinates(action_plan.reasoning or "", cw, ch)
-                    or parse_vlm_coordinates(persona_out.thought or "", cw, ch)
-                )
-                if vlm_coords is not None:
-                    if has_active_app_win:
-                        global_xy = (vlm_coords[0] + crop_offset[0], vlm_coords[1] + crop_offset[1])
-                    else:
-                        global_xy = self.foveated_engine.transform_macro_to_screen(vlm_coords[0], vlm_coords[1], foveated_frame)
-                    snapped_xy, snapped_el = self.vlm_grounder.snap_to_element(global_xy, elements)
-                    if snapped_el is not None:
-                        action_plan.target_id = snapped_el.id
-                    else:
-                        action_plan.coordinates = snapped_xy
-                else:
-                    snapped_xy, snapped_el = self.vlm_grounder.ground_target(
-                        image=crop_img,
-                        target_description=action_plan.reasoning or user_goal,
-                        candidate_elements=elements,
-                        crop_offset=crop_offset,
-                    )
-                    if snapped_el is not None:
-                        action_plan.target_id = snapped_el.id
-                    elif snapped_xy is not None:
-                        action_plan.coordinates = snapped_xy
-
-            token = (
+                    if is_prev_launch and prev_dir is not None and prev_dir.verb == "TYPE" and prev_dir.text:
+                        launched_proc = self._normalize_expected_process(prev_dir.text)
+                        if launched_proc:
+                            expected_proc = launched_proc
+            fast_tok = (
                 self.interrupt_guard.get_cancellation_token()
                 if self.interrupt_guard and hasattr(self.interrupt_guard, "get_cancellation_token")
                 else None
             )
-
-            target_app = (
-                (current_plan_step.target_description if current_plan_step else None)
-                or self.resolver.extract_target_app(user_goal)
-                or (self.resolver.extract_target_app(current_plan_step.description) if current_plan_step else None)
+            fast_res = self._try_directive_fast_path(
+                step=current_plan_step,
+                active_window=self._get_effective_active_window(user_goal=user_goal),
+                expected_process=expected_proc,
+                token=fast_tok,
             )
-            target_app_clean = target_app.strip().lower() if target_app else None
+            if fast_res is not None:
+                thought, action_plan = fast_res
+                persona_out = PersonaOutput(thought=thought, speech=thought)
+                directive_dispatched = True
 
-            cur_win = self._get_effective_active_window()
-            cur_win_title = (getattr(cur_win, "title", None) or "").lower() if cur_win else ""
-            cur_win_proc = (getattr(cur_win, "process_name", None) or "").lower() if cur_win else ""
-            is_error_dialog = is_error_dialog_window(cur_win_title, cur_win_proc, elements)
-            is_launcher_dialog = is_intermediate_launcher_window(
-                cur_win_title,
-                cur_win_proc,
-                user_goal=user_goal,
-                target_app=target_app_clean,
-                elements=elements,
-                window_rules=self.window_rules,
-            )
-            target_pattern = r"\b" + re.escape(target_app_clean) if target_app_clean else ""
-            is_generic_target = bool(
-                target_app_clean in {
-                    "game", "games", "app", "apps", "application", "applications",
-                    "program", "programs", "tool", "tools", "something", "it",
-                }
-            )
-            is_explorer_non_target = bool(
-                cur_win_proc == "explorer.exe"
-                and not any(k in user_goal.lower() for k in ("explorer", "folder", "file", "directory"))
-            )
-            is_target_active = bool(
-                cur_win
-                and target_app_clean
-                and not is_generic_target
-                and not is_error_dialog
-                and not is_launcher_dialog
-                and not is_explorer_non_target
-                and (
-                    bool(re.search(target_pattern, cur_win_proc))
-                    or bool(re.search(target_pattern, cur_win_title))
-                    or PrecisionAppMatcher.score_match(cur_win_title, target_app_clean) >= 0.80
-                    or PrecisionAppMatcher.score_match(cur_win_proc, target_app_clean) >= 0.80
-                )
-            )
-
-            # Pre-normalize LLM action confusions:
-            # (a) HOTKEY containing an element ID like "#5" or "[#1]" -> convert to CLICK on that element ID
-            if action_plan.action == ActionType.HOTKEY:
-                raw_keys = list(action_plan.keys or []) + ([action_plan.text.strip()] if action_plan.text else [])
-                converted_tid: Optional[int] = None
-                for rk in raw_keys:
-                    m_id = re.match(r"^\[?#(\d+)\]?$", str(rk).strip())
-                    if m_id:
-                        converted_tid = int(m_id.group(1))
-                        break
-                if converted_tid is not None:
-                    logger.warning(
-                        "[HOTKEY ID REDIRECT] LLM emitted HOTKEY with element ID '#%d'; converting to CLICK on target #%d.",
-                        converted_tid,
-                        converted_tid,
-                    )
-                    action_plan = ActionPlan(
-                        action=ActionType.CLICK,
-                        target_id=converted_tid,
-                        reasoning=action_plan.reasoning or f"Converted hotkey #{converted_tid} to CLICK on target #{converted_tid}",
-                    )
-                elif target_app_clean and not is_target_active and not is_generic_target and not is_launcher_dialog:
-                    # (b) Bare single-letter hotkey (e.g. HOTKEY "r") while trying to launch an app -> redirect to universal launch
-                    eff_keys = [
-                        k.strip().lower()
-                        for k in (action_plan.keys or [k for k in (action_plan.text or "").split("+") if k.strip()])
-                        if k.strip()
-                    ]
-                    if len(eff_keys) == 1 and len(eff_keys[0]) == 1 and eff_keys[0].isalnum():
-                        logger.warning(
-                            "[HOTKEY LAUNCH REDIRECT] Intercepted bare single-character hotkey '%s' while launching '%s'; redirecting to launch resolver.",
-                            eff_keys[0],
-                            target_app,
-                        )
-                        action_plan = self.resolver.resolve_launch_action(
-                            target_app=target_app,
-                            elements=elements,
-                            cancellation_token=token,
-                        )
-
-            # (c) MINIMIZE_WINDOW / CLOSE_WINDOW targeting the target app's own desktop shortcut -> convert to CLICK launch
-            if (
-                action_plan.action in (ActionType.MINIMIZE_WINDOW, ActionType.CLOSE_WINDOW)
-                and action_plan.target_id is not None
-                and target_app_clean
-                and not is_target_active
-                and not re.match(r"(?i)^\s*(?:please\s+)?(?:close|minimize|minimise)\b", user_goal or "")
-            ):
-                matched_el = next((e for e in elements if e.id == action_plan.target_id), None)
-                if matched_el and (
-                    matched_el.role == "ListItem"
-                    or (matched_el.window_title or "").strip().lower() in ("program manager", "workerw", "desktop")
-                ):
-                    if PrecisionAppMatcher.score_match(matched_el.label or "", target_app_clean) >= 0.80:
-                        logger.warning(
-                            "[LAUNCH TARGET REDIRECT] LLM chose %s on target desktop shortcut '%s' (#%d); converting to launch click.",
-                            action_plan.action.value,
-                            matched_el.label,
-                            matched_el.id,
-                        )
-                        action_plan = ActionPlan(
-                            action=ActionType.CLICK,
-                            target_id=matched_el.id,
-                            reasoning=f"Launching desktop target '{matched_el.label}' instead of minimizing/closing it",
-                        )
-
-            # (d) DOUBLE_CLICK on a Windows Taskbar button -> downgrade to single CLICK so it activates instead of toggling/minimizing
-            if action_plan.action == ActionType.DOUBLE_CLICK and action_plan.target_id is not None:
-                matched_tb = next((e for e in elements if e.id == action_plan.target_id), None)
-                if matched_tb and (
-                    (matched_tb.window_title or "").strip().lower() in ("taskbar", "running applications")
-                    or "running window" in (matched_tb.label or "").lower()
-                ):
-                    logger.info(
-                        "[TASKBAR CLICK NORMALIZATION] Downgrading DOUBLE_CLICK to single CLICK on taskbar button '%s' (#%d) so window activates cleanly.",
-                        matched_tb.label,
-                        matched_tb.id,
-                    )
-                    action_plan.action = ActionType.CLICK
-
-            # (e) Reasoning-to-Label Target Cross-Check:
-            # If the LLM's reasoning explicitly quotes an element name (e.g. 'Document Editor')
-            # that does not match the element at action_plan.target_id (e.g. #24 'Second Brain'),
-            # snap target_id to the element matching the quoted label.
-            if (
-                action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK, ActionType.CLICK_AND_TYPE)
-                and action_plan.target_id is not None
-                and action_plan.reasoning
-            ):
-                matched_by_id = next((e for e in elements if e.id == action_plan.target_id), None)
-                quoted_names = re.findall(r"['\"]([^'\"]{3,60})['\"]", action_plan.reasoning)
-                for q_name in quoted_names:
-                    q_clean = q_name.strip()
-                    if not q_clean:
-                        continue
-                    cur_score = (
-                        PrecisionAppMatcher.score_match(matched_by_id.label or "", q_clean)
-                        if matched_by_id is not None
-                        else 0.0
-                    )
-                    if cur_score < 0.50:
-                        best_quoted = PrecisionAppMatcher.find_best_element(q_clean, elements, threshold=0.85)
-                        if best_quoted is not None:
-                            q_elem, q_score = best_quoted
-                            logger.warning(
-                                "[REASONING TARGET CORRECTION] Reasoning named '%s' (matches #%d '%s', score=%.2f) "
-                                "but target_id was #%s ('%s'). Snapping target_id to #%d.",
-                                q_clean,
-                                q_elem.id,
-                                q_elem.label,
-                                q_score,
-                                action_plan.target_id,
-                                matched_by_id.label if matched_by_id else "None",
-                                q_elem.id,
-                            )
-                            action_plan.target_id = q_elem.id
-                            action_plan.coordinates = (q_elem.center_x, q_elem.center_y)
-                            break
-
-            run_edit = next(
-                (
-                    e for e in elements
-                    if e.role == "Edit" and any(
-                        kw in (e.label or "").lower()
-                        for kw in ("open", "type the name of a program", "run")
-                    )
-                ),
-                None,
-            )
-
-            # 0. Error Dialog Recovery: If an error dialog is open (e.g. 'Windows cannot find...'), dismiss it immediately
-            if is_error_dialog:
-                logger.warning(
-                    "[ERROR DIALOG RECOVERY] Error dialog detected ('%s'); dismissing via Enter/Esc to unblock launch.",
-                    cur_win_title,
-                )
-                action_plan = ActionPlan(
-                    action=ActionType.HOTKEY,
-                    keys=["enter"],
-                    reasoning=f"Dismissing launch error dialog '{cur_win_title}' to recover workflow",
-                )
-
-            # 0a. Intermediate Platform Launcher / Launch Options Dialog (e.g. pre-launch dialog):
-            elif is_launcher_dialog and target_app_clean and not is_generic_target:
-                clicking_active_launcher_ctl = False
-                if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK) and action_plan.target_id is not None:
-                    matched_ctl = next((e for e in elements if e.id == action_plan.target_id), None)
-                    if matched_ctl and matched_ctl.is_active_window and (matched_ctl.process_name or "").lower() != "explorer.exe":
-                        clicking_active_launcher_ctl = True
-
-                if not clicking_active_launcher_ctl:
-                    launch_btn = next(
-                        (
-                            e for e in elements
-                            if e.is_active_window
-                            and (e.process_name or "").lower() != "explorer.exe"
-                            and any(
-                                kw in (e.label or "").strip().lower()
-                                for kw in ("play", "launch", "continue", "start", "ok", "confirm")
-                            )
-                            and not any(
-                                hdr in (e.label or "").strip().lower()
-                                for hdr in ("launch options", "select launch option", "always use")
-                            )
-                        ),
-                        None,
-                    )
-                    if launch_btn is not None:
-                        logger.info(
-                            "[LAUNCHER DIALOG INTERCEPT] Intermediate launcher '%s' (%s) detected; clicking '%s' (#%d) to start '%s'.",
-                            cur_win_title,
-                            cur_win_proc,
-                            launch_btn.label,
-                            launch_btn.id,
-                            target_app,
-                        )
-                        action_plan = ActionPlan(
-                            action=ActionType.CLICK,
-                            target_id=launch_btn.id,
-                            reasoning=f"Clicking '{launch_btn.label}' in launcher dialog '{cur_win_title}' to start '{target_app}'",
-                        )
-                    else:
-                        logger.info(
-                            "[LAUNCHER DIALOG INTERCEPT] Intermediate launcher '%s' (%s) detected; pressing Enter to confirm launch options for '%s'.",
-                            cur_win_title,
-                            cur_win_proc,
-                            target_app,
-                        )
-                        action_plan = ActionPlan(
-                            action=ActionType.HOTKEY,
-                            keys=["enter"],
-                            reasoning=f"Confirming launch options dialog '{cur_win_title}' via Enter to start '{target_app}'",
-                        )
-
-            # 0b. Explicit Close Goal Upgrade: If user goal explicitly starts with "close " and LLM chose MINIMIZE_WINDOW,
-            # upgrade to CLOSE_WINDOW when targeting a closable window
-            elif (
-                action_plan.action == ActionType.MINIMIZE_WINDOW
-                and re.match(r"(?i)^\s*(?:please\s+)?close\b", user_goal or "")
-            ):
-                logger.info(
-                    "[WINDOW LIFECYCLE] User goal explicitly requests closing ('%s'); upgrading MINIMIZE_WINDOW to CLOSE_WINDOW.",
-                    user_goal,
-                )
-                action_plan.action = ActionType.CLOSE_WINDOW
-
-            # 1. Run dialog / Launch intercept: If Run dialog is open and target app not active, ensure we type into Run dialog
-            # UNLESS a matching desktop icon is already visible on screen!
-            elif run_edit and target_app_clean and not is_target_active and not is_generic_target:
-                desktop_match = PrecisionAppMatcher.find_best_element(target_app_clean, elements, threshold=0.80)
-                if " " in target_app_clean or desktop_match is not None:
-                    logger.warning(
-                        "[LAUNCH REDIRECT] Run dialog open for '%s' (desktop_match=%s); dismissing Run dialog.",
-                        target_app,
-                        bool(desktop_match),
-                    )
-                    action_plan = ActionPlan(
-                        action=ActionType.HOTKEY,
-                        keys=["esc"],
-                        reasoning=f"Dismissing Run dialog for '{target_app}' to use desktop icon or Start Search",
-                    )
-                elif action_plan.target_id != run_edit.id or not action_plan.text or target_app_clean not in (action_plan.text or "").lower():
-                    logger.warning(
-                        "[LAUNCH REDIRECT] Run dialog is open; typing target app '%s' into Run dialog instead of misdirected action: %s",
-                        target_app,
-                        action_plan.action.value,
-                    )
-                    action_plan = ActionPlan(
-                        action=ActionType.CLICK_AND_TYPE,
-                        target_id=run_edit.id,
-                        text=target_app,
-                        submit=True,
-                        reasoning=f"Run dialog detected; typing '{target_app}' and pressing Enter to execute launch.",
-                    )
-
-            # 2. Premature DONE intercept: Do not conclude if target application is not active
-            #    or if the user requested open-ended gameplay/autonomous interaction and fewer than 3 in-app actions occurred
-            elif action_plan.action == ActionType.DONE:
-                if target_app_clean and not is_target_active and not is_generic_target:
-                    logger.warning(
-                        "[PREMATURE DONE INTERCEPTED] LLM emitted DONE while target application '%s' is not active on screen. Continuing execution.",
-                        target_app,
-                    )
-                    action_plan = self.resolver.resolve_launch_action(
-                        target_app=target_app,
-                        elements=elements,
-                        cancellation_token=token,
-                    )
-                elif is_target_active and any(
-                    kw in user_goal.lower() for kw in ("play ", "on your own", "without my input", "by yourself")
-                ):
-                    recent_hist = self.memory.get_recent_history(n=10)
-                    in_app_actions = [
-                        rec for rec in recent_hist
-                        if rec.action.action in (ActionType.CLICK, ActionType.CLICK_AND_TYPE, ActionType.TYPE, ActionType.HOTKEY)
-                        and PrecisionAppMatcher.score_match(rec.window_title or "", target_app_clean) >= 0.80
-                    ]
-                    if len(in_app_actions) < 3:
-                        logger.warning(
-                            "[PREMATURE DONE INTERCEPTED] Goal '%s' requires autonomous gameplay/interaction, "
-                            "but only %d in-app action(s) executed so far. Continuing interaction.",
-                            user_goal,
-                            len(in_app_actions),
-                        )
-                        if cur_win_proc == "conhost.exe":
-                            last_was_enter = bool(
-                                in_app_actions
-                                and in_app_actions[-1].action.action == ActionType.HOTKEY
-                                and (in_app_actions[-1].action.keys or []) == ["enter"]
-                            )
-                            if last_was_enter:
-                                action_plan = ActionPlan(
-                                    action=ActionType.TYPE,
-                                    text="1",
-                                    submit=True,
-                                    clear_first=False,
-                                    reasoning=f"Continuing autonomous gameplay in console '{cur_win_title}'; typing menu option '1' + Enter",
-                                )
-                            else:
-                                action_plan = ActionPlan(
-                                    action=ActionType.HOTKEY,
-                                    keys=["enter"],
-                                    reasoning=f"Continuing autonomous gameplay in console '{cur_win_title}'; pressing Enter to advance prompt",
-                                )
-                        else:
-                            interactive_elem = next(
-                                (
-                                    e for e in elements
-                                    if e.is_active_window
-                                    and (e.label or "").strip().lower() not in ("close", "minimize", "minimise", "maximize", "maximise", "restore", "system", "text area", "")
-                                ),
-                                None,
-                            )
-                            if interactive_elem:
-                                action_plan = ActionPlan(
-                                    action=ActionType.CLICK,
-                                    target_id=interactive_elem.id,
-                                    reasoning=f"Continuing autonomous interaction in '{cur_win_title}' by clicking '{interactive_elem.label}'",
-                                )
-
-            # 3. Non-target window hijack & lifecycle evaluation guard:
-            # When target app is not yet active and the LLM tries to click/type into a non-target open window
-            # (or when an unneeded/obstructing window is active), evaluate whether that window should be
-            # MINIMIZED ("need soon", e.g. terminal/IDE/launcher) or CLOSED ("don't need anytime soon", e.g. stray Explorer folder / Notepad).
-            elif action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.CLICK_AND_TYPE) and action_plan.target_id:
-                matched = next((e for e in elements if e.id == action_plan.target_id), None)
-                if matched and matched.process_name and target_app_clean and not is_target_active:
-                    matched_proc = matched.process_name.lower()
-                    matched_title = (matched.window_title or "").lower()
-                    is_desktop_shortcut = (
-                        matched_proc == "explorer.exe"
-                        and matched_title in ("program manager", "workerw", "desktop")
-                    )
-                    is_system_shell = (
-                        matched_proc in ("searchapp.exe", "searchhost.exe", "startmenuexperiencehost.exe")
-                        or (matched_proc == "explorer.exe" and matched_title in ("", "taskbar", "search", "start", "run"))
-                    )
-                    if is_desktop_shortcut and not is_generic_target and PrecisionAppMatcher.score_match(matched.label or "", target_app_clean) < 0.80:
-                        logger.warning(
-                            "[DESKTOP LAUNCH REDIRECT] Blocked %s on unrelated desktop item '%s' (#%d) while launching '%s'; redirecting to launch resolver.",
-                            action_plan.action.value,
-                            matched.label,
-                            matched.id,
-                            target_app,
-                        )
-                        action_plan = self.resolver.resolve_launch_action(
-                            target_app=target_app,
-                            elements=elements,
-                            cancellation_token=token,
-                        )
-                    elif not is_system_shell and not is_desktop_shortcut and PrecisionAppMatcher.score_match(matched.label or "", target_app_clean) < 0.80:
-                        if target_app_clean not in matched_proc and target_app_clean not in matched_title:
-                            disp = evaluate_window_disposition(
-                                window_title=matched.window_title or "",
-                                process_name=matched.process_name or "",
-                                user_goal=user_goal,
-                                target_app=target_app,
-                                window_rules=self.window_rules,
-                            )
-                            if disp == "DONT_NEED_CLOSE" and matched.is_active_window and not use_cua_single_pass:
-                                logger.info(
-                                    "[WINDOW LIFECYCLE] Non-target active window '%s' (%s) evaluated as DONT_NEED_CLOSE. Closing window.",
-                                    matched.window_title,
-                                    matched.process_name,
-                                )
-                                close_btn = next(
-                                    (
-                                        e for e in elements
-                                        if e.is_active_window
-                                        and e.role == "Button"
-                                        and any(k in (e.label or "").lower() for k in ("close", "ok", "cancel"))
-                                    ),
-                                    None,
-                                )
-                                action_plan = ActionPlan(
-                                    action=ActionType.CLOSE_WINDOW,
-                                    target_id=close_btn.id if close_btn else None,
-                                    coordinates=(close_btn.center_x, close_btn.center_y) if close_btn else None,
-                                    reasoning=f"Window '{matched.window_title}' ({matched.process_name}) is not needed anytime soon for goal '{user_goal}'; closing it.",
-                                )
-                            elif disp == "NEED_SOON_MINIMIZE":
-                                if (
-                                    matched.role == "Button"
-                                    and any(k in (matched.label or "").lower() for k in ("minimize", "minimise"))
-                                    and matched_proc not in ("windowsterminal.exe", "cmd.exe", "powershell.exe", "code.exe", "conhost.exe", "antigravity.exe")
-                                ):
-                                    logger.info(
-                                        "[WINDOW LIFECYCLE] Upgrading click on Minimize button of non-target window '%s' (%s) to MINIMIZE_WINDOW.",
-                                        matched.window_title,
-                                        matched.process_name,
-                                    )
-                                    action_plan = ActionPlan(
-                                        action=ActionType.MINIMIZE_WINDOW,
-                                        target_id=matched.id,
-                                        coordinates=(matched.center_x, matched.center_y),
-                                        reasoning=f"Minimizing non-target window '{matched.window_title}' ({matched.process_name}) to clear desktop for '{target_app}'.",
-                                    )
-                                else:
-                                    logger.warning(
-                                        "[WINDOW HIJACK PREVENTED] Blocked %s on '%s' in non-target window '%s' (%s) while target '%s' is not active; redirecting to launch resolver.",
-                                        action_plan.action.value,
-                                        matched.label,
-                                        matched.window_title,
-                                        matched.process_name,
-                                        target_app,
-                                    )
-                                    action_plan = self.resolver.resolve_launch_action(
-                                        target_app=target_app,
-                                        elements=elements,
-                                        cancellation_token=token,
-                                    )
-
-            # 3b. File Explorer folder window guard: If typing target app into a File Explorer folder search box,
-            # evaluate disposition: close the unneeded File Explorer window or redirect to universal launch
-            if action_plan.action in (ActionType.CLICK_AND_TYPE, ActionType.TYPE) and action_plan.target_id:
-                target_elem = next((e for e in elements if e.id == action_plan.target_id), None)
-                if (
-                    target_elem
-                    and (target_elem.process_name or "").lower() == "explorer.exe"
-                    and target_elem.role == "Edit"
-                    and "search" in (target_elem.label or "").lower()
-                    and target_elem.window_title != "Run"
-                    and target_app_clean
-                    and not is_target_active
-                ):
-                    disp = evaluate_window_disposition(
-                        window_title=target_elem.window_title or "",
-                        process_name=target_elem.process_name or "",
-                        user_goal=user_goal,
-                        target_app=target_app,
-                        window_rules=self.window_rules,
-                    )
-                    if disp == "DONT_NEED_CLOSE" and target_elem.is_active_window:
-                        logger.warning(
-                            "[WINDOW LIFECYCLE] Unneeded File Explorer folder window '%s' is intercepting search for '%s'. Closing folder window.",
-                            target_elem.window_title,
-                            target_app,
-                        )
-                        close_btn = next(
-                            (
-                                e for e in elements
-                                if e.is_active_window
-                                and e.role == "Button"
-                                and "close" in (e.label or "").lower()
-                            ),
-                            None,
-                        )
-                        action_plan = ActionPlan(
-                            action=ActionType.CLOSE_WINDOW,
-                            target_id=close_btn.id if close_btn else None,
-                            coordinates=(close_btn.center_x, close_btn.center_y) if close_btn else None,
-                            reasoning=f"File Explorer window '{target_elem.window_title}' is not needed anytime soon; closing it before launching '{target_app}'.",
-                        )
-                    else:
-                        logger.warning(
-                            "[EXPLORER SEARCH PREVENTED] Blocked typing target app '%s' into File Explorer folder search box (%s). Redirecting to universal launch.",
-                            target_app,
-                            target_elem.window_title,
-                        )
-                        action_plan = self.resolver.resolve_launch_action(
-                            target_app=target_app,
-                            elements=elements,
-                            cancellation_token=token,
-                        )
-
-            # 3c. Desktop icon launch upgrade, already-open window focus guard, & obstructing window lifecycle evaluation
-            open_target_win_elems = [
-                e for e in elements
-                if (e.window_title or "").strip().lower() not in ("program manager", "workerw", "desktop", "taskbar", "running applications", "")
-                and (e.process_name or "").strip().lower() != "explorer.exe"
-                and target_app_clean
-                and PrecisionAppMatcher.score_match(e.window_title or "", target_app_clean) >= 0.80
-                and (e.label or "").strip().lower() not in ("close", "minimize", "minimise", "maximize", "maximise", "restore", "system")
-            ]
-
-            if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK) and action_plan.target_id:
-                target_elem = next((e for e in elements if e.id == action_plan.target_id), None)
-                if target_elem:
-                    t_win_norm = (target_elem.window_title or "").strip().lower()
-                    is_taskbar_item = (
-                        t_win_norm in ("taskbar", "running applications")
-                        or "running window" in (target_elem.label or "").lower()
-                    )
-                    is_desktop_item = (
-                        not is_taskbar_item
-                        and (
-                            target_elem.role == "ListItem"
-                            or (
-                                (target_elem.process_name or "").lower() == "explorer.exe"
-                                and t_win_norm in ("program manager", "workerw", "desktop", "")
-                            )
-                        )
-                    )
-                    # If the target application's window is ALREADY open and visible on screen,
-                    # block re-double-clicking the desktop shortcut or clicking the taskbar button (which toggles to minimized!)
-                    if (is_desktop_item or is_taskbar_item) and open_target_win_elems:
-                        focus_el = open_target_win_elems[0]
-                        logger.info(
-                            "[ALREADY OPEN REDIRECT] Target window '%s' (%s) is already open on screen; redirecting %s on %s '%s' (#%d) to open window element #%d ('%s').",
-                            focus_el.window_title,
-                            focus_el.process_name,
-                            action_plan.action.value,
-                            "taskbar button" if is_taskbar_item else "desktop shortcut",
-                            target_elem.label,
-                            target_elem.id,
-                            focus_el.id,
-                            focus_el.label,
-                        )
-                        action_plan = ActionPlan(
-                            action=ActionType.CLICK,
-                            target_id=focus_el.id,
-                            coordinates=(focus_el.center_x, focus_el.center_y),
-                            reasoning=f"Target window '{focus_el.window_title}' is already open; focusing window instead of clicking {'taskbar button' if is_taskbar_item else 'desktop shortcut'}",
-                        )
-                        is_target_active = True
-                        cur_win_title = (focus_el.window_title or "").lower()
-                        cur_win_proc = (focus_el.process_name or "").lower()
-                    elif is_desktop_item and target_app_clean and not is_target_active:
-                        if PrecisionAppMatcher.score_match(target_elem.label or "", target_app_clean) >= 0.80:
-                            # Check if active window is obscuring this desktop element (cur_win.rect is (left, top, right, bottom))
-                            is_active_obscuring = False
-                            if cur_win and cur_win.rect and not (
-                                cur_win_proc == "explorer.exe"
-                                and cur_win_title in ("program manager", "workerw", "desktop", "", "taskbar")
-                            ):
-                                rl, rt, rr, rb = cur_win.rect
-                                # Handle both (left, top, right, bottom) and (x, y, w, h) conventions safely
-                                right_edge = rr if rr > rl else (rl + rr)
-                                bottom_edge = rb if rb > rt else (rt + rb)
-                                if rl <= target_elem.center_x <= right_edge and rt <= target_elem.center_y <= bottom_edge:
-                                    is_active_obscuring = True
-
-                            if is_active_obscuring:
-                                disp = evaluate_window_disposition(
-                                    window_title=cur_win_title,
-                                    process_name=cur_win_proc,
-                                    user_goal=user_goal,
-                                    target_app=target_app,
-                                    window_rules=self.window_rules,
-                                )
-                                if disp == "DONT_NEED_CLOSE":
-                                    logger.info(
-                                        "[WINDOW LIFECYCLE] Desktop shortcut '%s' is obscured by unneeded window '%s' (%s -> DONT_NEED_CLOSE). Closing window.",
-                                        target_elem.label,
-                                        cur_win_title,
-                                        cur_win_proc,
-                                    )
-                                    close_btn = next(
-                                        (
-                                            e for e in elements
-                                            if e.is_active_window
-                                            and e.role == "Button"
-                                            and "close" in (e.label or "").lower()
-                                        ),
-                                        None,
-                                    )
-                                    action_plan = ActionPlan(
-                                        action=ActionType.CLOSE_WINDOW,
-                                        target_id=close_btn.id if close_btn else None,
-                                        coordinates=(close_btn.center_x, close_btn.center_y) if close_btn else None,
-                                        reasoning=f"Window '{cur_win_title}' ({cur_win_proc}) obscures desktop shortcut '{target_elem.label}' and is not needed anytime soon; closing it.",
-                                    )
-                                else:
-                                    logger.info(
-                                        "[WINDOW LIFECYCLE] Desktop shortcut '%s' is obscured by persistent window '%s' (%s -> NEED_SOON_MINIMIZE). Minimizing window.",
-                                        target_elem.label,
-                                        cur_win_title,
-                                        cur_win_proc,
-                                    )
-                                    min_btn = next(
-                                        (
-                                            e for e in elements
-                                            if e.is_active_window
-                                            and e.role == "Button"
-                                            and any(k in (e.label or "").lower() for k in ("minimize", "minimise"))
-                                        ),
-                                        None,
-                                    )
-                                    action_plan = ActionPlan(
-                                        action=ActionType.MINIMIZE_WINDOW,
-                                        target_id=min_btn.id if min_btn else None,
-                                        coordinates=(min_btn.center_x, min_btn.center_y) if min_btn else None,
-                                        reasoning=f"Active window '{cur_win_title}' ({cur_win_proc}) obscures desktop shortcut '{target_elem.label}' but is needed soon; minimizing it.",
-                                    )
-                            else:
-                                logger.info(
-                                    "[DESKTOP LAUNCH] Upgrading to DOUBLE_CLICK on desktop shortcut '%s' (id: %s)",
-                                    target_elem.label,
-                                    target_elem.id,
-                                )
-                                action_plan.action = ActionType.DOUBLE_CLICK
-
-            # 3d. Console / Text-Mode Application Keyboard Interaction (conhost.exe / cmd.exe / powershell.exe):
-            # Console windows do not respond to mouse clicks on text prompts (and clicking inside conhost.exe triggers
-            # QuickEdit selection which freezes console output). Convert clicks on console text/elements into keyboard input.
-            if (is_target_active or open_target_win_elems) and cur_win_proc in ("conhost.exe", "cmd.exe", "powershell.exe"):
-                # Ensure target console window has OS foreground focus without clicking inside QuickEdit canvas
+        if reflex_dispatched or directive_dispatched:
+            pass
+        elif use_cua_single_pass:
+            memory_context = self.memory.format_for_prompt()
+            working_memory_context = ""
+            if self.goal_verifier and hasattr(self.goal_verifier, "build_working_memory_snapshot"):
                 try:
-                    if sys.platform == "win32" and target_app_clean:
-                        user32 = ctypes.windll.user32
+                    working_memory_context = self.goal_verifier.build_working_memory_snapshot(
+                        user_goal=user_goal,
+                        active_window=self._get_effective_active_window(user_goal=user_goal),
+                        grounded_elements=elements,
+                    )
+                except Exception as wm_exc:
+                    logger.debug("Working memory snapshot generation skipped/failed: %s", wm_exc)
 
-                        def _focus_console_proc(hwnd: int, lparam: int) -> bool:
-                            if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
-                                return True
-                            tbuf = ctypes.create_unicode_buffer(256)
-                            user32.GetWindowTextW(hwnd, tbuf, 256)
-                            if PrecisionAppMatcher.score_match(tbuf.value or "", target_app_clean) >= 0.80:
-                                user32.SetForegroundWindow(hwnd)
-                                return False
-                            return True
+            sw, sh = (1920, 1080)
+            if current_frame is not None and isinstance(current_frame, np.ndarray) and current_frame.ndim >= 2:
+                sh, sw = current_frame.shape[:2]
 
-                        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-                        user32.EnumWindows(WNDENUMPROC(_focus_console_proc), 0)
+            teardown_already_fulfilled = "Teardown goal is fulfilled -> Emit DONE" in (working_memory_context or "")
+            g_low = (user_goal or "").lower().strip()
+            is_app_teardown_goal = bool(
+                is_single_window_mgmt_goal(user_goal)
+                and "dialog" not in g_low
+                and re.match(r"^(?:please\s+)?(?:close|minimize|minimise|hide|exit|quit)\b", g_low)
+            )
+            if (
+                not teardown_already_fulfilled
+                and is_app_teardown_goal
+                and self.goal_verifier is not None
+                and hasattr(self.goal_verifier, "verify_goal_state")
+            ):
+                try:
+                    pre_ver = self.goal_verifier.verify_goal_state(
+                        user_goal=user_goal,
+                        active_window=self._get_effective_active_window(user_goal=user_goal),
+                        grounded_elements=elements,
+                    )
+                    if getattr(pre_ver, "verified", False) is True:
+                        teardown_already_fulfilled = True
                 except Exception:
                     pass
 
-                if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK):
-                    clicked_el = next((e for e in elements if e.id == action_plan.target_id), None) if action_plan.target_id else None
-                    lbl_raw = (clicked_el.label or "").strip() if clicked_el else ""
-                    m_choice = re.match(r"^\s*[\[\(]?(\d{1,2}|[a-zA-Z])[\]\)\.\-:]\s+", lbl_raw)
-                    if m_choice:
-                        choice_key = m_choice.group(1)
-                        logger.info(
-                            "[CONSOLE INTERACTION] Converting %s on console menu item '%s' to TYPE '%s' + Enter.",
-                            action_plan.action.value,
-                            lbl_raw,
-                            choice_key,
-                        )
-                        action_plan = ActionPlan(
-                            action=ActionType.TYPE,
-                            text=choice_key,
-                            submit=True,
-                            clear_first=False,
-                            reasoning=f"Console window '{cur_win_title}' requires keyboard input; typing option '{choice_key}' + Enter for '{lbl_raw}'",
-                        )
-                    else:
-                        prev_steps = self.memory.get_recent_history(n=1)
-                        last_was_enter = bool(
-                            prev_steps
-                            and prev_steps[-1].action.action == ActionType.HOTKEY
-                            and (prev_steps[-1].action.keys or []) == ["enter"]
-                        )
-                        if last_was_enter:
-                            logger.info(
-                                "[CONSOLE INTERACTION] Previous step already sent Enter in console '%s'; typing option '1' + Enter to advance menu.",
-                                cur_win_title,
-                            )
-                            action_plan = ActionPlan(
-                                action=ActionType.TYPE,
-                                text="1",
-                                submit=True,
-                                clear_first=False,
-                                reasoning=f"Console window '{cur_win_title}' active at menu prompt; typing '1' + Enter to select first option",
-                            )
+            # In CUA mode, inject active strategic advisor blueprint guidance into working memory if available
+            if not teardown_already_fulfilled and self.active_plan and getattr(self.active_plan, "overall_strategy", None):
+                strategy = str(self.active_plan.overall_strategy).strip()
+                if strategy and not strategy.startswith("Generic multi-stage resolution for:"):
+                    adv_step = self.active_plan.get_current_step()
+                    if adv_step:
+                        step_desc = adv_step.description
+                        if adv_step.target_description:
+                            step_desc = f"{step_desc} (Target: {adv_step.target_description})"
+                        adv_parts = [
+                            f"- Strategic Advisor Guidance: Step {adv_step.step_id} ({adv_step.intent.value}) — {step_desc}"
+                        ]
+                        if getattr(adv_step, "directive", None) is not None:
+                            adv_parts.append(f"  Required action: {adv_step.directive.verb}")
+                        if getattr(self.active_plan, "consulted_gemini", False):
+                            adv_parts.append(f"  Route: {adv_step.tool_route} | Strategy: {strategy[:220]}")
+                            if adv_step.contingency:
+                                adv_parts.append(f"  Contingency: {adv_step.contingency}")
+                        adv_line = "\n".join(adv_parts)
+                        if working_memory_context:
+                            working_memory_context = f"{working_memory_context}\n{adv_line}"
                         else:
-                            logger.info(
-                                "[CONSOLE INTERACTION] Converting %s on console '%s' ('%s') to HOTKEY ['enter'] to advance console prompt.",
-                                action_plan.action.value,
-                                cur_win_title,
-                                lbl_raw or "Text Area",
-                            )
-                            action_plan = ActionPlan(
-                                action=ActionType.HOTKEY,
-                                keys=["enter"],
-                                reasoning=f"Console window '{cur_win_title}' active; pressing Enter to advance prompt without triggering QuickEdit pause",
-                            )
+                            working_memory_context = adv_line
 
-            # 4. Target application document content typing guard:
-            # If target app is active and user wants to write/type, ensure we target the editor document
-            # and do not accidentally click/type into non-text controls (like MenuItem, Button, ScrollBar).
-            if is_target_active and any(k in user_goal.lower() for k in ("write", "type", "intro", "introduction", "introduce", "note", "code")):
-                doc_elem = next(
-                    (e for e in elements if e.is_active_window and e.role in ("Document", "Edit")),
-                    None,
+            if self._cua_loop_warning:
+                warn_line = f"- Loop Intervention Warning: {self._cua_loop_warning}"
+                working_memory_context = (
+                    f"{working_memory_context}\n{warn_line}"
+                    if working_memory_context
+                    else warn_line
                 )
-                if action_plan.action in (ActionType.CLICK_AND_TYPE, ActionType.TYPE):
-                    if action_plan.target_id:
-                        matched = next((e for e in elements if e.id == action_plan.target_id), None)
-                        if matched and matched.role in ("MenuItem", "Button", "TabItem", "ScrollBar", "Header"):
-                            if doc_elem:
-                                logger.warning(
-                                    "[DOCUMENT TARGET REDIRECT] Redirecting type from %s '%s' to Document canvas #%d",
-                                    matched.role,
-                                    matched.label,
-                                    doc_elem.id,
-                                )
-                                action_plan.target_id = doc_elem.id
-                            elif cur_win and cur_win.rect:
-                                rx, ry, rw, rh = cur_win.rect[0], cur_win.rect[1], cur_win.rect[2] - cur_win.rect[0], cur_win.rect[3] - cur_win.rect[1]
-                                editor_x = rx + rw // 2
-                                editor_y = ry + rh // 2
-                                logger.warning(
-                                    "[DOCUMENT TARGET REDIRECT] Matched control is %s '%s'; redirecting click_and_type to window center (%d, %d)",
-                                    matched.role,
-                                    matched.label,
-                                    editor_x,
-                                    editor_y,
-                                )
-                                action_plan.target_id = None
-                                action_plan.coordinates = (editor_x, editor_y)
-                            action_plan.submit = False
-                        elif matched and matched.role in ("Document", "Edit"):
-                            action_plan.submit = False
-                    elif doc_elem and not action_plan.coordinates:
-                        action_plan.target_id = doc_elem.id
-                        action_plan.submit = False
+            if self._active_operator_steering and self._active_operator_steering_ttl > 0:
+                steer_line = f"- [OPERATOR COURSE CORRECTION]: {self._active_operator_steering}"
+                working_memory_context = (
+                    f"{working_memory_context}\n{steer_line}"
+                    if working_memory_context
+                    else steer_line
+                )
+                self._active_operator_steering_ttl -= 1
+                if self._active_operator_steering_ttl <= 0:
+                    self._active_operator_steering = None
 
-            if action_plan.action == ActionType.OFFLOAD_WEB_AI:
-                goal_lower = user_goal.lower()
-                wants_offload = any(
-                    kw in goal_lower
-                    for kw in ("gemini", "web ai", "offload", "browser ai", "chatgpt", "claude", "ask ai", "ask browser")
-                )
-                if not wants_offload:
-                    target_app = self.resolver.extract_target_app(user_goal)
-                    if target_app:
-                        action_plan = self.resolver.resolve_launch_action(
-                            target_app=target_app,
-                            elements=elements,
-                            cancellation_token=token,
+            # In CUA mode, pass image_base64=None so BrainManager encodes the uncropped full Monitor 1 current_frame.
+            thought, action_plan = self.brain_manager.generate_cua_step(
+                user_goal=user_goal,
+                screen_frame=current_frame,
+                image_base64=None,
+                screen_width=sw,
+                screen_height=sh,
+                candidate_elements=elements,
+                memory_context=memory_context,
+                working_memory_context=working_memory_context,
+            )
+
+            # CUA Pre-Dispatch Semantic Oscillation & Loop Breaker:
+            recent_recs = self.memory.get_recent_history(n=2)
+            if recent_recs:
+                last_rec = recent_recs[-1]
+
+                if action_plan.action == ActionType.TYPE and not action_plan.clear_first:
+                    last_tlabel = str((last_rec.target_info or {}).get("label", "") or "").lower()
+                    last_reason = str(last_rec.action.reasoning or "").lower()
+                    if last_rec.action.action == ActionType.CLICK and any(
+                        kw in last_tlabel or kw in last_reason
+                        for kw in ("search", "filter", "address bar")
+                    ):
+                        logger.info(
+                            "[SEARCH OVERWRITE] Enabling clear_first=True for TYPE after clicking search/filter input (%r).",
+                            last_tlabel or "search",
                         )
-                    else:
+                        action_plan.clear_first = True
+
+                # 1. Repetitive Typing Loop Breaker:
+                # For short search/launcher strings (<40 chars without sentence punctuation), convert consecutive
+                # duplicate TYPE into HOTKEY ["enter"] to submit. For long/punctuated editor prose, verify
+                # goal state first so we either complete cleanly or suppress buffer duplication.
+                if action_plan.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE):
+                    if last_rec.action.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE):
+                        prev_text = (last_rec.action.text or "").strip().lower()
+                        cur_text = (action_plan.text or "").strip().lower()
+                        is_long_prose = len(cur_text) >= 40 or cur_text.endswith((".", "!", "?"))
+                        if len(cur_text) >= 2 and prev_text == cur_text:
+                            if is_long_prose and override_action is None and self.goal_verifier is not None:
+                                dup_ver = self.goal_verifier.verify_goal_state(
+                                    user_goal=user_goal,
+                                    active_window=self._get_effective_active_window(user_goal=user_goal),
+                                    grounded_elements=elements,
+                                )
+                                if getattr(dup_ver, "verified", False):
+                                    logger.info("[LOOP BREAKER] Duplicate prose TYPE suppressed; goal already verified complete -> DONE.")
+                                    action_plan = ActionPlan(
+                                        action=ActionType.DONE,
+                                        reasoning="Duplicate typing suppressed: requested goal already verified complete.",
+                                    )
+                                else:
+                                    dup_reason = getattr(dup_ver, "reason", "Avoid repeating identical text.")
+                                    logger.warning("[LOOP BREAKER] Duplicate prose TYPE suppressed (%s).", dup_reason)
+                                    self._cua_loop_warning = f"Do NOT repeat identical text; resolve active window state: {dup_reason}"
+                                    action_plan = ActionPlan(
+                                        action=ActionType.WAIT,
+                                        wait_ms=250,
+                                        reasoning=f"Duplicate typing suppressed: {dup_reason}",
+                                    )
+                            elif not is_long_prose:
+                                already_pressed_enter = (
+                                    len(recent_recs) >= 2
+                                    and recent_recs[-2].action.action == ActionType.HOTKEY
+                                    and recent_recs[-2].action.keys == ["enter"]
+                                )
+                                if not already_pressed_enter:
+                                    logger.warning(
+                                        "[LOOP BREAKER] Repetitive typing of '%s' detected across consecutive steps. "
+                                        "Converting to Enter hotkey to submit input.",
+                                        action_plan.text,
+                                    )
+                                    action_plan.action = ActionType.HOTKEY
+                                    action_plan.keys = ["enter"]
+                                    action_plan.text = None
+                                    action_plan.submit = True
+                                    action_plan.reasoning = f"Submitting Enter for '{cur_text}' after repetitive typing loop"
+
+                # 2. Click Upgrade (Single-click -> Double-click) OR Already-Focused Editor Loop Guard:
+                # If CUA repeats a CLICK inside an already-active text editor (e.g. Notepad) with no screen change,
+                # do NOT upgrade to DOUBLE_CLICK; warn CUA that the editor is already focused and to emit type(content=...).
+                elif (
+                    action_plan.action == ActionType.CLICK
+                    and action_plan.coordinates is not None
+                ):
+                    if (
+                        last_rec.action.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK)
+                        and last_rec.action.coordinates is not None
+                    ):
+                        cur_eff_win = self._get_effective_active_window(user_goal=user_goal)
+                        cur_proc = (getattr(cur_eff_win, "process_name", "") or "").lower()
+                        cur_title = getattr(cur_eff_win, "title", "") or cur_proc
+                        goal_low = (user_goal or "").lower()
+                        is_write_goal = any(
+                            k in goal_low for k in ("write", "type", "compose", "draft", "sentence", "overview", "greeting")
+                        ) and not any(k in goal_low for k in ("save", "export", "close", "menu", "print"))
+                        if is_write_goal and cur_proc in ("notepad.exe", "wordpad.exe", "notepad++.exe") and last_rec.screen_diff < 0.02:
+                            ver = (
+                                self.goal_verifier.verify_goal_state(user_goal, cur_eff_win, [])
+                                if self.goal_verifier is not None
+                                else None
+                            )
+                            if ver is not None and ver.verified:
+                                logger.info(
+                                    "[EDITOR FOCUS GUARD] Goal is already verified complete (%s); "
+                                    "promoting redundant click in %s to ActionType.DONE.",
+                                    ver.reason, cur_proc,
+                                )
+                                action_plan.action = ActionType.DONE
+                                action_plan.coordinates = None
+                                action_plan.reasoning = f"Goal already verified complete: {ver.reason}"
+                            else:
+                                logger.info(
+                                    "[EDITOR FOCUS GUARD] Repeated click at %s while %s ('%s') is already active. "
+                                    "Converting to WAIT and instructing CUA to emit type(content=...).",
+                                    action_plan.coordinates, cur_proc, cur_title,
+                                )
+                                self._cua_loop_warning = (
+                                    f"Target editor '{cur_title}' ({cur_proc}) is ALREADY active and focused. "
+                                    "Do NOT click it again to bring it to front. Immediately emit type(content=...) with the requested text."
+                                )
+                                action_plan.action = ActionType.WAIT
+                                action_plan.coordinates = None
+                                action_plan.wait_ms = 100
+                                action_plan.reasoning = f"Editor '{cur_title}' is already active; prompting direct type()."
+                        elif (
+                            last_rec.action.action == ActionType.CLICK
+                            and "denied" not in (last_rec.error_message or "").lower()
+                        ):
+                            dx = abs(action_plan.coordinates[0] - last_rec.action.coordinates[0])
+                            dy = abs(action_plan.coordinates[1] - last_rec.action.coordinates[1])
+                            if dx <= 24 and dy <= 24:
+                                logger.info(
+                                    "[CUA CLICK UPGRADE] Upgrading repeated click at %s to DOUBLE_CLICK to activate target item",
+                                    action_plan.coordinates,
+                                )
+                                action_plan.action = ActionType.DOUBLE_CLICK
+                                action_plan.clicks = 2
+                                action_plan.reasoning = f"{action_plan.reasoning} [Upgraded to double-click]".strip()
+
+                # 3. Repeated Double-Click Loop Breaker:
+                # If double-clicking the same spatial cluster twice consecutively on desktop surface,
+                # submitting Enter activates the selected desktop item directly without redundant clicking.
+                elif (
+                    action_plan.action == ActionType.DOUBLE_CLICK
+                    and action_plan.coordinates is not None
+                    and last_rec.action.action == ActionType.DOUBLE_CLICK
+                    and last_rec.action.coordinates is not None
+                ):
+                    dx = abs(action_plan.coordinates[0] - last_rec.action.coordinates[0])
+                    dy = abs(action_plan.coordinates[1] - last_rec.action.coordinates[1])
+                    if dx <= 24 and dy <= 24:
+                        cur_eff_win = self._get_effective_active_window(user_goal=user_goal)
+                        cur_proc = (getattr(cur_eff_win, "process_name", "") or "").lower()
+                        cur_title = (getattr(cur_eff_win, "title", "") or "").lower()
+                        is_desktop = cur_proc == "explorer.exe" and cur_title in ("program manager", "workerw", "desktop", "")
+                        if is_desktop:
+                            logger.info(
+                                "[LOOP BREAKER] Repeated double-click at %s on desktop surface detected. "
+                                "Submitting Enter key to launch selected item.",
+                                action_plan.coordinates,
+                            )
+                            action_plan.action = ActionType.HOTKEY
+                            action_plan.keys = ["enter"]
+                            action_plan.reasoning = f"Submitting Enter on selected desktop target at {action_plan.coordinates}"
+
+            # 4. Unrequested Ctrl+S Guard (prevent post-completion Save As oscillation on non-save goals):
+            if (
+                override_action is None
+                and action_plan.action == ActionType.HOTKEY
+                and [k.strip().lower() for k in (action_plan.keys or [])] == ["ctrl", "s"]
+                and not self._goal_requests_save_or_close(user_goal)
+                and self.goal_verifier is not None
+            ):
+                save_ver = self.goal_verifier.verify_goal_state(
+                    user_goal=user_goal,
+                    active_window=self._get_effective_active_window(user_goal=user_goal),
+                    grounded_elements=elements,
+                )
+                if getattr(save_ver, "verified", False):
+                    logger.info("[SAVE GUARD] Intercepted unrequested Ctrl+S; goal already verified complete -> DONE.")
+                    action_plan = ActionPlan(
+                        action=ActionType.DONE,
+                        reasoning="Goal already complete without unrequested Ctrl+S save.",
+                    )
+                else:
+                    prior_ctrl_s = any(
+                        r.action.action == ActionType.HOTKEY
+                        and [k.strip().lower() for k in (r.action.keys or [])] == ["ctrl", "s"]
+                        for r in self.memory.get_recent_history(n=4)
+                    )
+                    if prior_ctrl_s:
+                        save_reason = getattr(save_ver, "reason", "Complete the task before finishing.")
+                        logger.warning("[SAVE GUARD] Blocked repeat unrequested Ctrl+S cycle (%s).", save_reason)
+                        self._cua_loop_warning = (
+                            f"Do NOT press Ctrl+S (saving was not requested). Complete the task directly: {save_reason}"
+                        )
                         action_plan = ActionPlan(
                             action=ActionType.WAIT,
-                            wait_ms=500,
-                            reasoning="Skipping unrequested browser offload in local mode; re-grounding desktop",
+                            wait_ms=250,
+                            reasoning=f"Blocked repeat unrequested Ctrl+S: {save_reason}",
                         )
+
+            persona_out = PersonaOutput(thought=thought, speech=thought)
+            if self.bridge:
+                self.bridge.notify_speech(thought)
+        else:
+            persona_out, action_plan = self._step_legacy_two_pass(
+                user_goal=user_goal,
+                elements=elements,
+                current_frame=current_frame,
+                override_action=override_action,
+                active_plan=active_plan,
+                current_plan_step=current_plan_step,
+            )
+
+        # Pre-DONE Objective Goal Verification Gate:
+        # Before executing DONE (and only if not explicitly overridden by test/user override_action),
+        # verify that the requested OS post-conditions have genuinely been accomplished.
+        # If verification fails, veto DONE, convert to diagnostic WAIT(success=False),
+        # and record the specific missing reason into memory so the model completes the task.
+        veto_error_message: Optional[str] = None
+        if action_plan.action == ActionType.DONE and override_action is None:
+            # Post-search launch gate: if the goal asks to open/launch/play something and the last
+            # interactive step was merely typing a search query (without a subsequent click/enter), veto DONE.
+            goal_low = (user_goal or "").lower()
+            is_launch_goal = bool(re.search(r"\b(open|launch|start|play|run)\b", goal_low))
+            if is_launch_goal and self.memory is not None:
+                recent_done_chk = [
+                    r for r in self.memory.get_recent_history(n=3)
+                    if r.action.action not in (ActionType.WAIT, ActionType.DONE)
+                ]
+                if recent_done_chk and recent_done_chk[-1].action.action == ActionType.TYPE and not recent_done_chk[-1].action.submit:
+                    self._episode_veto_count += 1
+                    self._consecutive_vetoed_dones += 1
+                    veto_error_message = (
+                        "Premature DONE rejected: You only typed the search query; "
+                        "you have NOT clicked or launched the target item yet."
+                    )
+                    self._cua_loop_warning = (
+                        f"{veto_error_message} Click the matching item or press Play/Enter before calling finished()."
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.WAIT,
+                        wait_ms=250,
+                        reasoning=f"Vetoed premature DONE after search TYPE: {veto_error_message}",
+                    )
+        if action_plan.action == ActionType.DONE and override_action is None:
+            verification = self.goal_verifier.verify_goal_state(
+                user_goal=user_goal,
+                active_window=self._get_effective_active_window(user_goal=user_goal),
+                grounded_elements=elements,
+            )
+            if not verification.verified:
+                self._episode_veto_count += 1
+                self._consecutive_vetoed_dones += 1
+                logger.warning(
+                    "[PRE-DONE VETO] Vetoing premature DONE for goal %r: %s (consecutive=%d)",
+                    user_goal,
+                    verification.reason,
+                    self._consecutive_vetoed_dones,
+                )
+                checked_conds = getattr(verification, "checked_conditions", None) or ()
+                is_notepad_composition_veto = any(
+                    c in checked_conds
+                    for c in ("notepad_greeting_non_echo", "notepad_greeting_composed")
+                )
+                if self._consecutive_vetoed_dones >= 2:
+                    if is_notepad_composition_veto:
+                        commit_hint = (
+                            " (Do NOT press Ctrl+S; click the Notepad text area, "
+                            "select all with ctrl+a, and type original sentences.)"
+                        )
+                    else:
+                        commit_hint = (
+                            " (If an inline rename, Save As box, or dialog edit is still open, "
+                            "press Enter or click Confirm to commit it.)"
+                        )
+                else:
+                    commit_hint = ""
+                veto_error_message = f"Premature DONE rejected: {verification.reason}{commit_hint}"
+                self._cua_loop_warning = (
+                    f"Premature finished() rejected: {verification.reason}{commit_hint} "
+                    "Do NOT call finished() again until you resolve this in the active window."
+                )
+                action_plan = ActionPlan(
+                    action=ActionType.WAIT,
+                    wait_ms=250,
+                    reasoning=veto_error_message,
+                )
+                if self.bridge:
+                    self.bridge.notify_speech(f"Not quite done yet: {verification.reason}")
+        else:
+            self._consecutive_vetoed_dones = 0
 
         # 5. Execution State & Dispatch
         if action_plan.action == ActionType.OFFLOAD_WEB_AI:
@@ -2897,6 +4587,9 @@ class DualMindPipeline:
             else None
         )
 
+        vbounds = self._resolve_frame_bounds(current_frame if isinstance(current_frame, np.ndarray) else None)
+        dispatch_frame = current_frame if isinstance(current_frame, np.ndarray) else None
+        observed_risk_level = "GREEN"
         if action_plan.action == ActionType.OFFLOAD_WEB_AI and self.offloader:
             try:
                 harvested = self.offloader.query_web_ai(user_goal)
@@ -2914,37 +4607,175 @@ class DualMindPipeline:
             except Exception as exc:
                 action_res = ActionResult(success=False, error=str(exc), action_executed=action_plan)
         else:
-            excl_rect = getattr(self.screen_grounder, "_last_excluded_rect", None) if self.screen_grounder else None
-            action_res = self.action_dispatcher.dispatch(
-                action=action_plan,
-                som_elements=elements,
-                cancellation_token=token,
-                excluded_rect=excl_rect,
-            )
+            fg_title = ""
+            fg_proc = ""
+            if self.window_guard and hasattr(self.window_guard, "get_active_window_info"):
+                try:
+                    winfo = self.window_guard.get_active_window_info()
+                    if winfo:
+                        t_val = getattr(winfo, "title", "")
+                        p_val = getattr(winfo, "process_name", "")
+                        fg_title = t_val if isinstance(t_val, str) else ""
+                        fg_proc = p_val if isinstance(p_val, str) else ""
+                except Exception:
+                    pass
+
+            consent_handler = getattr(self, "consent_handler", None)
+            if (consent_handler and callable(consent_handler)) or self.trace_recorder is not None:
+                from parasite_ai.safety.risk_gate import ActionRisk, ActionConsentRequest, classify_action_risk
+                risk_eval = classify_action_risk(action_plan, foreground_title=fg_title, foreground_process=fg_proc)
+                observed_risk_level = risk_eval.risk.value
+                if consent_handler and callable(consent_handler) and risk_eval.risk in (ActionRisk.YELLOW, ActionRisk.RED):
+                    if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK) and action_plan.coordinates:
+                        cx, cy = int(action_plan.coordinates[0]), int(action_plan.coordinates[1])
+                        risk_sig: Tuple[Any, ...] = (
+                            "CLICK_FAMILY",
+                            str(risk_eval.matched_pattern or risk_eval.reason),
+                            cx // 96,
+                            cy // 96,
+                        )
+                    else:
+                        risk_sig = (action_plan.action.value, str(risk_eval.matched_pattern or risk_eval.reason))
+                    with self._operator_lock:
+                        already_denied = risk_sig in self._denied_risk_signatures
+
+                    if already_denied:
+                        logger.info(
+                            "[CONSENT SKIP] Action %s matches previously denied risk signature %s; not re-prompting.",
+                            action_plan.action.value,
+                            risk_sig,
+                        )
+                        self._cua_loop_warning = (
+                            f"Operator ALREADY DENIED this {risk_eval.risk.value} action ({risk_eval.reason}). "
+                            "Do NOT retry or double-click it. Choose a completely different approach or call finished() if blocked."
+                        )
+                        action_res = ActionResult(
+                            success=False,
+                            error=f"Action previously denied by operator; not re-prompting ({risk_eval.reason}).",
+                            action_executed=action_plan,
+                        )
+                    else:
+                        consent_req = ActionConsentRequest(
+                            step_id=len(self.memory.history) + 1 if self.memory else 1,
+                            action_plan=action_plan,
+                            risk=risk_eval.risk,
+                            reason=risk_eval.reason,
+                            foreground_title=fg_title,
+                            foreground_process=fg_proc,
+                        )
+                        approved = False
+                        try:
+                            approved = bool(consent_handler(consent_req))
+                        except Exception as e:
+                            logger.warning(f"Error in consent handler: {e}")
+                            approved = False
+
+                        if not approved:
+                            with self._operator_lock:
+                                self._denied_risk_signatures.add(risk_sig)
+                            self._cua_loop_warning = (
+                                f"Operator DENIED this {risk_eval.risk.value} action ({risk_eval.reason}). "
+                                "Do NOT retry it. Choose a different approach or call finished() if blocked."
+                            )
+                            if (
+                                not (token and token.is_set())
+                                and self.parasite_skill is not None
+                                and self.parasite_skill.is_available()
+                            ):
+                                self.request_parasite_consult(
+                                    hint=f"Operator denied {risk_eval.risk.value} action ({risk_eval.reason}). Propose an alternative safe path."
+                                )
+                            action_res = ActionResult(
+                                success=False,
+                                error=f"Risk consent denied or timed out for {risk_eval.risk.value} action: {risk_eval.reason}",
+                                action_executed=action_plan,
+                            )
+
+            if 'action_res' not in locals():
+                excl_rect = getattr(self.screen_grounder, "_last_excluded_rect", None) if self.screen_grounder else None
+                action_res = self.action_dispatcher.dispatch(
+                    action=action_plan,
+                    som_elements=elements,
+                    cancellation_token=token,
+                    excluded_rect=excl_rect,
+                    cua_mode=use_cua_single_pass,
+                    frame=dispatch_frame,
+                    frame_origin=(vbounds[0], vbounds[1]),
+                    target_process=self._episode_expected_process,
+                    user_goal=user_goal,
+                )
 
         # 6. Settling & Localized Screen Diff Verification
         post_frame = current_frame
+        burst_frames: list[np.ndarray] = []
         if action_res.success and action_plan.action in INTERACTIVE_ACTION_TYPES and not action_res.interrupted:
-            time.sleep(0.05)
+            # Settle intervals: longer for window/app launches and Enter submissions, shorter for normal clicks
+            if use_cua_single_pass and self.capturer and type(self.capturer).__name__ != "MagicMock":
+                is_burst = action_plan.action == ActionType.BURST
+                has_slow_sub = is_burst and action_plan.burst_actions and any(
+                    sub.action in (ActionType.HOTKEY, ActionType.DOUBLE_CLICK)
+                    or (sub.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE) and sub.submit)
+                    for sub in action_plan.burst_actions
+                )
+                settle_s = (
+                    0.5
+                    if (
+                        action_plan.action in (ActionType.HOTKEY, ActionType.DOUBLE_CLICK)
+                        or (action_plan.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE) and action_plan.submit)
+                        or has_slow_sub
+                    )
+                    else (0.18 if is_burst else 0.12)
+                )
+                if self.screenshot_recorder.enabled:
+                    for _ in range(2):
+                        time.sleep(settle_s / 3.0)
+                        try:
+                            burst_frames.append(self.capturer.capture_screen())
+                        except Exception:
+                            pass
+                    time.sleep(settle_s / 3.0)
+                else:
+                    time.sleep(settle_s)
+            else:
+                time.sleep(0.05)
+
+            # Post-launch foreground settle wait: after submitting a Start/Run launch query,
+            # give the newly spawned application window up to 1.5s to become foreground so the
+            # next directive step does not fire into explorer.exe/SearchApp.exe.
+            is_launch_submit = (
+                active_plan is not None
+                and active_plan.get_current_step() is not None
+                and (
+                    (active_plan.get_current_step().rationale or "") == "launch:submit_search"
+                    or (
+                        active_plan.get_current_step().step_id <= 2
+                        and action_plan.action == ActionType.TYPE
+                        and action_plan.submit
+                        and "explorer.exe" in (pre_win_label or "").lower()
+                    )
+                )
+            )
+            if is_launch_submit and self.capturer and type(self.capturer).__name__ != "MagicMock":
+                shell_procs = {"explorer.exe", "searchapp.exe", "searchhost.exe", "startmenuexperiencehost.exe"}
+                deadline = time.perf_counter() + 1.5
+                while time.perf_counter() < deadline:
+                    if token and token.is_set():
+                        break
+                    cur_eff = self._get_effective_active_window(user_goal=user_goal)
+                    cur_p = (getattr(cur_eff, "process_name", None) or "").strip().lower() if cur_eff else ""
+                    if cur_p and cur_p not in shell_procs:
+                        break
+                    time.sleep(0.1)
+
             if self.capturer:
                 try:
                     post_frame = self.capturer.capture_screen()
                 except Exception:
                     pass
 
-        # Resolve monitor / virtual screen bounds and target ROI
-        from parasite_ai.vision.capture import get_monitor_bounds, get_virtual_screen_bounds
-        mon_idx = getattr(getattr(self.config, "vision", None), "monitor_index", 0) if self.config is not None else 0
-        if isinstance(mon_idx, int) and mon_idx >= 1 and current_frame is not None:
-            mbounds = get_monitor_bounds(mon_idx)
-            if current_frame.shape[1] == mbounds[2] and current_frame.shape[0] == mbounds[3]:
-                vbounds = mbounds
-            else:
-                vbounds = get_virtual_screen_bounds()
-        else:
-            vbounds = get_virtual_screen_bounds()
         active_rect = None
-        eff_win = self._get_effective_active_window()
+        eff_win = self._get_effective_active_window(user_goal=user_goal)
+        post_win_label = self._format_window_label(eff_win)
         if eff_win and hasattr(eff_win, "rect"):
             active_rect = eff_win.rect
 
@@ -2962,9 +4793,16 @@ class DualMindPipeline:
         roi_post = target_roi.crop_frame(post_frame, bounds=vbounds) if target_roi else None
 
         if roi_pre is not None and roi_post is not None and roi_pre.shape == roi_post.shape and roi_pre.size > 0:
-            screen_diff = compute_pixel_diff(roi_pre, roi_post)
+            roi_diff = compute_pixel_diff(roi_pre, roi_post)
             post_hash = compute_dhash(roi_post)
             pre_hash = compute_dhash(roi_pre)
+            # In CUA mode, if clicking a small button launched or focused an external window,
+            # take max(roi_diff, full_screen_diff) so the full-screen appearance is credited.
+            if use_cua_single_pass and current_frame is not None and post_frame is not None:
+                full_diff = compute_pixel_diff(current_frame, post_frame)
+                screen_diff = max(roi_diff, full_diff)
+            else:
+                screen_diff = roi_diff
         else:
             # Fallback to full desktop diffing for global actions or ungrounded hotkeys
             screen_diff = (
@@ -2975,44 +4813,135 @@ class DualMindPipeline:
             post_hash = compute_dhash(post_frame) if post_frame is not None else None
             pre_hash = compute_dhash(current_frame) if current_frame is not None else None
 
+        recent_history = self.memory.get_recent_history(n=4)
+
+        def _actions_match_for_oscillation(act_a: ActionPlan, act_b: ActionPlan) -> bool:
+            if act_a.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.MINIMIZE_WINDOW):
+                if act_b.action != act_a.action:
+                    return False
+                if act_a.target_id is not None and act_b.target_id == act_a.target_id:
+                    return True
+                if act_a.coordinates and act_b.coordinates:
+                    return (
+                        abs(act_a.coordinates[0] - act_b.coordinates[0]) <= 24
+                        and abs(act_a.coordinates[1] - act_b.coordinates[1]) <= 24
+                    )
+                return False
+            if act_a.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE):
+                if act_b.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE):
+                    return (act_a.text or "").strip().lower() == (act_b.text or "").strip().lower()
+                if act_b.action == ActionType.BURST and act_b.burst_actions:
+                    target_txt = (act_a.text or "").strip().lower()
+                    return bool(target_txt) and any(
+                        sub.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE)
+                        and (sub.text or "").strip().lower() == target_txt
+                        for sub in act_b.burst_actions
+                    )
+                return False
+            if act_a.action == ActionType.HOTKEY:
+                if act_b.action != ActionType.HOTKEY:
+                    return False
+                hk_a = tuple(act_a.keys or ([act_a.text] if act_a.text else []))
+                hk_b = tuple(act_b.keys or ([act_b.text] if act_b.text else []))
+                return bool(hk_a and hk_a == hk_b)
+            if act_a.action == ActionType.BURST:
+                subs_a = act_a.burst_actions or []
+                if not subs_a:
+                    return False
+                if act_b.action == ActionType.BURST:
+                    subs_b = act_b.burst_actions or []
+                    if len(subs_a) != len(subs_b):
+                        return False
+                    return all(_actions_match_for_oscillation(sa, sb) for sa, sb in zip(subs_a, subs_b))
+                if act_b.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE):
+                    return _actions_match_for_oscillation(act_b, act_a)
+                return False
+            return False
+
+        # In CUA mode, typing or non-oscillating keyboard hotkeys (e.g. Win+R, Enter, Ctrl+A, Ctrl+C)
+        # often change a small percentage of a 1920x1080 screen (< 2%). When physically successful
+        # and not repeating a zero-diff action, credit them with at least the screen_diff_threshold.
+        if use_cua_single_pass and action_res.success:
+            is_keyboard_burst = (
+                action_plan.action == ActionType.BURST
+                and bool(action_plan.burst_actions)
+                and all(
+                    sub.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE, ActionType.HOTKEY)
+                    for sub in action_plan.burst_actions
+                )
+            )
+            repeats_prev_with_no_diff = bool(
+                screen_diff < 0.002
+                and recent_history
+                and _actions_match_for_oscillation(action_plan, recent_history[-1].action)
+            )
+            if not repeats_prev_with_no_diff and (
+                action_plan.action in (ActionType.TYPE, ActionType.CLICK_AND_TYPE, ActionType.HOTKEY)
+                or is_keyboard_burst
+            ):
+                screen_diff = max(screen_diff, self.memory.screen_diff_threshold)
+
         # 7. Action-Aware Strike Evaluation & Tier Transition
         is_interactive = action_plan.action in INTERACTIVE_ACTION_TYPES
         cli_rc = getattr(action_res, "returncode", None)
 
-        # Detect toggle oscillation loops (e.g. repeatedly clicking the same button or spamming the same hotkey)
-        recent_history = self.memory.get_recent_history(n=2)
+        # Detect toggle / ABAB oscillation loops (e.g. repeatedly clicking the same button,
+        # ping-ponging between two coordinates [A <-> B], or spamming TYPE/HOTKEY/BURST loops)
         is_oscillating = False
-        if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.MINIMIZE_WINDOW):
-            same_target_repeats = 0
-            for prev_rec in recent_history:
-                prev_act = prev_rec.action
-                if prev_act.action == action_plan.action and (
-                    (action_plan.target_id is not None and prev_act.target_id == action_plan.target_id)
-                    or (action_plan.coordinates and prev_act.coordinates == action_plan.coordinates)
-                ):
-                    same_target_repeats += 1
-            if same_target_repeats >= 2:
+
+        if action_plan.action in (
+            ActionType.CLICK,
+            ActionType.DOUBLE_CLICK,
+            ActionType.MINIMIZE_WINDOW,
+            ActionType.TYPE,
+            ActionType.CLICK_AND_TYPE,
+            ActionType.HOTKEY,
+            ActionType.BURST,
+        ):
+            same_repeats = sum(
+                1 for prev_rec in recent_history[-2:]
+                if _actions_match_for_oscillation(action_plan, prev_rec.action)
+            )
+            abab_cycle = (
+                len(recent_history) >= 3
+                and _actions_match_for_oscillation(action_plan, recent_history[-2].action)
+                and _actions_match_for_oscillation(recent_history[-1].action, recent_history[-3].action)
+                and not _actions_match_for_oscillation(action_plan, recent_history[-1].action)
+            )
+            if same_repeats >= 2 or abab_cycle:
                 is_oscillating = True
                 logger.warning(
-                    "[OSCILLATION LOOP DETECTED] Action %s repeatedly targeted the same element (target_id=%s). Enforcing failure strike to break toggle cycle.",
+                    "[OSCILLATION LOOP DETECTED] Action %s %s (same_repeats=%d, abab_cycle=%s). Enforcing failure strike to break loop.",
                     action_plan.action.value,
-                    action_plan.target_id,
+                    f"coords={action_plan.coordinates}" if action_plan.coordinates else f"text={action_plan.text!r}, keys={action_plan.keys}",
+                    same_repeats,
+                    abab_cycle,
                 )
-        elif action_plan.action == ActionType.HOTKEY:
-            cur_hk = tuple(action_plan.keys or ([action_plan.text] if action_plan.text else []))
-            same_hk_repeats = 0
-            for prev_rec in recent_history:
-                prev_act = prev_rec.action
-                if prev_act.action == ActionType.HOTKEY:
-                    prev_hk = tuple(prev_act.keys or ([prev_act.text] if prev_act.text else []))
-                    if cur_hk and cur_hk == prev_hk:
-                        same_hk_repeats += 1
-            if same_hk_repeats >= 2:
-                is_oscillating = True
-                logger.warning(
-                    "[OSCILLATION LOOP DETECTED] Action HOTKEY %s repeated consecutively. Enforcing failure strike to break hotkey loop.",
-                    cur_hk,
-                )
+
+        if veto_error_message is not None and self._consecutive_vetoed_dones >= 2:
+            is_oscillating = True
+            logger.warning(
+                "[PRE-DONE LOOP DETECTED] %d consecutive premature DONEs rejected; enforcing failure strike.",
+                self._consecutive_vetoed_dones,
+            )
+
+        is_post_launch_settle = "post-launch" in (action_plan.reasoning or "").lower()
+        if (
+            action_plan.action == ActionType.WAIT
+            and screen_diff < 0.002
+            and veto_error_message is None
+            and not is_post_launch_settle
+        ):
+            self._consecutive_idle_waits += 1
+        elif action_plan.action != ActionType.WAIT or screen_diff >= 0.002:
+            self._consecutive_idle_waits = 0
+
+        if self._consecutive_idle_waits >= 3:
+            is_oscillating = True
+            logger.warning(
+                "[IDLE WAIT LOOP DETECTED] %d consecutive zero-diff WAIT actions; enforcing failure strike to break passive stall.",
+                self._consecutive_idle_waits,
+            )
 
         eval_success = action_res.success and not is_oscillating
         eval_diff = screen_diff if not is_oscillating else 0.0
@@ -3025,6 +4954,36 @@ class DualMindPipeline:
             cli_returncode=cli_rc,
             diff_threshold=self.memory.screen_diff_threshold,
         )
+
+        # Track strike root cause for reactive ParasiteSkill recovery prompts
+        if is_oscillating:
+            self._last_strike_cause = RecoveryTrigger.OSCILLATION
+            self._cua_loop_warning = (
+                "Action loop / alternating cycle detected without net progress. "
+                "Stop repeating the previous shortcut/dialog cycle; if the requested task is already complete on screen emit finished(), otherwise pick a new approach."
+            )
+        elif not eval_success or (is_interactive and eval_diff < self.memory.screen_diff_threshold):
+            _click_actions = (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK)
+            prior_click_fail = any(
+                (not r.success or (r.action.action in _click_actions and r.screen_diff < self.memory.screen_diff_threshold))
+                and r.action.action in _click_actions
+                for r in recent_history[-1:]
+            )
+            if action_plan.action in _click_actions and prior_click_fail:
+                self._last_strike_cause = RecoveryTrigger.CONSECUTIVE_CLICK_FAILURES
+            else:
+                self._last_strike_cause = RecoveryTrigger.CONSECUTIVE_STRIKES
+        elif new_tier == CadenceTier.TIER_1_LOCAL and self.escalation_sm.current_strikes == 0:
+            self._last_strike_cause = RecoveryTrigger.CONSECUTIVE_STRIKES
+            if eval_success and is_interactive and eval_diff >= self.memory.screen_diff_threshold:
+                self._cua_loop_warning = None
+        elif (
+            not is_oscillating
+            and eval_success
+            and action_plan.action == ActionType.TYPE
+            and eval_diff >= self.memory.screen_diff_threshold
+        ):
+            self._cua_loop_warning = None
 
         logger.info(
             "[ACTION VERIFIED] Action: %s | Success: %s | Screen Diff: %.4f (Threshold: %.4f) | Tier: %s (Strikes: %d/3)",
@@ -3064,10 +5023,66 @@ class DualMindPipeline:
                     "label": matched.label,
                     "bbox": matched.bbox,
                 }
+        elif action_plan.coordinates and elements:
+            from parasite_ai.mind.uitars_parser import snap_coordinates_to_element
+            _, snapped_elem = snap_coordinates_to_element(action_plan.coordinates, elements, snap_radius_px=35.0)
+            if snapped_elem:
+                target_info = {
+                    "id": getattr(snapped_elem, "id", None),
+                    "role": getattr(snapped_elem, "role", None),
+                    "label": getattr(snapped_elem, "label", None) or getattr(snapped_elem, "name", None),
+                    "bbox": getattr(snapped_elem, "bbox", None),
+                }
+
+        effective_success = action_res.success and (veto_error_message is None) and not is_oscillating
+        effective_error = (
+            veto_error_message
+            or action_res.error
+            or ("Action oscillation loop detected" if is_oscillating else None)
+        )
+
+        self._debug_step_counter += 1
+        ref_info = getattr(self.action_dispatcher, "last_refinement", None) or {}
+        raw_c = ref_info.get("raw_coords") or action_plan.coordinates
+        final_c = ref_info.get("final_coords") or action_res.resolved_coordinates or raw_c
+        saved_shot = self.screenshot_recorder.save_step_frames(
+            pre_frame=current_frame,
+            post_frame=post_frame,
+            step_idx=self._debug_step_counter,
+            raw_coords=raw_c,
+            final_coords=final_c,
+            snap_strategy=ref_info.get("snap_strategy"),
+            matched_label=ref_info.get("matched_label"),
+            optical_tier=ref_info.get("optical_tier"),
+            active_window=post_win_label or pre_win_label,
+            action_label=action_plan.action.value,
+            thought=persona_out.thought,
+            burst_frames=burst_frames,
+            burst_coords=ref_info.get("burst_coords"),
+        )
+        logger.info(
+            "[STEP TELEMETRY] Step %02d | %s | Coords: %s->%s (%s, label=%r, opt=%s, glyph=%r) | Win: %s -> %s | Diff: %.4f%s",
+            self._debug_step_counter,
+            action_plan.action.value,
+            raw_c,
+            final_c,
+            ref_info.get("snap_strategy", "none"),
+            ref_info.get("matched_label", ""),
+            ref_info.get("optical_tier"),
+            ref_info.get("target_glyph"),
+            pre_win_label,
+            post_win_label,
+            screen_diff,
+            f" | Shot: {saved_shot}" if saved_shot is not None else "",
+        )
+
+        frame_screen_size = (1920, 1080)
+        if current_frame is not None and isinstance(current_frame, np.ndarray) and current_frame.ndim >= 2:
+            frame_screen_size = (int(current_frame.shape[1]), int(current_frame.shape[0]))
 
         step_record = self.memory.record_step(
             action=action_plan,
-            success=action_res.success,
+            success=effective_success,
             screen_diff=screen_diff,
             user_goal=user_goal,
             persona_thought=persona_out.thought,
@@ -3075,15 +5090,18 @@ class DualMindPipeline:
             target_info=target_info,
             pre_hash=pre_hash,
             post_hash=post_hash,
-            error_message=action_res.error,
+            error_message=effective_error,
             tier_level=self.escalation_sm.current_tier,
+            pre_window=pre_win_label,
+            post_window=post_win_label,
+            screen_size=frame_screen_size,
         )
 
         # 8. Living Plan Step Advancement & Contingency Generation
         if active_plan:
             cur = active_plan.get_current_step()
             if cur:
-                current_window = self._get_effective_active_window()
+                current_window = self._get_effective_active_window(user_goal=user_goal)
                 if verify_step_completion(cur, action_plan, action_res, screen_diff, current_window, elements=elements):
                     active_plan.advance_step()
                 elif action_res.success:
@@ -3107,4 +5125,956 @@ class DualMindPipeline:
             if self.bridge:
                 self.bridge.notify_state("USER_OVERRIDE", "Curious")
 
+        # 9. Deterministic Skill Trace Observation (P4.4)
+        if self.trace_recorder is not None:
+            post_proc_str = ""
+            post_sensitive = False
+            eff_post_win = self._get_effective_active_window(user_goal=user_goal)
+            if eff_post_win is not None:
+                p_attr = getattr(eff_post_win, "process_name", "")
+                post_proc_str = p_attr if isinstance(p_attr, str) else ""
+            if self.window_guard and hasattr(self.window_guard, "is_safe_to_operate"):
+                try:
+                    post_sensitive = not bool(self.window_guard.is_safe_to_operate())
+                except Exception:
+                    post_sensitive = False
+            tgt_label = (
+                target_info.get("label")
+                if isinstance(target_info, dict)
+                else None
+            ) or (current_plan_step.target_description if current_plan_step else None)
+            self.trace_recorder.observe(
+                step_record=step_record,
+                pre_window=pre_win_label or "",
+                post_window=post_win_label or "",
+                post_process=post_proc_str,
+                target_label=tgt_label,
+                risk_level=observed_risk_level,
+                sensitive_window=post_sensitive,
+            )
+
         return step_record
+
+    def _step_legacy_two_pass(
+        self,
+        user_goal: str,
+        elements: List[UIElement],
+        current_frame: Optional[np.ndarray],
+        override_action: Optional[ActionPlan],
+        active_plan: Any,
+        current_plan_step: Any,
+    ) -> Tuple[PersonaOutput, ActionPlan]:
+        """
+        Auxiliary legacy 2-pass execution pipeline: Pass 1 (Monologue) + Pass 2 (Action planning).
+        Retained as a compatibility fallback for legacy unit tests and non-CUA backends.
+        """
+        use_cua_single_pass = False
+
+        # 1. Foveated VLM frame and composite preparation for legacy 2-pass mode
+        vlm_image_b64: Optional[str] = None
+        foveated_frame: Optional[FoveatedFrame] = None
+        has_active_app_win = False
+        if current_frame is not None and isinstance(current_frame, np.ndarray) and current_frame.size > 0:
+            try:
+                eff_win = self._get_effective_active_window(user_goal=user_goal)
+                active_rect_xywh: Optional[Tuple[int, int, int, int]] = None
+                if eff_win is not None:
+                    ew_title = (getattr(eff_win, "title", "") or "").strip().lower()
+                    ew_rect = getattr(eff_win, "rect", None)
+                    if (
+                        ew_title not in ("program manager", "workerw", "desktop", "taskbar", "")
+                        and isinstance(ew_rect, (tuple, list))
+                        and len(ew_rect) == 4
+                    ):
+                        rl, rt, rr, rb = (int(v) for v in ew_rect)
+                        rw = (rr - rl) if rr > rl else rr
+                        rh = (rb - rt) if rb > rt else rb
+                        if rw > 50 and rh > 50:
+                            active_rect_xywh = (rl, rt, rw, rh)
+                            has_active_app_win = True
+
+                foveated_frame = self.foveated_engine.capture_foveated(
+                    active_window_rect=active_rect_xywh,
+                    full_frame_override=current_frame,
+                    force=True,
+                )
+                self.last_foveated_frame = foveated_frame
+
+                supports_vis = getattr(self.brain_manager, "supports_vision", None)
+                if callable(supports_vis) and supports_vis() is True:
+                    vlm_image_b64 = self.foveated_engine.build_vlm_composite(
+                        frame=foveated_frame,
+                        elements=elements,
+                        use_fovea=has_active_app_win,
+                        max_dim=512,
+                        quality=80,
+                    )
+            except Exception as fov_exc:
+                logger.debug("Foveated VLM frame preparation skipped: %s", fov_exc)
+
+        # Legacy 2-Pass: Pass 1 Persona Monologue + Pass 2 Action Planning
+        current_mood = self.persona_engine.derive_mood(self.memory, state="THINKING")
+        if self.screen_grounder and hasattr(self.screen_grounder, "format_concise_scene_summary"):
+            scene_summary = self.screen_grounder.format_concise_scene_summary(elements)
+        elif self.screen_grounder and hasattr(self.screen_grounder, "format_som_summary"):
+            scene_summary = self.screen_grounder.format_som_summary(elements)
+        else:
+            scene_summary = f"{len(elements)} targets detected"
+        if current_plan_step:
+            scene_summary = f"[Active Step {current_plan_step.step_id}]: {current_plan_step.description}\n{scene_summary}"
+
+        memory_context = self.memory.format_for_prompt()
+
+        persona_out = self.persona_engine.generate_monologue(
+            user_goal=user_goal,
+            scene_summary=scene_summary,
+            memory_context=memory_context,
+            mood_override=current_mood,
+            state="THINKING",
+            image_base64=vlm_image_b64,
+        )
+
+        # 4. Pass 2: Action Planning
+        if override_action is not None:
+            action_plan = override_action
+        elif self.escalation_sm.current_tier == CadenceTier.TIER_1_LOCAL and self.memory.is_in_loop():
+            # Detected cognitive failure loop! Trigger emergency strategy switch
+            action_plan = ActionPlan(
+                action=ActionType.PANIC,
+                reasoning="Detected 3-strike failure loop. Initiating panic/strategy reset.",
+            )
+        else:
+            som_dicts = [
+                {
+                    "id": e.id,
+                    "role": e.role,
+                    "label": e.label,
+                    "x": e.x,
+                    "y": e.y,
+                    "width": e.width,
+                    "height": e.height,
+                    **({"app": e.process_name} if getattr(e, "process_name", None) else {}),
+                    **({"window": e.window_title} if getattr(e, "window_title", None) else {}),
+                }
+                for e in elements
+            ]
+            # Bound persona thought to a concise string (max 300 chars) for Pass 2 intent
+            clean_thought = (persona_out.thought or "").strip()
+            if len(clean_thought) > 300:
+                clean_thought = clean_thought[:297] + "..."
+
+            step_desc = f"Active Step: {current_plan_step.description}\n" if current_plan_step else ""
+            try:
+                raw_action = self.brain_manager.generate_action(
+                    persona_intent=f"{step_desc}User Goal: {user_goal}\nIntent: {clean_thought}",
+                    som_elements=som_dicts,
+                    memory_context=memory_context,
+                    image_base64=vlm_image_b64,
+                )
+            except TypeError:
+                raw_action = self.brain_manager.generate_action(
+                    persona_intent=f"{step_desc}User Goal: {user_goal}\nIntent: {clean_thought}",
+                    som_elements=som_dicts,
+                    memory_context=memory_context,
+                )
+            action_plan = ActionPlan.model_validate(raw_action)
+
+        # 4a. VLM Coordinate & Hybrid Snapping Resolution (Legacy 2-pass mode):
+        # If the VLM emitted Qwen2.5-VL bounding box / coordinate tags in reasoning or thought,
+        # or returned a click action without target_id/coordinates, resolve via VLMGrounder.
+        if (
+            not use_cua_single_pass
+            and action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK, ActionType.CLICK_AND_TYPE)
+            and action_plan.target_id is None
+            and action_plan.coordinates is None
+            and foveated_frame is not None
+        ):
+            crop_img = foveated_frame.fovea_image if has_active_app_win else foveated_frame.macro_image
+            crop_offset = (foveated_frame.fovea_rect[0], foveated_frame.fovea_rect[1]) if has_active_app_win else (0, 0)
+            ch, cw = crop_img.shape[:2]
+            vlm_coords = (
+                parse_vlm_coordinates(action_plan.reasoning or "", cw, ch)
+                or parse_vlm_coordinates(persona_out.thought or "", cw, ch)
+            )
+            if vlm_coords is not None:
+                if has_active_app_win:
+                    global_xy = (vlm_coords[0] + crop_offset[0], vlm_coords[1] + crop_offset[1])
+                else:
+                    global_xy = self.foveated_engine.transform_macro_to_screen(vlm_coords[0], vlm_coords[1], foveated_frame)
+                snapped_xy, snapped_el = self.vlm_grounder.snap_to_element(global_xy, elements)
+                if snapped_el is not None:
+                    action_plan.target_id = snapped_el.id
+                else:
+                    action_plan.coordinates = snapped_xy
+            else:
+                snapped_xy, snapped_el = self.vlm_grounder.ground_target(
+                    image=crop_img,
+                    target_description=action_plan.reasoning or user_goal,
+                    candidate_elements=elements,
+                    crop_offset=crop_offset,
+                )
+                if snapped_el is not None:
+                    action_plan.target_id = snapped_el.id
+                elif snapped_xy is not None:
+                    action_plan.coordinates = snapped_xy
+
+        token = (
+            self.interrupt_guard.get_cancellation_token()
+            if self.interrupt_guard and hasattr(self.interrupt_guard, "get_cancellation_token")
+            else None
+        )
+
+        target_app = (
+            (current_plan_step.target_description if current_plan_step else None)
+            or self.resolver.extract_target_app(user_goal)
+            or (self.resolver.extract_target_app(current_plan_step.description) if current_plan_step else None)
+        )
+        target_app_clean = target_app.strip().lower() if target_app else None
+
+        cur_win = self._get_effective_active_window(user_goal=user_goal)
+        cur_win_title = (getattr(cur_win, "title", None) or "").lower() if cur_win else ""
+        cur_win_proc = (getattr(cur_win, "process_name", None) or "").lower() if cur_win else ""
+        is_error_dialog = is_error_dialog_window(cur_win_title, cur_win_proc, elements)
+        is_launcher_dialog = is_intermediate_launcher_window(
+            cur_win_title,
+            cur_win_proc,
+            user_goal=user_goal,
+            target_app=target_app_clean,
+            elements=elements,
+            window_rules=self.window_rules,
+        )
+        target_pattern = r"\b" + re.escape(target_app_clean) if target_app_clean else ""
+        is_generic_target = bool(
+            target_app_clean in {
+                "game", "games", "app", "apps", "application", "applications",
+                "program", "programs", "tool", "tools", "something", "it",
+            }
+        )
+        is_explorer_non_target = bool(
+            cur_win_proc == "explorer.exe"
+            and not any(k in user_goal.lower() for k in ("explorer", "folder", "file", "directory"))
+        )
+        is_target_active = bool(
+            cur_win
+            and target_app_clean
+            and not is_generic_target
+            and not is_error_dialog
+            and not is_launcher_dialog
+            and not is_explorer_non_target
+            and (
+                bool(re.search(target_pattern, cur_win_proc))
+                or bool(re.search(target_pattern, cur_win_title))
+                or PrecisionAppMatcher.score_match(cur_win_title, target_app_clean) >= 0.80
+                or PrecisionAppMatcher.score_match(cur_win_proc, target_app_clean) >= 0.80
+            )
+        )
+
+        # Pre-normalize LLM action confusions:
+        # (a) HOTKEY containing an element ID like "#5" or "[#1]" -> convert to CLICK on that element ID
+        if action_plan.action == ActionType.HOTKEY:
+            raw_keys = list(action_plan.keys or []) + ([action_plan.text.strip()] if action_plan.text else [])
+            converted_tid: Optional[int] = None
+            for rk in raw_keys:
+                m_id = re.match(r"^\[?#(\d+)\]?$", str(rk).strip())
+                if m_id:
+                    converted_tid = int(m_id.group(1))
+                    break
+            if converted_tid is not None:
+                logger.warning(
+                    "[HOTKEY ID REDIRECT] LLM emitted HOTKEY with element ID '#%d'; converting to CLICK on target #%d.",
+                    converted_tid,
+                    converted_tid,
+                )
+                action_plan = ActionPlan(
+                    action=ActionType.CLICK,
+                    target_id=converted_tid,
+                    reasoning=action_plan.reasoning or f"Converted hotkey #{converted_tid} to CLICK on target #{converted_tid}",
+                )
+            elif target_app_clean and not is_target_active and not is_generic_target and not is_launcher_dialog:
+                # (b) Bare single-letter hotkey (e.g. HOTKEY "r") while trying to launch an app -> redirect to universal launch
+                eff_keys = [
+                    k.strip().lower()
+                    for k in (action_plan.keys or [k for k in (action_plan.text or "").split("+") if k.strip()])
+                    if k.strip()
+                ]
+                if len(eff_keys) == 1 and len(eff_keys[0]) == 1 and eff_keys[0].isalnum():
+                    logger.warning(
+                        "[HOTKEY LAUNCH REDIRECT] Intercepted bare single-character hotkey '%s' while launching '%s'; redirecting to launch resolver.",
+                        eff_keys[0],
+                        target_app,
+                    )
+                    action_plan = self.resolver.resolve_launch_action(
+                        target_app=target_app,
+                        elements=elements,
+                        cancellation_token=token,
+                    )
+
+        # (c) MINIMIZE_WINDOW / CLOSE_WINDOW targeting the target app's own desktop shortcut -> convert to CLICK launch
+        if (
+            action_plan.action in (ActionType.MINIMIZE_WINDOW, ActionType.CLOSE_WINDOW)
+            and action_plan.target_id is not None
+            and target_app_clean
+            and not is_target_active
+            and not re.match(r"(?i)^\s*(?:please\s+)?(?:close|minimize|minimise)\b", user_goal or "")
+        ):
+            matched_el = next((e for e in elements if e.id == action_plan.target_id), None)
+            if matched_el and (
+                matched_el.role == "ListItem"
+                or (matched_el.window_title or "").strip().lower() in ("program manager", "workerw", "desktop")
+            ):
+                if PrecisionAppMatcher.score_match(matched_el.label or "", target_app_clean) >= 0.80:
+                    logger.warning(
+                        "[LAUNCH TARGET REDIRECT] LLM chose %s on target desktop shortcut '%s' (#%d); converting to launch click.",
+                        action_plan.action.value,
+                        matched_el.label,
+                        matched_el.id,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.CLICK,
+                        target_id=matched_el.id,
+                        reasoning=f"Launching desktop target '{matched_el.label}' instead of minimizing/closing it",
+                    )
+
+        # (d) DOUBLE_CLICK on a Windows Taskbar button -> downgrade to single CLICK so it activates instead of toggling/minimizing
+        if action_plan.action == ActionType.DOUBLE_CLICK and action_plan.target_id is not None:
+            matched_tb = next((e for e in elements if e.id == action_plan.target_id), None)
+            if matched_tb and (
+                (matched_tb.window_title or "").strip().lower() in ("taskbar", "running applications")
+                or "running window" in (matched_tb.label or "").lower()
+            ):
+                logger.info(
+                    "[TASKBAR CLICK NORMALIZATION] Downgrading DOUBLE_CLICK to single CLICK on taskbar button '%s' (#%d) so window activates cleanly.",
+                    matched_tb.label,
+                    matched_tb.id,
+                )
+                action_plan.action = ActionType.CLICK
+
+        # (e) Reasoning-to-Label Target Cross-Check:
+        # If the LLM's reasoning explicitly quotes an element name (e.g. 'Document Editor')
+        # that does not match the element at action_plan.target_id (e.g. #24 'Second Brain'),
+        # snap target_id to the element matching the quoted label.
+        if (
+            action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK, ActionType.CLICK_AND_TYPE)
+            and action_plan.target_id is not None
+            and action_plan.reasoning
+        ):
+            matched_by_id = next((e for e in elements if e.id == action_plan.target_id), None)
+            quoted_names = re.findall(r"['\"]([^'\"]{3,60})['\"]", action_plan.reasoning)
+            for q_name in quoted_names:
+                q_clean = q_name.strip()
+                if not q_clean:
+                    continue
+                cur_score = (
+                    PrecisionAppMatcher.score_match(matched_by_id.label or "", q_clean)
+                    if matched_by_id is not None
+                    else 0.0
+                )
+                if cur_score < 0.50:
+                    best_quoted = PrecisionAppMatcher.find_best_element(q_clean, elements, threshold=0.85)
+                    if best_quoted is not None:
+                        q_elem, q_score = best_quoted
+                        logger.warning(
+                            "[REASONING TARGET CORRECTION] Reasoning named '%s' (matches #%d '%s', score=%.2f) "
+                            "but target_id was #%s ('%s'). Snapping target_id to #%d.",
+                            q_clean,
+                            q_elem.id,
+                            q_elem.label,
+                            q_score,
+                            action_plan.target_id,
+                            matched_by_id.label if matched_by_id else "None",
+                            q_elem.id,
+                        )
+                        action_plan.target_id = q_elem.id
+                        action_plan.coordinates = (q_elem.center_x, q_elem.center_y)
+                        break
+
+        run_edit = next(
+            (
+                e for e in elements
+                if e.role == "Edit" and any(
+                    kw in (e.label or "").lower()
+                    for kw in ("open", "type the name of a program", "run")
+                )
+            ),
+            None,
+        )
+
+        # 0. Error Dialog Recovery: If an error dialog is open (e.g. 'Windows cannot find...'), dismiss it immediately
+        if is_error_dialog:
+            logger.warning(
+                "[ERROR DIALOG RECOVERY] Error dialog detected ('%s'); dismissing via Enter/Esc to unblock launch.",
+                cur_win_title,
+            )
+            action_plan = ActionPlan(
+                action=ActionType.HOTKEY,
+                keys=["enter"],
+                reasoning=f"Dismissing launch error dialog '{cur_win_title}' to recover workflow",
+            )
+
+        # 0a. Intermediate Platform Launcher / Launch Options Dialog (e.g. pre-launch dialog):
+        elif is_launcher_dialog and target_app_clean and not is_generic_target:
+            clicking_active_launcher_ctl = False
+            if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK) and action_plan.target_id is not None:
+                matched_ctl = next((e for e in elements if e.id == action_plan.target_id), None)
+                if matched_ctl and matched_ctl.is_active_window and (matched_ctl.process_name or "").lower() != "explorer.exe":
+                    clicking_active_launcher_ctl = True
+
+            if not clicking_active_launcher_ctl:
+                launch_btn = next(
+                    (
+                        e for e in elements
+                        if e.is_active_window
+                        and (e.process_name or "").lower() != "explorer.exe"
+                        and any(
+                            kw in (e.label or "").strip().lower()
+                            for kw in ("play", "launch", "continue", "start", "ok", "confirm")
+                        )
+                        and not any(
+                            hdr in (e.label or "").strip().lower()
+                            for hdr in ("launch options", "select launch option", "always use")
+                        )
+                    ),
+                    None,
+                )
+                if launch_btn is not None:
+                    logger.info(
+                        "[LAUNCHER DIALOG INTERCEPT] Intermediate launcher '%s' (%s) detected; clicking '%s' (#%d) to start '%s'.",
+                        cur_win_title,
+                        cur_win_proc,
+                        launch_btn.label,
+                        launch_btn.id,
+                        target_app,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.CLICK,
+                        target_id=launch_btn.id,
+                        reasoning=f"Clicking '{launch_btn.label}' in launcher dialog '{cur_win_title}' to start '{target_app}'",
+                    )
+                else:
+                    logger.info(
+                        "[LAUNCHER DIALOG INTERCEPT] Intermediate launcher '%s' (%s) detected; pressing Enter to confirm launch options for '%s'.",
+                        cur_win_title,
+                        cur_win_proc,
+                        target_app,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.HOTKEY,
+                        keys=["enter"],
+                        reasoning=f"Confirming launch options dialog '{cur_win_title}' via Enter to start '{target_app}'",
+                    )
+
+        # 0b. Explicit Close Goal Upgrade: If user goal explicitly starts with "close " and LLM chose MINIMIZE_WINDOW,
+        # upgrade to CLOSE_WINDOW when targeting a closable window
+        elif (
+            action_plan.action == ActionType.MINIMIZE_WINDOW
+            and re.match(r"(?i)^\s*(?:please\s+)?close\b", user_goal or "")
+        ):
+            logger.info(
+                "[WINDOW LIFECYCLE] User goal explicitly requests closing ('%s'); upgrading MINIMIZE_WINDOW to CLOSE_WINDOW.",
+                user_goal,
+            )
+            action_plan.action = ActionType.CLOSE_WINDOW
+
+        # 1. Run dialog / Launch intercept: If Run dialog is open and target app not active, ensure we type into Run dialog
+        # UNLESS a matching desktop icon is already visible on screen!
+        elif run_edit and target_app_clean and not is_target_active and not is_generic_target:
+            desktop_match = PrecisionAppMatcher.find_best_element(target_app_clean, elements, threshold=0.80)
+            if " " in target_app_clean or desktop_match is not None:
+                logger.warning(
+                    "[LAUNCH REDIRECT] Run dialog open for '%s' (desktop_match=%s); dismissing Run dialog.",
+                    target_app,
+                    bool(desktop_match),
+                )
+                action_plan = ActionPlan(
+                    action=ActionType.HOTKEY,
+                    keys=["esc"],
+                    reasoning=f"Dismissing Run dialog for '{target_app}' to use desktop icon or Start Search",
+                )
+            elif action_plan.target_id != run_edit.id or not action_plan.text or target_app_clean not in (action_plan.text or "").lower():
+                logger.warning(
+                    "[LAUNCH REDIRECT] Run dialog is open; typing target app '%s' into Run dialog instead of misdirected action: %s",
+                    target_app,
+                    action_plan.action.value,
+                )
+                action_plan = ActionPlan(
+                    action=ActionType.CLICK_AND_TYPE,
+                    target_id=run_edit.id,
+                    text=target_app,
+                    submit=True,
+                    reasoning=f"Run dialog detected; typing '{target_app}' and pressing Enter to execute launch.",
+                )
+
+        # 2. Premature DONE intercept: Do not conclude if target application is not active
+        #    or if the user requested open-ended gameplay/autonomous interaction and fewer than 3 in-app actions occurred
+        elif action_plan.action == ActionType.DONE:
+            if target_app_clean and not is_target_active and not is_generic_target:
+                logger.warning(
+                    "[PREMATURE DONE INTERCEPTED] LLM emitted DONE while target application '%s' is not active on screen. Continuing execution.",
+                    target_app,
+                )
+                action_plan = self.resolver.resolve_launch_action(
+                    target_app=target_app,
+                    elements=elements,
+                    cancellation_token=token,
+                )
+            elif is_target_active and any(
+                kw in user_goal.lower() for kw in ("play ", "on your own", "without my input", "by yourself")
+            ):
+                recent_hist = self.memory.get_recent_history(n=10)
+                in_app_actions = [
+                    rec for rec in recent_hist
+                    if rec.action.action in (ActionType.CLICK, ActionType.CLICK_AND_TYPE, ActionType.TYPE, ActionType.HOTKEY)
+                    and PrecisionAppMatcher.score_match(rec.window_title or "", target_app_clean) >= 0.80
+                ]
+                if len(in_app_actions) < 3:
+                    logger.warning(
+                        "[PREMATURE DONE INTERCEPTED] Goal '%s' requires autonomous gameplay/interaction, "
+                        "but only %d in-app action(s) executed so far. Continuing interaction.",
+                        user_goal,
+                        len(in_app_actions),
+                    )
+                    if cur_win_proc == "conhost.exe":
+                        last_was_enter = bool(
+                            in_app_actions
+                            and in_app_actions[-1].action.action == ActionType.HOTKEY
+                            and (in_app_actions[-1].action.keys or []) == ["enter"]
+                        )
+                        if last_was_enter:
+                            action_plan = ActionPlan(
+                                action=ActionType.TYPE,
+                                text="1",
+                                submit=True,
+                                clear_first=False,
+                                reasoning=f"Continuing autonomous gameplay in console '{cur_win_title}'; typing menu option '1' + Enter",
+                            )
+                        else:
+                            action_plan = ActionPlan(
+                                action=ActionType.HOTKEY,
+                                keys=["enter"],
+                                reasoning=f"Continuing autonomous gameplay in console '{cur_win_title}'; pressing Enter to advance prompt",
+                            )
+                    else:
+                        interactive_elem = next(
+                            (
+                                e for e in elements
+                                if e.is_active_window
+                                and (e.label or "").strip().lower() not in ("close", "minimize", "minimise", "maximize", "maximise", "restore", "system", "text area", "")
+                            ),
+                            None,
+                        )
+                        if interactive_elem:
+                            action_plan = ActionPlan(
+                                action=ActionType.CLICK,
+                                target_id=interactive_elem.id,
+                                reasoning=f"Continuing autonomous interaction in '{cur_win_title}' by clicking '{interactive_elem.label}'",
+                            )
+
+        # 3. Non-target window hijack & lifecycle evaluation guard:
+        # When target app is not yet active and the LLM tries to click/type into a non-target open window
+        # (or when an unneeded/obstructing window is active), evaluate whether that window should be
+        # MINIMIZED ("need soon", e.g. terminal/IDE/launcher) or CLOSED ("don't need anytime soon", e.g. stray Explorer folder / Notepad).
+        elif action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.CLICK_AND_TYPE) and action_plan.target_id:
+            matched = next((e for e in elements if e.id == action_plan.target_id), None)
+            if matched and matched.process_name and target_app_clean and not is_target_active:
+                matched_proc = matched.process_name.lower()
+                matched_title = (matched.window_title or "").lower()
+                is_desktop_shortcut = (
+                    matched_proc == "explorer.exe"
+                    and matched_title in ("program manager", "workerw", "desktop")
+                )
+                is_system_shell = (
+                    matched_proc in ("searchapp.exe", "searchhost.exe", "startmenuexperiencehost.exe")
+                    or (matched_proc == "explorer.exe" and matched_title in ("", "taskbar", "search", "start", "run"))
+                )
+                if is_desktop_shortcut and not is_generic_target and PrecisionAppMatcher.score_match(matched.label or "", target_app_clean) < 0.80:
+                    logger.warning(
+                        "[DESKTOP LAUNCH REDIRECT] Blocked %s on unrelated desktop item '%s' (#%d) while launching '%s'; redirecting to launch resolver.",
+                        action_plan.action.value,
+                        matched.label,
+                        matched.id,
+                        target_app,
+                    )
+                    action_plan = self.resolver.resolve_launch_action(
+                        target_app=target_app,
+                        elements=elements,
+                        cancellation_token=token,
+                    )
+                elif not is_system_shell and not is_desktop_shortcut and PrecisionAppMatcher.score_match(matched.label or "", target_app_clean) < 0.80:
+                    if target_app_clean not in matched_proc and target_app_clean not in matched_title:
+                        disp = evaluate_window_disposition(
+                            window_title=matched.window_title or "",
+                            process_name=matched.process_name or "",
+                            user_goal=user_goal,
+                            target_app=target_app,
+                            window_rules=self.window_rules,
+                        )
+                        if disp == "DONT_NEED_CLOSE" and matched.is_active_window and not use_cua_single_pass:
+                            logger.info(
+                                "[WINDOW LIFECYCLE] Non-target active window '%s' (%s) evaluated as DONT_NEED_CLOSE. Closing window.",
+                                matched.window_title,
+                                matched.process_name,
+                            )
+                            close_btn = next(
+                                (
+                                    e for e in elements
+                                    if e.is_active_window
+                                    and e.role == "Button"
+                                    and any(k in (e.label or "").lower() for k in ("close", "ok", "cancel"))
+                                ),
+                                None,
+                            )
+                            action_plan = ActionPlan(
+                                action=ActionType.CLOSE_WINDOW,
+                                target_id=close_btn.id if close_btn else None,
+                                coordinates=(close_btn.center_x, close_btn.center_y) if close_btn else None,
+                                reasoning=f"Window '{matched.window_title}' ({matched.process_name}) is not needed anytime soon for goal '{user_goal}'; closing it.",
+                            )
+                        elif disp == "NEED_SOON_MINIMIZE":
+                            if (
+                                matched.role == "Button"
+                                and any(k in (matched.label or "").lower() for k in ("minimize", "minimise"))
+                                and matched_proc not in ("windowsterminal.exe", "cmd.exe", "powershell.exe", "code.exe", "conhost.exe", "antigravity.exe")
+                            ):
+                                logger.info(
+                                    "[WINDOW LIFECYCLE] Upgrading click on Minimize button of non-target window '%s' (%s) to MINIMIZE_WINDOW.",
+                                    matched.window_title,
+                                    matched.process_name,
+                                )
+                                action_plan = ActionPlan(
+                                    action=ActionType.MINIMIZE_WINDOW,
+                                    target_id=matched.id,
+                                    coordinates=(matched.center_x, matched.center_y),
+                                    reasoning=f"Minimizing non-target window '{matched.window_title}' ({matched.process_name}) to clear desktop for '{target_app}'.",
+                                )
+                            else:
+                                logger.warning(
+                                    "[WINDOW HIJACK PREVENTED] Blocked %s on '%s' in non-target window '%s' (%s) while target '%s' is not active; redirecting to launch resolver.",
+                                    action_plan.action.value,
+                                    matched.label,
+                                    matched.window_title,
+                                    matched.process_name,
+                                    target_app,
+                                )
+                                action_plan = self.resolver.resolve_launch_action(
+                                    target_app=target_app,
+                                    elements=elements,
+                                    cancellation_token=token,
+                                )
+
+        # 3b. File Explorer folder window guard: If typing target app into a File Explorer folder search box,
+        # evaluate disposition: close the unneeded File Explorer window or redirect to universal launch
+        if action_plan.action in (ActionType.CLICK_AND_TYPE, ActionType.TYPE) and action_plan.target_id:
+            target_elem = next((e for e in elements if e.id == action_plan.target_id), None)
+            if (
+                target_elem
+                and (target_elem.process_name or "").lower() == "explorer.exe"
+                and target_elem.role == "Edit"
+                and "search" in (target_elem.label or "").lower()
+                and target_elem.window_title != "Run"
+                and target_app_clean
+                and not is_target_active
+            ):
+                disp = evaluate_window_disposition(
+                    window_title=target_elem.window_title or "",
+                    process_name=target_elem.process_name or "",
+                    user_goal=user_goal,
+                    target_app=target_app,
+                    window_rules=self.window_rules,
+                )
+                if disp == "DONT_NEED_CLOSE" and target_elem.is_active_window:
+                    logger.warning(
+                        "[WINDOW LIFECYCLE] Unneeded File Explorer folder window '%s' is intercepting search for '%s'. Closing folder window.",
+                        target_elem.window_title,
+                        target_app,
+                    )
+                    close_btn = next(
+                        (
+                            e for e in elements
+                            if e.is_active_window
+                            and e.role == "Button"
+                            and "close" in (e.label or "").lower()
+                        ),
+                        None,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.CLOSE_WINDOW,
+                        target_id=close_btn.id if close_btn else None,
+                        coordinates=(close_btn.center_x, close_btn.center_y) if close_btn else None,
+                        reasoning=f"File Explorer window '{target_elem.window_title}' is not needed anytime soon; closing it before launching '{target_app}'.",
+                    )
+                else:
+                    logger.warning(
+                        "[EXPLORER SEARCH PREVENTED] Blocked typing target app '%s' into File Explorer folder search box (%s). Redirecting to universal launch.",
+                        target_app,
+                        target_elem.window_title,
+                    )
+                    action_plan = self.resolver.resolve_launch_action(
+                        target_app=target_app,
+                        elements=elements,
+                        cancellation_token=token,
+                    )
+
+        # 3c. Desktop icon launch upgrade, already-open window focus guard, & obstructing window lifecycle evaluation
+        open_target_win_elems = [
+            e for e in elements
+            if (e.window_title or "").strip().lower() not in ("program manager", "workerw", "desktop", "taskbar", "running applications", "")
+            and (e.process_name or "").strip().lower() != "explorer.exe"
+            and target_app_clean
+            and PrecisionAppMatcher.score_match(e.window_title or "", target_app_clean) >= 0.80
+            and (e.label or "").strip().lower() not in ("close", "minimize", "minimise", "maximize", "maximise", "restore", "system")
+        ]
+
+        if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK) and action_plan.target_id:
+            target_elem = next((e for e in elements if e.id == action_plan.target_id), None)
+            if target_elem:
+                t_win_norm = (target_elem.window_title or "").strip().lower()
+                is_taskbar_item = (
+                    t_win_norm in ("taskbar", "running applications")
+                    or "running window" in (target_elem.label or "").lower()
+                )
+                is_desktop_item = (
+                    not is_taskbar_item
+                    and (
+                        target_elem.role == "ListItem"
+                        or (
+                            (target_elem.process_name or "").lower() == "explorer.exe"
+                            and t_win_norm in ("program manager", "workerw", "desktop", "")
+                        )
+                    )
+                )
+                # If the target application's window is ALREADY open and visible on screen,
+                # block re-double-clicking the desktop shortcut or clicking the taskbar button (which toggles to minimized!)
+                if (is_desktop_item or is_taskbar_item) and open_target_win_elems:
+                    focus_el = open_target_win_elems[0]
+                    logger.info(
+                        "[ALREADY OPEN REDIRECT] Target window '%s' (%s) is already open on screen; redirecting %s on %s '%s' (#%d) to open window element #%d ('%s').",
+                        focus_el.window_title,
+                        focus_el.process_name,
+                        action_plan.action.value,
+                        "taskbar button" if is_taskbar_item else "desktop shortcut",
+                        target_elem.label,
+                        target_elem.id,
+                        focus_el.id,
+                        focus_el.label,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.CLICK,
+                        target_id=focus_el.id,
+                        coordinates=(focus_el.center_x, focus_el.center_y),
+                        reasoning=f"Target window '{focus_el.window_title}' is already open; focusing window instead of clicking {'taskbar button' if is_taskbar_item else 'desktop shortcut'}",
+                    )
+                    is_target_active = True
+                    cur_win_title = (focus_el.window_title or "").lower()
+                    cur_win_proc = (focus_el.process_name or "").lower()
+                elif is_desktop_item and target_app_clean and not is_target_active:
+                    if PrecisionAppMatcher.score_match(target_elem.label or "", target_app_clean) >= 0.80:
+                        # Check if active window is obscuring this desktop element (cur_win.rect is (left, top, right, bottom))
+                        is_active_obscuring = False
+                        if cur_win and cur_win.rect and not (
+                            cur_win_proc == "explorer.exe"
+                            and cur_win_title in ("program manager", "workerw", "desktop", "", "taskbar")
+                        ):
+                            rl, rt, rr, rb = cur_win.rect
+                            # Handle both (left, top, right, bottom) and (x, y, w, h) conventions safely
+                            right_edge = rr if rr > rl else (rl + rr)
+                            bottom_edge = rb if rb > rt else (rt + rb)
+                            if rl <= target_elem.center_x <= right_edge and rt <= target_elem.center_y <= bottom_edge:
+                                is_active_obscuring = True
+
+                        if is_active_obscuring:
+                            disp = evaluate_window_disposition(
+                                window_title=cur_win_title,
+                                process_name=cur_win_proc,
+                                user_goal=user_goal,
+                                target_app=target_app,
+                                window_rules=self.window_rules,
+                            )
+                            if disp == "DONT_NEED_CLOSE":
+                                logger.info(
+                                    "[WINDOW LIFECYCLE] Desktop shortcut '%s' is obscured by unneeded window '%s' (%s -> DONT_NEED_CLOSE). Closing window.",
+                                    target_elem.label,
+                                    cur_win_title,
+                                    cur_win_proc,
+                                )
+                                close_btn = next(
+                                    (
+                                        e for e in elements
+                                        if e.is_active_window
+                                        and e.role == "Button"
+                                        and "close" in (e.label or "").lower()
+                                    ),
+                                    None,
+                                )
+                                action_plan = ActionPlan(
+                                    action=ActionType.CLOSE_WINDOW,
+                                    target_id=close_btn.id if close_btn else None,
+                                    coordinates=(close_btn.center_x, close_btn.center_y) if close_btn else None,
+                                    reasoning=f"Window '{cur_win_title}' ({cur_win_proc}) obscures desktop shortcut '{target_elem.label}' and is not needed anytime soon; closing it.",
+                                )
+                            else:
+                                logger.info(
+                                    "[WINDOW LIFECYCLE] Desktop shortcut '%s' is obscured by persistent window '%s' (%s -> NEED_SOON_MINIMIZE). Minimizing window.",
+                                    target_elem.label,
+                                    cur_win_title,
+                                    cur_win_proc,
+                                )
+                                min_btn = next(
+                                    (
+                                        e for e in elements
+                                        if e.is_active_window
+                                        and e.role == "Button"
+                                        and any(k in (e.label or "").lower() for k in ("minimize", "minimise"))
+                                    ),
+                                    None,
+                                )
+                                action_plan = ActionPlan(
+                                    action=ActionType.MINIMIZE_WINDOW,
+                                    target_id=min_btn.id if min_btn else None,
+                                    coordinates=(min_btn.center_x, min_btn.center_y) if min_btn else None,
+                                    reasoning=f"Active window '{cur_win_title}' ({cur_win_proc}) obscures desktop shortcut '{target_elem.label}' but is needed soon; minimizing it.",
+                                )
+                        else:
+                            logger.info(
+                                "[DESKTOP LAUNCH] Upgrading to DOUBLE_CLICK on desktop shortcut '%s' (id: %s)",
+                                target_elem.label,
+                                target_elem.id,
+                            )
+                            action_plan.action = ActionType.DOUBLE_CLICK
+
+        # 3d. Console / Text-Mode Application Keyboard Interaction (conhost.exe / cmd.exe / powershell.exe):
+        # Console windows do not respond to mouse clicks on text prompts (and clicking inside conhost.exe triggers
+        # QuickEdit selection which freezes console output). Convert clicks on console text/elements into keyboard input.
+        if (is_target_active or open_target_win_elems) and cur_win_proc in ("conhost.exe", "cmd.exe", "powershell.exe"):
+            # Ensure target console window has OS foreground focus without clicking inside QuickEdit canvas
+            try:
+                if sys.platform == "win32" and target_app_clean:
+                    user32 = ctypes.windll.user32
+
+                    def _focus_console_proc(hwnd: int, lparam: int) -> bool:
+                        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+                            return True
+                        tbuf = ctypes.create_unicode_buffer(256)
+                        user32.GetWindowTextW(hwnd, tbuf, 256)
+                        if PrecisionAppMatcher.score_match(tbuf.value or "", target_app_clean) >= 0.80:
+                            user32.SetForegroundWindow(hwnd)
+                            return False
+                        return True
+
+                    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+                    user32.EnumWindows(WNDENUMPROC(_focus_console_proc), 0)
+            except Exception:
+                pass
+
+            if action_plan.action in (ActionType.CLICK, ActionType.DOUBLE_CLICK):
+                clicked_el = next((e for e in elements if e.id == action_plan.target_id), None) if action_plan.target_id else None
+                lbl_raw = (clicked_el.label or "").strip() if clicked_el else ""
+                m_choice = re.match(r"^\s*[\[\(]?(\d{1,2}|[a-zA-Z])[\]\)\.\-:]\s+", lbl_raw)
+                if m_choice:
+                    choice_key = m_choice.group(1)
+                    logger.info(
+                        "[CONSOLE INTERACTION] Converting %s on console menu item '%s' to TYPE '%s' + Enter.",
+                        action_plan.action.value,
+                        lbl_raw,
+                        choice_key,
+                    )
+                    action_plan = ActionPlan(
+                        action=ActionType.TYPE,
+                        text=choice_key,
+                        submit=True,
+                        clear_first=False,
+                        reasoning=f"Console window '{cur_win_title}' requires keyboard input; typing option '{choice_key}' + Enter for '{lbl_raw}'",
+                    )
+                else:
+                    prev_steps = self.memory.get_recent_history(n=1)
+                    last_was_enter = bool(
+                        prev_steps
+                        and prev_steps[-1].action.action == ActionType.HOTKEY
+                        and (prev_steps[-1].action.keys or []) == ["enter"]
+                    )
+                    if last_was_enter:
+                        logger.info(
+                            "[CONSOLE INTERACTION] Previous step already sent Enter in console '%s'; typing option '1' + Enter to advance menu.",
+                            cur_win_title,
+                        )
+                        action_plan = ActionPlan(
+                            action=ActionType.TYPE,
+                            text="1",
+                            submit=True,
+                            clear_first=False,
+                            reasoning=f"Console window '{cur_win_title}' active at menu prompt; typing '1' + Enter to select first option",
+                        )
+                    else:
+                        logger.info(
+                            "[CONSOLE INTERACTION] Converting %s on console '%s' ('%s') to HOTKEY ['enter'] to advance console prompt.",
+                            action_plan.action.value,
+                            cur_win_title,
+                            lbl_raw or "Text Area",
+                        )
+                        action_plan = ActionPlan(
+                            action=ActionType.HOTKEY,
+                            keys=["enter"],
+                            reasoning=f"Console window '{cur_win_title}' active; pressing Enter to advance prompt without triggering QuickEdit pause",
+                        )
+
+        # 4. Target application document content typing guard:
+        # If target app is active and user wants to write/type, ensure we target the editor document
+        # and do not accidentally click/type into non-text controls (like MenuItem, Button, ScrollBar).
+        if is_target_active and any(k in user_goal.lower() for k in ("write", "type", "intro", "introduction", "introduce", "note", "code")):
+            doc_elem = next(
+                (e for e in elements if e.is_active_window and e.role in ("Document", "Edit")),
+                None,
+            )
+            if action_plan.action in (ActionType.CLICK_AND_TYPE, ActionType.TYPE):
+                if action_plan.target_id:
+                    matched = next((e for e in elements if e.id == action_plan.target_id), None)
+                    if matched and matched.role in ("MenuItem", "Button", "TabItem", "ScrollBar", "Header"):
+                        if doc_elem:
+                            logger.warning(
+                                "[DOCUMENT TARGET REDIRECT] Redirecting type from %s '%s' to Document canvas #%d",
+                                matched.role,
+                                matched.label,
+                                doc_elem.id,
+                            )
+                            action_plan.target_id = doc_elem.id
+                        elif cur_win and cur_win.rect:
+                            rx, ry, rw, rh = cur_win.rect[0], cur_win.rect[1], cur_win.rect[2] - cur_win.rect[0], cur_win.rect[3] - cur_win.rect[1]
+                            editor_x = rx + rw // 2
+                            editor_y = ry + rh // 2
+                            logger.warning(
+                                "[DOCUMENT TARGET REDIRECT] Matched control is %s '%s'; redirecting click_and_type to window center (%d, %d)",
+                                matched.role,
+                                matched.label,
+                                editor_x,
+                                editor_y,
+                            )
+                            action_plan.target_id = None
+                            action_plan.coordinates = (editor_x, editor_y)
+                        action_plan.submit = False
+                    elif matched and matched.role in ("Document", "Edit"):
+                        action_plan.submit = False
+                elif doc_elem and not action_plan.coordinates:
+                    action_plan.target_id = doc_elem.id
+                    action_plan.submit = False
+
+        if action_plan.action == ActionType.OFFLOAD_WEB_AI:
+            goal_lower = user_goal.lower()
+            wants_offload = any(
+                kw in goal_lower
+                for kw in ("gemini", "web ai", "offload", "browser ai", "chatgpt", "claude", "ask ai", "ask browser")
+            )
+            if not wants_offload:
+                target_app = self.resolver.extract_target_app(user_goal)
+                if target_app:
+                    action_plan = self.resolver.resolve_launch_action(
+                        target_app=target_app,
+                        elements=elements,
+                        cancellation_token=token,
+                    )
+                else:
+                    action_plan = ActionPlan(
+                        action=ActionType.WAIT,
+                        wait_ms=500,
+                        reasoning="Skipping unrequested browser offload in local mode; re-grounding desktop",
+                    )
+
+        return persona_out, action_plan

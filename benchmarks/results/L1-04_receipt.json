@@ -1,0 +1,93 @@
+{
+  "goal": "Open Notepad and type 'Benchmark Alpha Test 42'",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 4,
+  "max_steps": 16,
+  "duration_sec": 10.239,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    0.929,
+    1.43,
+    2.221,
+    5.342
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "*Untitled - Notepad",
+    "process_name": "notepad.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.05602237654320988,
+      "error_message": null,
+      "duration_sec": 0.929,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "notepad",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.7941687116869182,
+      "error_message": null,
+      "duration_sec": 1.43,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Benchmark Alpha Test 42",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 2.221,
+      "burst_count": null
+    },
+    {
+      "step_id": 4,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 5.342,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794891536.367953,
+  "plan_source": "skill",
+  "skill_id": "notepad-write-text",
+  "farmed_plan_id": null,
+  "fast_path_steps": 3,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
+}

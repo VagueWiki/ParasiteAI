@@ -1,0 +1,62 @@
+{
+  "metrics": {
+    "total_tasks": 1,
+    "verified_pass_count": 0,
+    "verified_pass_rate": 0.0,
+    "agent_claimed_success_rate": 0.0,
+    "false_done_count": 0,
+    "false_done_rate": 0.0,
+    "loop_abort_count": 0,
+    "total_hardware_interrupts": 0,
+    "mean_steps": 8.0,
+    "mean_duration_sec": 55.85,
+    "median_step_sec": 6.465,
+    "p90_step_sec": 7.538,
+    "levels": {
+      "L1": {
+        "total": 1,
+        "passed": 0,
+        "pass_rate": 0.0
+      }
+    },
+    "failure_modes": {
+      "MAX_STEPS_EXHAUSTED": 1
+    }
+  },
+  "tasks": [
+    {
+      "id": "L1-08",
+      "name": "Compute Multiplication in Calculator",
+      "tier": "Tier_B",
+      "level": "L1",
+      "prompt": "Open Calculator and compute 7 * 8",
+      "setup": "clean_workspace",
+      "setup_ok": true,
+      "verifier": "verify_calculator_result",
+      "verifier_passed": false,
+      "agent_success": false,
+      "claimed_done": false,
+      "false_done": false,
+      "exit_code": 1,
+      "exit_reason": "MAX_STEPS",
+      "total_steps": 8,
+      "step_latencies_sec": [
+        6.414,
+        5.4,
+        5.598,
+        8.489,
+        5.727,
+        6.516,
+        7.13,
+        6.898
+      ],
+      "hardware_interrupt_count": 0,
+      "total_strikes": 0,
+      "highest_tier_reached": "TIER_1_LOCAL",
+      "duration_sec": 55.848,
+      "timed_out": false,
+      "error": null,
+      "failure_mode": "MAX_STEPS_EXHAUSTED"
+    }
+  ]
+}

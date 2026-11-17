@@ -1,0 +1,363 @@
+{
+  "goal": "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer",
+  "captured_at": "2026-11-15T23:49:21.988479+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05763165509259259,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.042783564814814816,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the taskbar at the bottom of the screen, and I need to locate the File Explorer icon to proceed with the next steps. The icon is usually represented by a folder symbol, so I will click on it to open the File Explorer window.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        680,
+        1071
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.6542173032407408,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the taskbar at the bottom of the screen, and I need to locate the File Explorer icon to launch it. The icon is positioned slightly to the left of the center of the taskbar, and I need to click on it to open the File Explorer window.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        506,
+        1070
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.6783333333333333,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the File Explorer window on the screen, and I need to create a new folder named 'Reports' inside the C:\\ParasiteAI\\benchmarks\\workspace directory. The first step is to navigate to the correct directory. I'll double-click on the workspace folder to open it and check if it's the right location.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        552,
+        945
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.231875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I need to open File Explorer to create a new folder. I notice the taskbar at the bottom of the screen, and I can see the File Explorer icon there. I'll click on it to open the File Explorer window, which will allow me to proceed with creating the 'Reports' folder.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        511,
+        1070
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.6816666666666666,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
+      "reasoning": "I see the File Explorer window on the screen, and I need to create a new folder named 'Reports' inside the C:\\ParasiteAI\\benchmarks\\workspace directory. The first step is to navigate to the correct directory. I notice that the File Explorer window is already open, so I can directly type the path \"C:\\ParasiteAI\\benchmarks\\workspace\" into the address bar to access the target folder.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "explorer.exe",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.024088541666666668,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I need to open File Explorer to create a new folder named 'Reports'. I notice the taskbar at the bottom of the screen, and I can see the File Explorer icon. I will click on it to open the File Explorer window.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        511,
+        1070
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.68,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the File Explorer window on the screen, and I need to create a new folder named 'Reports' inside the C:\\ParasiteAI\\benchmarks\\workspace directory. The first step is to navigate to the correct directory. I notice that the File Explorer window is already open, so I will click on the \"workspace\" folder to enter that directory and prepare for creating the new folder.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        554,
+        928
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.248125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I need to open File Explorer to create a new folder named 'Reports'. I notice the taskbar at the bottom of the screen, and I can see the File Explorer icon there. I will click on it to open the File Explorer window.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        707,
+        1070
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": true,
+      "screen_diff": 0.59,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer window is already open, but it's currently minimized. To proceed with creating the 'Reports' folder, I need to bring the File Explorer window to the foreground. I can do this by clicking on the File Explorer icon in the taskbar, which will allow me to access the workspace directory and create the new folder.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        511,
+        1070
+      ],
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.6816666666666666,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The File Explorer window is open, and I can see the workspace folder. To create a new folder named 'Reports', I need to right-click in the workspace folder to bring up the context menu for the next steps.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        566,
+        953
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.08,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the File Explorer window on the screen, and I need to create a new folder named 'Reports' inside the C:\\ParasiteAI\\benchmarks\\workspace directory. To do this, I first need to open File Explorer. I'll click on the File Explorer icon in the taskbar to launch it.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        511,
+        1070
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.001533082561728395,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the File Explorer window on the screen, and I need to create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace. I notice that the File Explorer window is already open, but it's currently minimized. To proceed with the task, I need to click on the File Explorer window to restore it to its normal size, so I can access the workspace folder and create the new folder. [Upgraded to double-click]",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        511,
+        1070
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.6816666666666666,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer window is open, but it's currently minimized. To proceed with creating a new folder, I need to restore the window to its normal size. I'll click the maximize button in the upper right corner to make the window fully visible.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1153,
+        252
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": true,
+      "screen_diff": 0.85,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Directory 'C:\\ParasiteAI\\benchmarks\\workspace\\Reports' does not exist on disk. Create the new folder.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 17,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Directory 'C:\\ParasiteAI\\benchmarks\\workspace\\Reports' does not exist on disk. Create the new folder. (If an inline rename, Save As box, or dialog edit is still open, press Enter or click Confirm to commit it.)",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 18,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Directory 'C:\\ParasiteAI\\benchmarks\\workspace\\Reports' does not exist on disk. Create the new folder. (If an inline rename, Save As box, or dialog edit is still open, press Enter or click Confirm to commit it.)",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 20,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer window is open, but it's currently minimized. To proceed with the task of creating a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace, I need to restore the File Explorer window to its normal size. This will allow me to access and navigate to the desired directory. Let me click on the File Explorer icon in the taskbar to bring it back to the foreground.",
+      "target_label": "Windows Run dialog",
+      "coordinates": [
+        511,
+        1071
+      ],
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.6706896551724137,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 21,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Directory 'C:\\ParasiteAI\\benchmarks\\workspace\\Reports' does not exist on disk. Create the new folder.",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "explorer.exe",
+      "post_window": "explorer.exe",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 22,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Directory 'C:\\ParasiteAI\\benchmarks\\workspace\\Reports' does not exist on disk. Create the new folder. (If an inline rename, Save As box, or dialog edit is still open, press Enter or click Confirm to commit it.)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "explorer.exe",
+      "post_window": "explorer.exe",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    }
+  ]
+}

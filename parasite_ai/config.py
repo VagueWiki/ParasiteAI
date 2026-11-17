@@ -60,6 +60,22 @@ class SystemConfig(BaseModel):
         default=Path("logs/parasite_debug.log"),
         description="Path to debug log file."
     )
+    save_debug_screenshots: bool = Field(
+        default=False,
+        description="Save per-step annotated pre/post screenshots to data_dir/screenshots for post-mortem debugging."
+    )
+    max_screenshot_episodes: int = Field(
+        default=20,
+        ge=1,
+        le=200,
+        description="Maximum number of episode screenshot folders retained on disk."
+    )
+    max_archived_logs: int = Field(
+        default=25,
+        ge=1,
+        le=200,
+        description="Maximum number of timestamped archived debug logs retained in logs/."
+    )
 
     @field_validator("data_dir", "models_dir", "log_file", mode="before")
     @classmethod
@@ -116,7 +132,7 @@ class LocalModelConfig(BaseModel):
         description="Optional multimodal vision projector (mmproj) GGUF filename."
     )
     context_size: int = Field(
-        default=4096,
+        default=8192,
         ge=512,
         le=32768,
         description="Inference context window length in tokens."
@@ -170,6 +186,20 @@ class LocalModelConfig(BaseModel):
         ge=256,
         le=4096,
         description="Minimum vision tokens allocated for Qwen2.5-VL / UI-TARS desktop grounding."
+    )
+    kv_cache_type_k: str = Field(
+        default="q8_0",
+        description="KV cache quantization type for K tensors (-ctk, e.g. 'q8_0', 'f16')."
+    )
+    kv_cache_type_v: str = Field(
+        default="q8_0",
+        description="KV cache quantization type for V tensors (-ctv, e.g. 'q8_0', 'f16')."
+    )
+    cache_reuse_tokens: int = Field(
+        default=0,
+        ge=0,
+        le=8192,
+        description="Minimum chunk size in tokens to reuse from KV cache (0 disables; disabled for multimodal models)."
     )
     keep_server_alive_on_exit: bool = Field(
         default=True,
@@ -267,16 +297,6 @@ class SafetyConfig(BaseModel):
         default_factory=lambda: ["ctrl+alt+backspace", "ctrl+alt+p", "esc"],
         description="Global hotkeys triggering instant emergency abort."
     )
-    corner_panic_enabled: bool = Field(
-        default=True,
-        description="Enable cursor slam into screen corners as an emergency abort trigger."
-    )
-    corner_distance_px: int = Field(
-        default=4,
-        ge=1,
-        le=50,
-        description="Pixel distance from display boundary triggering corner panic."
-    )
     sensitive_window_titles: List[str] = Field(
         default_factory=lambda: [
             "Bitwarden",
@@ -353,6 +373,12 @@ class CompanionDockConfig(BaseModel):
         default="bottom_right",
         description="Screen corner anchor position."
     )
+    monitor_index: int = Field(
+        default=2,
+        ge=0,
+        le=8,
+        description="1-based target monitor for CompanionDock placement (falls back to primaryScreen if unavailable)."
+    )
     margin_x: int = Field(default=24, ge=0, le=200, description="Horizontal margin from display border.")
     margin_y: int = Field(default=24, ge=0, le=200, description="Vertical margin from display border.")
     opacity: float = Field(default=0.95, ge=0.2, le=1.0, description="Window transparency opacity.")
@@ -392,6 +418,70 @@ class UIConfig(BaseModel):
 
     dock: CompanionDockConfig = Field(default_factory=CompanionDockConfig)
     hud: GhostHUDConfig = Field(default_factory=GhostHUDConfig)
+
+
+class DiscordConfig(BaseModel):
+    """Remote Discord Command & Control (C2) daemon configuration."""
+    model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
+
+    enabled: bool = Field(default=False, description="Enable Discord C2 bot listener on startup.")
+    token: str = Field(default="", description="Discord bot token (recommended via PARASITE_DISCORD_TOKEN env var).")
+    authorized_user_ids: List[int] = Field(
+        default_factory=list,
+        description="Discord user IDs permitted to issue C2 commands. Empty fails closed (blocks all)."
+    )
+    authorized_channel_ids: List[int] = Field(
+        default_factory=list,
+        description="Optional list of channel IDs permitted for bot commands. Empty permits any channel/DM from authorized users."
+    )
+    require_risk_consent: bool = Field(
+        default=True,
+        description="Gate Yellow and Red risk actions with interactive Discord [Approve]/[Cancel] buttons."
+    )
+    consent_timeout_sec: float = Field(
+        default=60.0,
+        ge=5.0,
+        le=300.0,
+        description="Timeout before an unapproved risk action fails closed."
+    )
+    milestone_screenshot_interval: int = Field(
+        default=1,
+        ge=1,
+        le=20,
+        description="Send screenshot embed to the task channel/thread every N steps."
+    )
+    send_final_screenshot: bool = Field(
+        default=True,
+        description="Attach a final desktop screenshot to the task completion/post-mortem embed."
+    )
+    enable_message_tasks: bool = Field(
+        default=True,
+        description="Allow dispatching tasks via DMs, @mentions, or plain-text messages from authorized users."
+    )
+    enable_message_content_intent: bool = Field(
+        default=False,
+        description="Request privileged Message Content Intent (requires enabling in Discord Developer Portal for non-mention guild messages)."
+    )
+    use_task_threads: bool = Field(
+        default=False,
+        description="Spawn a dedicated public Discord thread per task instead of replying inline in the channel."
+    )
+    auto_post_deck: bool = Field(
+        default=True,
+        description="Post the interactive Control Deck in authorized_channel_ids[0] on startup."
+    )
+    screen_max_width: int = Field(
+        default=1280,
+        ge=320,
+        le=3840,
+        description="Maximum image width for /screen and milestone screenshot embeds."
+    )
+    screen_jpeg_quality: int = Field(
+        default=75,
+        ge=20,
+        le=95,
+        description="JPEG compression quality for Discord attachments."
+    )
 
 
 class VisionConfig(BaseModel):
@@ -440,6 +530,10 @@ class VisionConfig(BaseModel):
         le=10,
         description="Consecutive settled frames required to confirm render stabilization."
     )
+    enable_vlm_micro_glance: bool = Field(
+        default=False,
+        description="Enable Tier-2 VLM micro-glance inside PreClickOpticalVerifier (disabled by default when image_min_tokens=1024 to preserve sub-second optical checks)."
+    )
 
 
 class MouseConfig(BaseModel):
@@ -480,6 +574,38 @@ class MouseConfig(BaseModel):
         le=2000,
         description="Targeting preview delay before physical mouse moves."
     )
+    use_two_phase_ballistics: bool = Field(
+        default=True,
+        description="Use HumanCurve two-phase velocity profile (ballistic sprint + terminal homing)."
+    )
+    enable_motor_hesitation: bool = Field(
+        default=True,
+        description="Enable pre-click biological motor commitment hesitation micro-pause."
+    )
+    motor_hesitation_min_ms: int = Field(
+        default=25,
+        ge=0,
+        le=200,
+        description="Minimum pre-click motor hesitation pause in milliseconds."
+    )
+    motor_hesitation_max_ms: int = Field(
+        default=60,
+        ge=0,
+        le=500,
+        description="Maximum pre-click motor hesitation pause in milliseconds."
+    )
+    dwell_mean_ms: int = Field(
+        default=45,
+        ge=10,
+        le=200,
+        description="Mean stochastic mouse button hold dwell duration in milliseconds."
+    )
+    dwell_std_ms: int = Field(
+        default=10,
+        ge=0,
+        le=50,
+        description="Standard deviation of stochastic mouse button hold dwell duration in milliseconds."
+    )
 
 
 class KeyboardConfig(BaseModel):
@@ -516,12 +642,147 @@ class KeyboardConfig(BaseModel):
     )
 
 
+class ReflexConfig(BaseModel):
+    """Layer 0.5 Chained Reflex & Muscle Memory Burst Engine parameters."""
+    model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
+
+    enabled: bool = Field(default=True, description="Enable Layer 0.5 compound burst reflex execution.")
+    max_burst_actions: int = Field(default=8, ge=1, le=20, description="Maximum sub-actions permitted in a single burst.")
+    inter_action_min_ms: int = Field(default=15, ge=0, le=200, description="Minimum inter-action hesitation pause in milliseconds.")
+    inter_action_max_ms: int = Field(default=30, ge=0, le=500, description="Maximum inter-action hesitation pause in milliseconds.")
+    reflex_move_duration_ms: int = Field(default=20, ge=0, le=200, description="Fast curved glide duration per burst sub-click in milliseconds.")
+    reflex_dwell_ms: int = Field(default=15, ge=5, le=100, description="Click hold dwell duration during reflex bursts in milliseconds.")
+    abort_on_window_change: bool = Field(default=True, description="Abort remaining burst actions if target window closes or loses focus to an unexpected popup.")
+
+
 class HandsConfig(BaseModel):
     """Physical hardware input execution layer."""
     model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
 
     mouse: MouseConfig = Field(default_factory=MouseConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
+    reflex: ReflexConfig = Field(default_factory=ReflexConfig)
+
+
+class SkillsConfig(BaseModel):
+    """Universal Skill Engine configuration (code default off for zero regression)."""
+    model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
+
+    enabled: bool = Field(default=False, description="Enable Universal Skill Engine loading and matching.")
+    skills_dir: Path = Field(default=Path("data/skills"), description="Root directory storing SKILL.md playbooks.")
+    ttl_days: int = Field(default=30, ge=1, le=365, description="Days before verified skills decay to STALE.")
+    phash_max_hamming: int = Field(default=10, ge=0, le=32, description="Max pHash Hamming distance before container drift quarantine.")
+    reflex_phash_max_hamming: int = Field(default=6, ge=0, le=16, description="Max pHash Hamming distance for §7.6 reflex_micro_skill gates.")
+    max_consecutive_failures: int = Field(default=2, ge=1, le=10, description="Consecutive execution failures before invalidating a skill.")
+    learning_enabled: bool = Field(default=False, description="Enable post-episode autonomous co-authoring of draft skills.")
+    min_trace_steps: int = Field(default=2, ge=1, le=10, description="Minimum interactive trace steps required to synthesize a skill.")
+    max_trace_steps: int = Field(default=40, ge=2, le=60, description="Maximum interactive trace steps eligible for synthesis.")
+
+
+class ParasiteSkillConfig(BaseModel):
+    """Titular ParasiteSkill web-interfaced symbiosis configuration (code default off)."""
+    model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
+
+    enabled: bool = Field(default=False, description="Enable physical Gemini in Chrome symbiosis.")
+    proactive_planning: bool = Field(default=True, description="Allow proactive planning before local execution.")
+    proactive_mode: Literal["open_ended", "always", "off"] = Field(
+        default="open_ended",
+        description="Trigger policy for PROACTIVE_PLAN when no non-draft skill matches.",
+    )
+    reactive_recovery: bool = Field(default=True, description="Route Tier-2 deadlocks/oscillations to ParasiteSkill.")
+    max_discovered_programs: int = Field(default=40, ge=0, le=100, description="Cap on OS-discovered installed program stems passed to planner.")
+    hotkey: List[str] = Field(default_factory=lambda: ["alt", "g"], description="Physical hotkey focusing standalone Gemini window.")
+    window_process_names: List[str] = Field(default_factory=lambda: ["chrome.exe"], description="Verified allowed host processes for Gemini window.")
+    window_title_keywords: List[str] = Field(default_factory=lambda: ["Gemini"], description="Verified title substrings required on standard Gemini browser windows.")
+    overlay_uia_signatures: List[str] = Field(
+        default_factory=lambda: [
+            "gemini",
+            "ask away",
+            "ask gemini",
+            "type @ to add tabs",
+            "copy response",
+            "stop response",
+        ],
+        description="Case-insensitive UIA text substrings verifying untitled Chrome Gemini overlays.",
+    )
+    input_box_names: List[str] = Field(
+        default_factory=lambda: ["Type @ to add tabs", "Ask Gemini", "Enter a prompt", "Prompt"],
+        description="Accessible UIA/OCR labels identifying the Gemini prompt composer input.",
+    )
+    send_button_names: List[str] = Field(
+        default_factory=lambda: ["Send message", "Send", "Submit", "Submit prompt"],
+        description="Accessible UIA/OCR button names identifying the prompt submit control.",
+    )
+    copy_button_names: List[str] = Field(
+        default_factory=lambda: ["Copy", "Copy response", "Copy to clipboard", "Copy code"],
+        description="Accessible UIA button names identifying response copy controls.",
+    )
+    stop_button_names: List[str] = Field(
+        default_factory=lambda: ["Stop response", "Stop generating", "Stop"],
+        description="Accessible UIA button names indicating active streaming.",
+    )
+    local_assist_enabled: bool = Field(
+        default=True,
+        description="Allow bounded ScreenGrounder OCR + loaded VLM assist inside verified Gemini window when UIA stalls.",
+    )
+    max_local_assist_calls_per_invoke: int = Field(
+        default=4,
+        ge=0,
+        le=10,
+        description="Maximum local assist fallback calls permitted per ParasiteSkill invocation.",
+    )
+    focus_timeout_sec: float = Field(default=5.5, ge=0.5, le=15.0)
+    attach_settle_ms: int = Field(default=2500, ge=100, le=15000)
+    submit_verify_timeout_sec: float = Field(default=1.5, ge=0.1, le=10.0)
+    min_generation_wait_ms: int = Field(default=2000, ge=0, le=15000)
+    scroll_before_copy_attempts: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Maximum vertical mouse-wheel scroll-down steps in chat viewport to reveal bottom Copy action bar.",
+    )
+    scroll_wheel_delta: int = Field(
+        default=-8,
+        ge=-24,
+        le=-1,
+        description="Mouse wheel delta per scroll-to-bottom step prior to Copy localization.",
+    )
+    poll_interval_ms: int = Field(default=250, ge=50, le=2000)
+    stream_stability_ms: int = Field(default=1500, ge=300, le=10000)
+    generation_timeout_sec: float = Field(default=90.0, ge=10.0, le=300.0)
+    harvest_timeout_sec: float = Field(default=6.0, ge=1.0, le=30.0)
+    max_response_chars: int = Field(default=32000, ge=1000, le=200000)
+    max_invocations_per_episode: int = Field(default=3, ge=0, le=10)
+    breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
+    breaker_cooldown_sec: float = Field(default=30.0, ge=0.0, le=86400.0)
+    diagnostics_dir: Path = Field(default=Path("data/logs/parasite_skill"))
+    save_failure_frames: bool = Field(default=True)
+
+
+class AppMemoryConfig(BaseModel):
+    """Persistent SQLite WAL App Memory & farmed-plan cache (code default off)."""
+    model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable SQLite WAL AppMemory persistence and Layer 1.5 farmed-plan cache.",
+    )
+    db_path: Path = Field(
+        default=Path("data/memory/app_memory.db"),
+        description="SQLite database path for persistent AppMemory.",
+    )
+    max_consecutive_failures: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Consecutive episode failures before evicting a cached farmed plan.",
+    )
+    promote_after_successes: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Successful episodes before promoting a directive-complete farmed plan to draft SKILL.md.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -532,14 +793,19 @@ class AppConfig(BaseModel):
     """Master configuration root container for ParasiteAI."""
     model_config = ConfigDict(extra="ignore", validate_default=True, str_strip_whitespace=True)
 
+    headless: bool = Field(default=False, description="Run headless without local GUI windows.")
     system: SystemConfig = Field(default_factory=SystemConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
     brain: BrainConfig = Field(default_factory=BrainConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    discord: DiscordConfig = Field(default_factory=DiscordConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
     hands: HandsConfig = Field(default_factory=HandsConfig)
     window_rules: WindowRulesConfig = Field(default_factory=WindowRulesConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
+    parasite_skill: ParasiteSkillConfig = Field(default_factory=ParasiteSkillConfig)
+    app_memory: AppMemoryConfig = Field(default_factory=AppMemoryConfig)
 
     @property
     def mind(self) -> BrainConfig:
@@ -580,6 +846,22 @@ class AppConfig(BaseModel):
         env_integrity = os.environ.get("PARASITE_INTEGRITY_MODE")
         if env_integrity:
             _get_section_dict("system")["integrity_mode"] = env_integrity.lower()
+
+        env_discord_token = os.environ.get("PARASITE_DISCORD_TOKEN")
+        if env_discord_token:
+            _get_section_dict("discord")["token"] = env_discord_token.strip()
+
+        env_discord_users = os.environ.get("PARASITE_DISCORD_USER_IDS")
+        if env_discord_users:
+            try:
+                user_ids = [int(u.strip()) for u in env_discord_users.split(",") if u.strip()]
+                _get_section_dict("discord")["authorized_user_ids"] = user_ids
+            except ValueError:
+                pass
+
+        env_headless = os.environ.get("PARASITE_HEADLESS")
+        if env_headless is not None:
+            data["headless"] = env_headless.lower() in ("true", "1", "yes")
 
         return data
 

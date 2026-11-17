@@ -1,0 +1,129 @@
+{
+  "goal": "Open Notepad",
+  "captured_at": "2026-11-14T21:27:03.587299+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad icon is visible on the desktop, and I can simply double-click it to launch the application. This is the most straightforward and efficient way to open Notepad.",
+      "target_label": "Notepad",
+      "coordinates": [
+        529,
+        52
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "*new 2 - Notepad++ (notepad++.exe)",
+      "success": true,
+      "screen_diff": 0.96375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that Notepad++ is open, but that's not the application we need. Let me close this window first by clicking the close button in the upper right corner, and then we can reopen the correct Notepad.",
+      "target_label": null,
+      "coordinates": [
+        1906,
+        12
+      ],
+      "pre_window": "*new 2 - Notepad++ (notepad++.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.9779411764705882,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad icon is visible on the desktop, and I can simply double-click it to launch the application.",
+      "target_label": null,
+      "coordinates": [
+        535,
+        25
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "*new 2 - Notepad++ (notepad++.exe)",
+      "success": true,
+      "screen_diff": 0.9576461226851852,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad++ window is open, but it's not the Notepad application we need. Let me close this window and then open the correct Notepad application.",
+      "target_label": null,
+      "coordinates": [
+        1906,
+        12
+      ],
+      "pre_window": "*new 2 - Notepad++ (notepad++.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.9779411764705882,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Notepad icon on the desktop, but I need to open the Start menu to find it. Let me click the Start button in the bottom left corner of the screen to open the Start menu, so I can search for and launch Notepad.",
+      "target_label": null,
+      "coordinates": [
+        23,
+        1070
+      ],
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Start menu (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.7916666666666666,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, and I can see the Notepad icon in the list of programs. The next step is to click on the Notepad icon to launch the application.",
+      "target_label": null,
+      "coordinates": [
+        88,
+        632
+      ],
+      "pre_window": "Start menu (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.9975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the task is complete. There's no need for any further action.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

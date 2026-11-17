@@ -1,0 +1,135 @@
+{
+  "timestamp": "20261114T175105Z",
+  "all_passed": true,
+  "results": {
+    "P-H": {
+      "passed": true,
+      "goal": "open Notepad and type ParasiteAI P4.5 verified",
+      "exit_reason": "DONE",
+      "steps_executed": 6,
+      "fast_path_steps": 5,
+      "duration_sec": 60.19,
+      "farmed_plan": {
+        "selected_program": "Notepad",
+        "rationale": "To accomplish the user goal of opening Notepad and typing 'ParasiteAI P4.5 verified', native Windows Notepad is chosen as the standard, most reliable tool for lightweight text entry. Since no instance of Notepad is open in the visible open windows, launching it via the Windows Run dialog is the most direct and reliable method.",
+        "steps": [
+          {
+            "intent": "LAUNCH_OR_ACTIVATE",
+            "description": "Open the Windows Run dialog to launch Notepad.",
+            "target_description": "Windows Run dialog",
+            "tool_route": "GUI",
+            "success_criteria": "The Run dialog box is visible on the screen.",
+            "contingency": "Use the Windows search bar to find and open Notepad.",
+            "action": {
+              "verb": "HOTKEY",
+              "text": "",
+              "keys": [
+                "win",
+                "r"
+              ],
+              "submit": false,
+              "scroll_direction": null,
+              "wait_ms": 0
+            }
+          },
+          {
+            "intent": "INPUT_DATA",
+            "description": "Type 'notepad' into the Run dialog input field.",
+            "target_description": "Run dialog input field",
+            "tool_route": "GUI",
+            "success_criteria": "'notepad' is typed into the Run input box.",
+            "contingency": "Clear and re-type 'notepad'.",
+            "action": {
+              "verb": "TYPE",
+              "text": "notepad",
+              "keys": [],
+              "submit": true,
+              "scroll_direction": null,
+              "wait_ms": 0
+            }
+          },
+          {
+            "intent": "VERIFY_STATE",
+            "description": "Wait for the Notepad application window to open and gain focus.",
+            "target_description": "Notepad window",
+            "tool_route": "GUI",
+            "success_criteria": "Notepad is open with an empty text editing area.",
+            "contingency": "Press Alt+Tab to bring Notepad into focus.",
+            "action": {
+              "verb": "WAIT",
+              "text": "",
+              "keys": [],
+              "submit": false,
+              "scroll_direction": null,
+              "wait_ms": 0
+            }
+          },
+          {
+            "intent": "INPUT_DATA",
+            "description": "Type the required text 'ParasiteAI P4.5 verified' into Notepad.",
+            "target_description": "Notepad text editor area",
+            "tool_route": "GUI",
+            "success_criteria": "'ParasiteAI P4.5 verified' appears in the Notepad window.",
+            "contingency": "Click inside the text area and re-type the text.",
+            "action": {
+              "verb": "TYPE",
+              "text": "ParasiteAI P4.5 verified",
+              "keys": [],
+              "submit": false,
+              "scroll_direction": null,
+              "wait_ms": 0
+            }
+          },
+          {
+            "intent": "CONCLUDE",
+            "description": "Verify that the text has been successfully typed into Notepad and conclude the task.",
+            "target_description": "Notepad application",
+            "tool_route": "GUI",
+            "success_criteria": "The goal is fully achieved.",
+            "contingency": "None",
+            "action": {
+              "verb": "WAIT",
+              "text": "",
+              "keys": [],
+              "submit": false,
+              "scroll_direction": null,
+              "wait_ms": 0
+            }
+          }
+        ]
+      }
+    },
+    "P-I": {
+      "passed": true,
+      "goal": "open Notepad and type ParasiteAI P4.5 verified",
+      "exit_reason": "DONE",
+      "parasite_invocations": 0,
+      "fast_path_steps": 5,
+      "duration_sec": 10.68
+    },
+    "P-J": {
+      "passed": true,
+      "goal": "calculate 12*7",
+      "exit_reason": "DONE",
+      "steps_executed": 6,
+      "fast_path_steps": 4,
+      "duration_sec": 13.04
+    },
+    "P-K": {
+      "passed": true,
+      "goal": "open paint and save as C:\\Users\\Suici\\AppData\\Local\\Temp\\parasite_p4_5_cys_11gj\\p4_5_smoke_canvas.png",
+      "exit_reason": "DONE",
+      "file_exists": true,
+      "duration_sec": 15.01
+    },
+    "P-L": {
+      "passed": true,
+      "journal_mode": "wal",
+      "farmed_plans": 1,
+      "episodes": 2,
+      "app_profiles": 1,
+      "promoted_count": 1,
+      "draft_skill_verified": true
+    }
+  }
+}

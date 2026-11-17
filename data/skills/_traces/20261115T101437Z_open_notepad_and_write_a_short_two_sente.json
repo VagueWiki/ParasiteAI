@@ -1,0 +1,249 @@
+{
+  "goal": "Open Notepad and write a short two-sentence greeting",
+  "captured_at": "2026-11-15T10:14:37.981447+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05610194830246914,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6998946998946999,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "BURST",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is now open, and the next step is to type the two-sentence greeting. I notice the cursor is blinking, indicating that the Notepad is ready to accept input. I will type the greeting text directly into the Notepad window.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.00579210681950408,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type the correct two-sentence greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type the correct two-sentence greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type the correct two-sentence greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type the correct two-sentence greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then retype the greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type the correct greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type the correct greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press Ctrl+A to select all the text and then type a new greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "HOTKEY",
+      "keys": [
+        "backspace"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press the Backspace key to delete the selected jumbled text and type a fresh greeting.",
+      "target_label": "Notepad Text Selection",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 15,
+      "verb": "HOTKEY",
+      "keys": [
+        "backspace"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, but the text is jumbled and repetitive. I need to press the backspace key to clear the jumbled text and type a fresh greeting.",
+      "target_label": "Notepad Text Editor",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "HOTKEY",
+      "keys": [
+        "backspace"
+      ],
+      "text": null,
+      "reasoning": "I see that the Notepad window is open, but the text is jumbled and repetitive. I need to press the backspace key to clear the jumbled text and then type a fresh greeting.",
+      "target_label": "Notepad Text Editor",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -111,9 +111,9 @@ def test_dual_mind_pipeline_vlm_foveated_composite_and_box_snapping() -> None:
     mock_vlm = MockBackend(vision_enabled=True)
     brain.active_backend = mock_vlm
 
-    # Enqueue single-pass CUA response (start_box in [0..1000] scaling to screen (500, 500))
+    # Enqueue single-pass CUA response using native screen pixels (500, 500) per Rule 8
     mock_vlm.enqueue_response(
-        "Thought: Starting the game! OBSERVATION: Game menu open.\nAction: click(start_box='(260, 463)')"
+        "Thought: Starting the game! OBSERVATION: Game menu open.\nAction: click(start_box='(500, 500)')"
     )
     mock_vlm.enqueue_response(
         '{"action": "CLICK", "target_id": null, "coordinates": null, "reasoning": "Click Start Game at <|box_start|>(480,480),(520,520)<|box_end|>"}'

@@ -1,0 +1,360 @@
+{
+  "goal": "Open File Explorer to C:\\ParasiteAI\\benchmarks\\workspace and rename old_name.txt to new_name.txt",
+  "captured_at": "2026-11-15T10:50:18.479406+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04274016203703704,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "explorer",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "explorer",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.5555457302703969,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer is open, and the workspace folder is visible in the left navigation pane. To proceed with the task of renaming files, I need to access the workspace directory. The next step is to double-click on the workspace folder in the left navigation pane to enter it.",
+      "target_label": null,
+      "coordinates": [
+        755,
+        674
+      ],
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.580625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the workspace folder is open, and there's a file named \"old_name.txt\" in the list. To rename it, I need to right-click on the file to bring up the context menu. Let me go ahead and do that.",
+      "target_label": null,
+      "coordinates": [
+        938,
+        440
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.024375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully navigated to the workspace folder and located the file named \"old_name.txt.\" The next step is to rename this file. To do this, I need to right-click on the file to bring up the context menu, which will allow me to select the rename option. This is a crucial step in completing the task of renaming the file.",
+      "target_label": null,
+      "coordinates": [
+        848,
+        472
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.35,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully navigated to the workspace folder and located the file named \"old_name.txt.\" The next step is to rename it to \"new_name.txt.\" To do this, I need to right-click on the file to bring up the context menu, which will allow me to select the rename option.",
+      "target_label": null,
+      "coordinates": [
+        938,
+        440
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.024375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully navigated to the workspace folder and located the file named \"old_name.txt.\" The next step is to rename it to \"new_name.txt.\" To do this, I need to right-click on the file to bring up the context menu, which will allow me to select the rename option.",
+      "target_label": null,
+      "coordinates": [
+        892,
+        472
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.211875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The context menu for the file is open, and I can see the \"Rename\" option. To proceed with the task of renaming the file, I need to click on the \"Rename\" option in the context menu. This will allow me to enter the new name for the file.",
+      "target_label": null,
+      "coordinates": [
+        962,
+        919
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.160625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "new_name.txt",
+      "reasoning": "The file name is already in edit mode, and the cursor is blinking, waiting for input. I can simply type \"new_name.txt\" to complete the renaming process.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter for 'new_name.txt' after repetitive typing loop",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 11,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Target file new_name.txt does not exist on disk yet. Complete renaming the file.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Target file new_name.txt does not exist on disk yet. Complete renaming the file. (If an inline rename, Save As box, or dialog edit is still open, press Enter or click Confirm to commit it.)",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Target file new_name.txt does not exist on disk yet. Complete renaming the file. (If an inline rename, Save As box, or dialog edit is still open, press Enter or click Confirm to commit it.)",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Target file new_name.txt does not exist on disk yet. Complete renaming the file. (If an inline rename, Save As box, or dialog edit is still open, press Enter or click Confirm to commit it.)",
+      "target_label": "Selected File Rename",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the file explorer is open and the workspace folder is selected. The next step is to rename the file. I need to right-click on the file to open the context menu, which will allow me to select the rename option.",
+      "target_label": "Selected File Rename",
+      "coordinates": [
+        1060,
+        471
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 17,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The file explorer is open and the workspace folder is selected. The next step is to rename the file to 'new_name.txt'. I will right-click on the file to open the context menu and select the rename option.",
+      "target_label": "Selected File Rename",
+      "coordinates": [
+        1139,
+        927
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.11875,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 18,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The file explorer is open and the workspace folder is selected. The next step is to rename the file to 'new_name.txt'. I will right-click on the file to open the context menu and select the rename option.",
+      "target_label": "Selected File Rename",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 19,
+      "verb": "HOTKEY",
+      "keys": [
+        "f2"
+      ],
+      "text": null,
+      "reasoning": "The file explorer is open and the workspace folder is selected. The next step is to rename the file to 'new_name.txt'. I will press the F2 key to initiate the renaming process.",
+      "target_label": "Selected File Rename",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 20,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "new_name.txt",
+      "reasoning": "The file explorer is open and the workspace folder is selected. The next step is to rename the file to 'new_name.txt'. I will type the new name into the rename field.",
+      "target_label": "File Name Input Field",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 21,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY enter (step 3)",
+      "target_label": "Rename Confirmation",
+      "coordinates": null,
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 22,
+      "verb": "RIGHT_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The file explorer is open and the workspace folder is selected. The next step is to rename the file to new_name.txt. I will right-click on the file to open the context menu and select the rename option.",
+      "target_label": "Rename Confirmation",
+      "coordinates": [
+        1002,
+        441
+      ],
+      "pre_window": "workspace (explorer.exe)",
+      "post_window": "workspace (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.10375,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "goal": "Minimize Notepad",
+  "captured_at": "2026-11-14T21:38:43.959851+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "alt",
+        "tab"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY alt+tab (step 1)",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "down"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+down (step 2)",
+      "target_label": "Notepad window minimize command",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Directive fast-path WAIT 500ms (step 3)",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "down"
+      ],
+      "text": null,
+      "reasoning": "To minimize the Notepad window, I can use the Windows+Down Arrow key combination. This is a standard shortcut for minimizing windows in Windows, and it is the most efficient way to achieve the task without needing to navigate through the taskbar or menu options.",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.5667684220679012,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window has been successfully minimized, and the task is complete. There are no further actions required.",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

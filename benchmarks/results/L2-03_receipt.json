@@ -1,67 +1,72 @@
 {
   "goal": "Open Calculator, compute 144 / 12, and type the result into the open Notepad window",
-  "success": false,
-  "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 25.175,
-  "exit_reason": "MAX_STEPS",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 7,
+  "max_steps": 22,
+  "duration_sec": 24.004,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    5.634,
-    5.4,
-    4.813,
-    5.247,
-    3.575
+    0.925,
+    1.287,
+    0.972,
+    0.306,
+    8.685,
+    5.494,
+    5.689
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Google Gemini - Google Chrome",
-    "process_name": "chrome.exe"
+    "title": "*Untitled - Notepad",
+    "process_name": "notepad.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": null,
+      "keys": [
+        "win",
+        "r"
+      ],
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.02498360339506173,
       "error_message": null,
-      "duration_sec": 5.634
+      "duration_sec": 0.925,
+      "burst_count": null
     },
     {
       "step_id": 2,
-      "action_type": "WAIT",
+      "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": null,
+      "text": "calc",
       "keys": null,
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.02189525462962963,
       "error_message": null,
-      "duration_sec": 5.4
+      "duration_sec": 1.287,
+      "burst_count": null
     },
     {
       "step_id": 3,
-      "action_type": "CLICK",
+      "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
-      "coordinates": [
-        973,
-        324
-      ],
-      "text": null,
+      "coordinates": null,
+      "text": "144/12=",
       "keys": null,
       "success": true,
-      "screen_diff": 0.03989121769050017,
+      "screen_diff": 0.3737995286637736,
       "error_message": null,
-      "duration_sec": 4.813
+      "duration_sec": 0.972,
+      "burst_count": null
     },
     {
       "step_id": 4,
@@ -74,22 +79,63 @@
       "success": true,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 5.247
+      "duration_sec": 0.306,
+      "burst_count": null
     },
     {
       "step_id": 5,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        380,
+        473
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.00574315200617284,
+      "error_message": null,
+      "duration_sec": 8.685,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
       "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "Calculator",
+      "text": "12",
       "keys": null,
-      "success": false,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 5.494,
+      "burst_count": null
+    },
+    {
+      "step_id": 7,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
       "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.575
+      "error_message": null,
+      "duration_sec": 5.689,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794175875.76844
+  "timestamp": 1794891722.9017463,
+  "plan_source": "skill",
+  "skill_id": "open-calculator-compute-144-12-and-type-the-resu",
+  "farmed_plan_id": null,
+  "fast_path_steps": 4,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

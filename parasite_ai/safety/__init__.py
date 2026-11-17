@@ -24,6 +24,18 @@ from parasite_ai.safety.window_guard import (
     WindowGuardedException,
     WindowInfo,
 )
+from parasite_ai.safety.risk_gate import (
+    ActionConsentRequest,
+    ActionRisk,
+    RiskAssessment,
+    classify_action_risk,
+)
+from parasite_ai.safety.content_scanner import (
+    ContentScanner,
+    REDACTED_SECRET_MARKER,
+    ScanResult,
+    sanitize_or_reject,
+)
 
 __all__ = [
     "InterruptGuard",
@@ -41,4 +53,12 @@ __all__ = [
     "WH_KEYBOARD_LL",
     "DEFAULT_SENSITIVE_PROCESSES",
     "DEFAULT_SENSITIVE_TITLES",
+    "ActionRisk",
+    "RiskAssessment",
+    "ActionConsentRequest",
+    "classify_action_risk",
+    "ContentScanner",
+    "REDACTED_SECRET_MARKER",
+    "ScanResult",
+    "sanitize_or_reject",
 ]

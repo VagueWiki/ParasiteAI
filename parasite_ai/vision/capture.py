@@ -15,6 +15,16 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def _safe_ensure_interactive_desktop() -> bool:
+    """Lazily attaches to the interactive Win32 desktop without circular package imports."""
+    try:
+        from parasite_ai.safety.window_guard import ensure_interactive_desktop
+
+        return ensure_interactive_desktop()
+    except Exception:
+        return False
+
+
 def get_virtual_screen_bounds() -> Tuple[int, int, int, int]:
     """
     Returns (vx, vy, vw, vh) of the entire virtual desktop spanning all monitors.
@@ -125,6 +135,7 @@ class ScreenCapture:
 
     def _init_backend(self) -> None:
         """Initialize capture provider."""
+        _safe_ensure_interactive_desktop()
         if self.backend == "mss":
             try:
                 import mss
@@ -140,6 +151,7 @@ class ScreenCapture:
 
     def _get_thread_sct(self) -> Optional[Any]:
         """Returns a thread-local mss instance so Windows GDI HDC handles are valid on worker threads."""
+        _safe_ensure_interactive_desktop()
         if self._sct is not None and self._sct is not getattr(self, "_owned_sct", None):
             # Custom or mock sct object injected externally (e.g. unit tests)
             return self._sct
@@ -161,6 +173,7 @@ class ScreenCapture:
         Gracefully falls back to PIL ImageGrab or blank synthetic frame
         if running headless or in restricted Win32 desktop sessions.
         """
+        _safe_ensure_interactive_desktop()
         eff_idx = self.monitor_index if monitor_idx is None else int(monitor_idx)
         sct = self._get_thread_sct() if self.backend == "mss" else None
         if self.backend == "mss" and sct is not None:

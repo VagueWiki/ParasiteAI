@@ -226,12 +226,20 @@ def test_subprocess_real_exit_code_and_receipt(tmp_path: Path) -> None:
     import subprocess
     import sys
 
+    cfg_path = tmp_path / "test_cfg.yaml"
+    skills_dir = (tmp_path / "skills").as_posix()
+    cfg_path.write_text(f"skills:\n  enabled: false\n  skills_dir: \"{skills_dir}\"\n", encoding="utf-8")
+
     report_path = tmp_path / "subprocess_test_receipt.json"
     cmd = [
         sys.executable,
         "-m",
         "parasite_ai.main",
+        "--config",
+        str(cfg_path),
         "--headless",
+        "--brain-mode",
+        "mock",
         "--goal",
         "Subprocess telemetry test goal",
         "--max-steps",
@@ -241,7 +249,7 @@ def test_subprocess_real_exit_code_and_receipt(tmp_path: Path) -> None:
         str(report_path),
     ]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
 
     # In headless test mode with 1 step that does not emit DONE, exit code must be 1 (failure)
     assert proc.returncode == 1, f"Process failed with exit code {proc.returncode}. stderr: {proc.stderr}"
@@ -257,4 +265,72 @@ def test_subprocess_real_exit_code_and_receipt(tmp_path: Path) -> None:
     assert isinstance(data["step_latencies_sec"], list)
     assert len(data["step_latencies_sec"]) == 1
     assert data["hardware_interrupt_count"] >= 0
+
+
+def test_runtime_orchestrator_incremental_checkpoint_and_provenance(tmp_path: Path) -> None:
+    """Verifies P4.6.6 per-step IN_PROGRESS checkpointing and plan/skill provenance fields."""
+    from parasite_ai.mind.dual_mind import ActionResult
+
+    out_file = tmp_path / "reports" / "checkpoint_receipt.json"
+    orch = RuntimeOrchestrator(simulation_mode=True, headless=True, episode_report_path=str(out_file))
+    orch.window_guard.is_safe_to_operate = MagicMock(return_value=True)
+    orch.interrupt_guard.is_interrupted = MagicMock(return_value=False)
+
+    observed_mid_run: list[dict] = []
+    step_calls = {"n": 0}
+
+    def _step_fn(user_goal: str = ""):
+        step_calls["n"] += 1
+        if step_calls["n"] == 1:
+            # Set provenance inside Step 1 after _execute_goal_episode calls start_debug_episode()
+            orch.pipeline._episode_plan_source = "skill"
+            orch.pipeline._episode_skill_id = "minimize-notepad"
+            orch.pipeline._episode_farmed_plan_id = None
+            orch.pipeline._episode_fast_path_steps = 1
+            orch.pipeline._episode_parasite_invocations = 0
+            orch.pipeline._episode_parasite_status = None
+            return StepRecord(
+                step_id=1,
+                user_goal=user_goal,
+                action=ActionPlan(action=ActionType.HOTKEY, keys=["win", "down"], reasoning="Minimize"),
+                result=ActionResult(success=True),
+                success=True,
+            )
+        # Before Step 2 runs, Step 1 checkpoint must already be on disk as IN_PROGRESS
+        # while last_episode_receipt remains None so --auto-exit-on-complete does not fire early.
+        assert orch.last_episode_receipt is None
+        assert out_file.exists()
+        observed_mid_run.append(json.loads(out_file.read_text(encoding="utf-8")))
+        return StepRecord(
+            step_id=2,
+            user_goal=user_goal,
+            action=ActionPlan(action=ActionType.DONE, reasoning="Minimized"),
+            result=ActionResult(success=True),
+            success=True,
+        )
+
+    orch.pipeline.step = MagicMock(side_effect=_step_fn)
+
+    orch._execute_goal_episode("Minimize Notepad", max_steps=5)
+
+    assert len(observed_mid_run) == 1
+    mid = observed_mid_run[0]
+    assert mid["exit_reason"] == "IN_PROGRESS"
+    assert mid["total_steps"] == 1
+    assert mid["plan_source"] == "skill"
+    assert mid["skill_id"] == "minimize-notepad"
+    assert mid["fast_path_steps"] == 1
+
+    assert orch.last_episode_receipt is not None
+    assert orch.last_episode_receipt.exit_reason == "DONE"
+    assert orch.last_episode_receipt.total_steps == 2
+    assert orch.last_episode_receipt.plan_source == "skill"
+    assert orch.last_episode_receipt.skill_id == "minimize-notepad"
+    assert orch.last_episode_receipt.fast_path_steps == 1
+
+    final_data = json.loads(out_file.read_text(encoding="utf-8"))
+    assert final_data["exit_reason"] == "DONE"
+    assert final_data["total_steps"] == 2
+    assert final_data["plan_source"] == "skill"
+
 

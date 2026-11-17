@@ -1,0 +1,31 @@
+{
+  "timestamp": "20261114T083004Z",
+  "all_passed": false,
+  "results": {
+    "P-H": {
+      "passed": false,
+      "error": "'RuntimeOrchestrator' object has no attribute 'run_goal_sync'"
+    },
+    "P-I": {
+      "passed": false,
+      "error": "'RuntimeOrchestrator' object has no attribute 'run_goal_sync'"
+    },
+    "P-J": {
+      "passed": false,
+      "error": "'RuntimeOrchestrator' object has no attribute 'run_goal_sync'"
+    },
+    "P-K": {
+      "passed": false,
+      "error": "'RuntimeOrchestrator' object has no attribute 'run_goal_sync'"
+    },
+    "P-L": {
+      "passed": false,
+      "journal_mode": "wal",
+      "farmed_plans": 0,
+      "episodes": 0,
+      "app_profiles": 0,
+      "promoted_count": 0,
+      "draft_skill_verified": false
+    }
+  }
+}

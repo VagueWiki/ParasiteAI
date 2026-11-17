@@ -1,0 +1,263 @@
+{
+  "goal": "Open Notepad and write a short two-sentence greeting",
+  "captured_at": "2026-11-15T08:06:20.122876+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04130594135802469,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6955138068151767,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Hello, how are you today?",
+      "reasoning": "The Notepad window is ready, and the cursor is blinking, waiting for input. I can now type the two sentences of the greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Submitting Enter for 'hello, how are you today?' after repetitive typing loop",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Hello, how are you today?",
+      "reasoning": "The Notepad window is ready, and the cursor is blinking, waiting for input. I can now type the two sentences of the greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Hello, how are you today? Hello, how are you today?",
+      "reasoning": "The Notepad window is ready, and the cursor is blinking, waiting for input. I can now type the two sentences of the greeting.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "I see that the Notepad window is open and the text has been entered. The next step is to save the file to ensure that the content is preserved. I will press the Ctrl+S key combination to open the save dialog box.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open and displaying the text I entered earlier. The next step is to save the file. I will press the \"ctrl s\" key combination to save the document.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.1858887924382716,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but I haven't finished writing the greeting yet. I need to close this dialog first and return to the Notepad window to continue typing. Let me click the Cancel button to close this dialog.",
+      "target_label": null,
+      "coordinates": [
+        1060,
+        567
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.939375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 10,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "I noticed that the Notepad window is open, but the text I entered earlier seems to be repeated. To fix this, I need to select all the text in the Notepad window and then retype the correct greeting. I can do this by pressing the Ctrl+A key combination to select everything.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open and displaying the text I entered earlier. The next step is to save the file. I will press the Ctrl+S key combination to open the Save As dialog box.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.18942226080246913,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but I haven't finished writing the greeting yet. I need to close this dialog first and return to the Notepad window to continue typing. Let me click the Cancel button to close this dialog.",
+      "target_label": null,
+      "coordinates": [
+        1060,
+        567
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.939375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 13,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open and displaying the text I entered earlier. The next step is to save the file. I will press the \"ctrl s\" key combination to save the file.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.18943769290123458,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but I haven't finished writing the greeting yet. I need to close this dialog first and return to the Notepad window to continue typing. Let me click the Cancel button to close this dialog.",
+      "target_label": null,
+      "coordinates": [
+        1060,
+        567
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.939375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 15,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "I see that the Notepad window is open and displaying the text I entered earlier. The next step is to save the file. I will press the Ctrl+S key combination to open the Save As dialog box, allowing me to save the greeting I've written.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.18942226080246913,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

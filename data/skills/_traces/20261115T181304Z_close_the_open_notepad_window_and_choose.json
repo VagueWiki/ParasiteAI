@@ -1,0 +1,101 @@
+{
+  "goal": "Close the open Notepad window and choose Don't Save on the prompt",
+  "captured_at": "2026-11-15T18:13:04.242362+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Target window (notepad.exe) already focused; skipping alt+tab (step 1)",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "HOTKEY",
+      "keys": [
+        "alt",
+        "f4"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY alt+f4 (step 2)",
+      "target_label": "Notepad close button",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "n"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY n (step 3)",
+      "target_label": "Don't Save button on confirmation dialog",
+      "coordinates": null,
+      "pre_window": "Notepad (notepad.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.5604764660493827,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Waiting for post-launch window process focus readiness (step 4)",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Waiting for post-launch window process focus readiness (step 4)",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully closed the Notepad window and chosen \"Don't Save\" on the prompt. The desktop is now clean, and the task is complete. There are no further actions needed.",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

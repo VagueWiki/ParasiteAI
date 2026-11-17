@@ -1,0 +1,150 @@
+{
+  "goal": "Open File Explorer to C:\\ParasiteAI\\benchmarks\\workspace and rename old_name.txt to new_name.txt",
+  "captured_at": "2026-11-14T18:28:06.729780+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "e"
+      ],
+      "text": null,
+      "reasoning": "I see the Start menu is open, and the quickest way to open File Explorer is by using the Windows+E shortcut. This will immediately bring up the File Explorer window, allowing me to proceed with the renaming task.",
+      "target_label": "File Explorer",
+      "coordinates": null,
+      "pre_window": "explorer.exe",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer is open, but the context menu is still visible. To proceed with renaming the file, I need to close this menu first. Let me click on a blank area of the File Explorer to dismiss the current menu, so I can then locate and select the file I want to rename.",
+      "target_label": null,
+      "coordinates": [
+        691,
+        512
+      ],
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.539375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer is open, but the context menu is still visible. To proceed with the task, I need to close this context menu first. I can do this by clicking on a blank area of the File Explorer window, which will allow me to continue with the renaming process.",
+      "target_label": null,
+      "coordinates": [
+        513,
+        638
+      ],
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.54,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 4,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I notice that the File Explorer is open, but the context menu is still visible. To proceed with the task, I need to close this context menu first. I can do this by clicking on a blank area of the File Explorer window, which will allow me to continue with the renaming process. [Upgraded to double-click]",
+      "target_label": null,
+      "coordinates": [
+        513,
+        638
+      ],
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer is open, but the context menu is still visible. To proceed with the task, I need to close this context menu first. I can do this by clicking on a blank area of the File Explorer window to dismiss the menu.",
+      "target_label": null,
+      "coordinates": [
+        399,
+        765
+      ],
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "complete care select add on.pdf - Personal - Microsoft\u200b Edge (msedge.exe)",
+      "success": true,
+      "screen_diff": 1.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I notice that the File Explorer is currently in the background, but the task requires me to rename a file in a specific directory. To proceed, I need to bring the File Explorer to the foreground. The easiest way to do this is by clicking the File Explorer icon on the taskbar, which will allow me to access the correct directory and perform the renaming task.",
+      "target_label": null,
+      "coordinates": [
+        511,
+        1071
+      ],
+      "pre_window": "complete care select add on.pdf - Personal - Microsoft\u200b Edge (msedge.exe)",
+      "post_window": "explorer.exe",
+      "success": true,
+      "screen_diff": 0.6698275862068965,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer is open in the background, but it's currently obscured by the PDF window. To proceed with the task of renaming files, I need to bring the File Explorer to the front. Let me click on the File Explorer window to make it the active window so I can continue with the renaming process.",
+      "target_label": null,
+      "coordinates": [
+        562,
+        931
+      ],
+      "pre_window": "explorer.exe",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.846875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File Explorer is open, but the context menu is still visible. To proceed, I need to close the context menu first. I will click on a blank area of the File Explorer to close the context menu, and then I will type \"ParasiteAI\" into the search bar to locate the target folder.",
+      "target_label": null,
+      "coordinates": [
+        461,
+        614
+      ],
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.55,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

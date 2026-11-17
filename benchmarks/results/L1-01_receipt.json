@@ -1,0 +1,78 @@
+{
+  "goal": "Open Notepad",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 3,
+  "max_steps": 12,
+  "duration_sec": 7.76,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    1.047,
+    1.517,
+    4.982
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Untitled - Notepad",
+    "process_name": "notepad.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.05600694444444444,
+      "error_message": null,
+      "duration_sec": 1.047,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "notepad",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.7938942484426385,
+      "error_message": null,
+      "duration_sec": 1.517,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.982,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794891494.9640846,
+  "plan_source": "local",
+  "skill_id": null,
+  "farmed_plan_id": null,
+  "fast_path_steps": 2,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
+}

@@ -1,38 +1,43 @@
 {
   "goal": "Create a new folder named 'Reports' inside C:\\ParasiteAI\\benchmarks\\workspace in File Explorer",
-  "success": false,
-  "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 63.66,
-  "exit_reason": "MAX_STEPS",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 6,
+  "max_steps": 22,
+  "duration_sec": 15.069,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    3.916,
-    3.49,
-    47.827,
-    4.257,
-    3.664
+    0.949,
+    4.892,
+    0.864,
+    1.355,
+    0.684,
+    5.8
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "",
+    "title": "workspace",
     "process_name": "explorer.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "TYPE",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "File Explorer",
-      "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.916
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.04129195601851852,
+      "error_message": null,
+      "duration_sec": 0.949,
+      "burst_count": null
     },
     {
       "step_id": 2,
@@ -40,59 +45,83 @@
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "File Explorer",
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace",
       "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.49
+      "success": true,
+      "screen_diff": 0.3274713256378208,
+      "error_message": null,
+      "duration_sec": 4.892,
+      "burst_count": null
     },
     {
       "step_id": 3,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "ctrl",
+        "shift",
+        "n"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.864,
+      "burst_count": null
+    },
+    {
+      "step_id": 4,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Reports",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 1.355,
+      "burst_count": null
+    },
+    {
+      "step_id": 5,
       "action_type": "WAIT",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
       "keys": null,
-      "success": false,
+      "success": true,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 47.827
+      "duration_sec": 0.684,
+      "burst_count": null
     },
     {
-      "step_id": 4,
-      "action_type": "CLICK",
+      "step_id": 6,
+      "action_type": "DONE",
       "target_id": null,
       "target_label": null,
-      "coordinates": [
-        24,
-        1060
-      ],
+      "coordinates": null,
       "text": null,
       "keys": null,
       "success": true,
-      "screen_diff": 0.9051470588235294,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 4.257
-    },
-    {
-      "step_id": 5,
-      "action_type": "CLICK",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": [
-        24,
-        1060
-      ],
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.27990196078431373,
-      "error_message": null,
-      "duration_sec": 3.664
+      "duration_sec": 5.8,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794175971.7319286
+  "timestamp": 1794891990.8185375,
+  "plan_source": "skill",
+  "skill_id": "create-a-new-folder-named-reports-inside-c-paras",
+  "farmed_plan_id": null,
+  "fast_path_steps": 5,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

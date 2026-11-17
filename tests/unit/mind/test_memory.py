@@ -231,3 +231,83 @@ def test_thread_safety_concurrent_recording() -> None:
     step_ids = [r.step_id for r in history]
     assert step_ids == sorted(step_ids)
     assert len(set(step_ids)) == 100
+
+
+def test_format_for_prompt_includes_physical_coords_thought_and_window_delta() -> None:
+    mem = EpisodicMemory(capacity=10)
+    mem.record_step(
+        action=ActionPlan(action=ActionType.CLICK, coordinates=(434, 509)),
+        success=True,
+        screen_diff=0.05,
+        persona_thought="I see the target icon and will click it to focus the window.",
+        pre_window="Program Manager (explorer.exe)",
+        post_window="Calculator (ApplicationFrameHost.exe)",
+        screen_size=(1920, 1080),
+    )
+
+    prompt = mem.format_for_prompt(n=5)
+    assert "### Recent Action History & Visual Outcomes:" in prompt
+    assert "CLICK at (434, 509)" in prompt
+    assert "Window: Program Manager (explorer.exe) -> Calculator (ApplicationFrameHost.exe)" in prompt
+    assert 'Thought: "I see the target icon and will click it to focus the window."' in prompt
+    assert "(SUCCESS)" in prompt
+    assert "[Screen changed]" in prompt
+
+
+def test_format_for_prompt_compresses_older_steps_into_completed_milestones() -> None:
+    mem = EpisodicMemory(capacity=10)
+    # Record 6 steps
+    # Step 1: HOTKEY Win+R -> Run
+    mem.record_step(
+        action=ActionPlan(action=ActionType.HOTKEY, keys=["win", "r"]),
+        success=True,
+        screen_diff=0.04,
+        pre_window="Program Manager (explorer.exe)",
+        post_window="Run (explorer.exe)",
+    )
+    # Step 2: TYPE notepad [Enter] -> Notepad
+    mem.record_step(
+        action=ActionPlan(action=ActionType.TYPE, text="notepad", submit=True),
+        success=True,
+        screen_diff=0.08,
+        pre_window="Run (explorer.exe)",
+        post_window="Untitled - Notepad (notepad.exe)",
+    )
+    # Steps 3-6: Detailed steps
+    for i in range(3, 7):
+        mem.record_step(
+            action=ActionPlan(action=ActionType.TYPE, text=f"line {i}"),
+            success=True,
+            screen_diff=0.03,
+            post_window="Untitled - Notepad (notepad.exe)",
+        )
+
+    # With n=4, Steps 1 and 2 should be in Completed Milestones header
+    prompt = mem.format_for_prompt(n=4)
+    assert "- Completed Milestones (Steps #1-#2):" in prompt
+    assert "#1 HOTKEY [win+r] (SUCCESS -> Run)" in prompt
+    assert "#2 TYPE 'notepad' [Enter] (SUCCESS -> Untitled - Notepad)" in prompt
+    # Steps 3 through 6 should appear in full detail
+    assert "- Step #3:" in prompt
+    assert "- Step #4:" in prompt
+    assert "- Step #5:" in prompt
+    assert "- Step #6:" in prompt
+    assert "- Step #1:" not in prompt.split("- Completed Milestones")[1]  # Ensure step 1 is not in detailed list
+
+
+def test_episodic_memory_history_property_and_clear() -> None:
+    """Verifies EpisodicMemory.history, len(), and clear() contract for consent/episode isolation."""
+    mem = EpisodicMemory(capacity=5)
+    assert mem.history == []
+    assert len(mem) == 0
+
+    mem.record_step({"action": "CLICK", "coordinates": [10, 20]}, success=True, screen_diff=0.1)
+    mem.record_step({"action": "TYPE", "text": "hello"}, success=True, screen_diff=0.2)
+
+    assert len(mem.history) == 2
+    assert len(mem) == 2
+    assert mem.history[0].action.action == ActionType.CLICK
+
+    mem.clear()
+    assert mem.history == []
+    assert len(mem) == 0

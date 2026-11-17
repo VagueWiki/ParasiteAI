@@ -1,0 +1,114 @@
+{
+  "goal": "Go to my steam library and open up Auto clicker",
+  "captured_at": "2026-11-17T07:50:08.490143+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that Cookie Clicker is currently open, but the task is to go to the Steam library and open Auto Clicker. I need to close this game first. I'll click the X button in the upper right corner of the Cookie Clicker window to close it, and then I'll look for the Steam icon on the desktop to open the Steam client.",
+      "target_label": "Auto clicker",
+      "coordinates": [
+        1908,
+        13
+      ],
+      "pre_window": "[150] 333.5 Novemdec cookies - Cookie Clicker (Cookie Clicker.exe)",
+      "post_window": "[!126] 333.5 Novemdec cookies - Cookie Clicker (Cookie Clicker.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that Cookie Clicker is currently open, but the task is to go to the Steam library. I need to close this game first. Let me click the close button in the upper right corner of the window to shut down Cookie Clicker, and then I can proceed to the next step. [Upgraded to double-click]",
+      "target_label": "Auto clicker",
+      "coordinates": [
+        1908,
+        12
+      ],
+      "pre_window": "[!125] 333.5 Novemdec cookies - Cookie Clicker (Cookie Clicker.exe)",
+      "post_window": "[!106] 333.5 Novemdec cookies - Cookie Clicker (Cookie Clicker.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "alt",
+        "tab"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY alt+tab (step 1)",
+      "target_label": "Steam window via Alt+Tab switcher",
+      "coordinates": null,
+      "pre_window": "[G42] 336.2 Novemdec cookies - Cookie Clicker (Cookie Clicker.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": true,
+      "screen_diff": 0.5738464506172839,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Steam window is open, but there's a pop-up asking for permission to collect frame rate data. This pop-up is blocking my view of the Steam library, so I need to deal with it first. I'll click the \"No Thanks\" button to close it, which will allow me to see the Steam library and continue with my task.",
+      "target_label": "Steam Library tab",
+      "coordinates": [
+        1493,
+        758
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Steam window is open, but there's a pop-up asking for permission to collect anonymous framerate data. I need to deal with this pop-up before I can continue. Let me click the \"No Thanks\" button to close it, so I can proceed with the next steps. [Upgraded to double-click]",
+      "target_label": "Steam Library tab",
+      "coordinates": [
+        1495,
+        757
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Steam window is open, but there's a pop-up asking for permission to collect anonymous framerate data. I need to click the \"No Thanks\" button to close this pop-up before I can continue with the task of opening the Steam library.",
+      "target_label": "Steam Library tab",
+      "coordinates": [
+        1499,
+        758
+      ],
+      "pre_window": "Steam (steamwebhelper.exe)",
+      "post_window": "Steam (steamwebhelper.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "YELLOW"
+    }
+  ]
+}

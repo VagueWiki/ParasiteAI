@@ -187,3 +187,34 @@ def test_empty_yaml_returns_default_config(tmp_path: Path):
     assert cfg.persona.name == "Parasite"
     assert cfg.brain.mode == "local_llm"
 
+
+def test_discord_config_and_headless_defaults():
+    """Verify default values for Discord C2 and headless mode."""
+    cfg = AppConfig()
+    assert cfg.headless is False
+    assert cfg.discord.enabled is False
+    assert cfg.discord.token == ""
+    assert cfg.discord.authorized_user_ids == []
+    assert cfg.discord.require_risk_consent is True
+    assert cfg.discord.consent_timeout_sec == 60.0
+    assert cfg.discord.milestone_screenshot_interval == 1
+    assert cfg.discord.send_final_screenshot is True
+    assert cfg.discord.enable_message_tasks is True
+    assert cfg.discord.use_task_threads is False
+    assert cfg.discord.auto_post_deck is True
+    assert cfg.discord.screen_max_width == 1280
+    assert cfg.discord.screen_jpeg_quality == 75
+
+
+def test_discord_and_headless_env_overrides(monkeypatch):
+    """Verify environment variables override Discord and headless configurations."""
+    monkeypatch.setenv("PARASITE_DISCORD_TOKEN", "test_discord_token_xyz")
+    monkeypatch.setenv("PARASITE_DISCORD_USER_IDS", "123456789,987654321")
+    monkeypatch.setenv("PARASITE_HEADLESS", "true")
+
+    cfg = AppConfig()
+    assert cfg.headless is True
+    assert cfg.discord.token == "test_discord_token_xyz"
+    assert cfg.discord.authorized_user_ids == [123456789, 987654321]
+
+

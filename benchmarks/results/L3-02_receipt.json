@@ -1,98 +1,190 @@
 {
   "goal": "Compute 25 * 4 in Calculator, write 'Total: 100' in Notepad, and save to C:\\ParasiteAI\\benchmarks\\workspace\\total.txt",
-  "success": false,
-  "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 22.46,
-  "exit_reason": "MAX_STEPS",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 10,
+  "max_steps": 26,
+  "duration_sec": 97.898,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    5.022,
-    3.947,
-    5.192,
-    3.803,
-    3.99
+    85.359,
+    1.394,
+    0.843,
+    0.907,
+    1.387,
+    1.175,
+    0.89,
+    4.081,
+    0.712,
+    0.21
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "Start menu",
-    "process_name": "explorer.exe"
+    "title": "total.txt - Notepad",
+    "process_name": "notepad.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "CLICK",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
-      "coordinates": [
-        75,
-        15
-      ],
+      "coordinates": null,
       "text": null,
-      "keys": null,
+      "keys": [
+        "win",
+        "r"
+      ],
       "success": true,
-      "screen_diff": 0.9729175897208684,
+      "screen_diff": 0.05602478780864197,
       "error_message": null,
-      "duration_sec": 5.022
+      "duration_sec": 85.359,
+      "burst_count": null
     },
     {
       "step_id": 2,
-      "action_type": "WAIT",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.0,
-      "error_message": null,
-      "duration_sec": 3.947
-    },
-    {
-      "step_id": 3,
-      "action_type": "WAIT",
-      "target_id": null,
-      "target_label": null,
-      "coordinates": null,
-      "text": null,
-      "keys": null,
-      "success": true,
-      "screen_diff": 0.0,
-      "error_message": null,
-      "duration_sec": 5.192
-    },
-    {
-      "step_id": 4,
       "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": "Calculator",
+      "text": "calc",
       "keys": null,
-      "success": false,
-      "screen_diff": 0.0,
-      "error_message": "Caret focus not detected",
-      "duration_sec": 3.803
+      "success": true,
+      "screen_diff": 0.040617766203703706,
+      "error_message": null,
+      "duration_sec": 1.394,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "25*4=",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.3597951772625516,
+      "error_message": null,
+      "duration_sec": 0.843,
+      "burst_count": null
+    },
+    {
+      "step_id": 4,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.043408082561728394,
+      "error_message": null,
+      "duration_sec": 0.907,
+      "burst_count": null
     },
     {
       "step_id": 5,
-      "action_type": "CLICK",
+      "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
-      "coordinates": [
-        24,
-        1060
+      "coordinates": null,
+      "text": "notepad",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.7940072627196948,
+      "error_message": null,
+      "duration_sec": 1.387,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Total: 100",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 1.175,
+      "burst_count": null
+    },
+    {
+      "step_id": 7,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "ctrl",
+        "shift",
+        "s"
       ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 0.89,
+      "burst_count": null
+    },
+    {
+      "step_id": 8,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "C:\\ParasiteAI\\benchmarks\\workspace\\total.txt",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 4.081,
+      "burst_count": null
+    },
+    {
+      "step_id": 9,
+      "action_type": "WAIT",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
       "text": null,
       "keys": null,
       "success": true,
-      "screen_diff": 0.9029411764705882,
+      "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 3.99
+      "duration_sec": 0.712,
+      "burst_count": null
+    },
+    {
+      "step_id": 10,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 0.21,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794176182.3645296
+  "timestamp": 1794892189.247488,
+  "plan_source": "proactive_gemini",
+  "skill_id": null,
+  "farmed_plan_id": 30,
+  "fast_path_steps": 10,
+  "parasite_invocations": 1,
+  "parasite_status": "OK",
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from enum import Enum
 import logging
+import os
 from pathlib import Path
+import re
 import subprocess
 import threading
 import time
@@ -23,6 +25,36 @@ from parasite_ai.config import BrowserOffloadConfig
 from parasite_ai.ui.bridge import UIBridge
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Outbound Prompt Sanitizer
+# ---------------------------------------------------------------------------
+
+def sanitize_consultation_prompt(prompt: str) -> str:
+    """
+    Sanitizes outbound consultation prompt before transmission to web AI.
+    Redacts standard secrets, bearer tokens, API keys, and credential assignments.
+    """
+    if not prompt or not isinstance(prompt, str):
+        return ""
+
+    sanitized = prompt
+
+    # 1. Redact standard API keys and token formats
+    sanitized = re.sub(r"\bsk-[A-Za-z0-9_-]{20,}\b", "[REDACTED_API_KEY]", sanitized)
+    sanitized = re.sub(r"\bAIza[A-Za-z0-9_-]{30,}\b", "[REDACTED_API_KEY]", sanitized)
+    sanitized = re.sub(r"\bghp_[A-Za-z0-9]{30,}\b", "[REDACTED_API_KEY]", sanitized)
+    sanitized = re.sub(r"\bBearer\s+[A-Za-z0-9._~+/-]{20,}\b", "Bearer [REDACTED_TOKEN]", sanitized, flags=re.IGNORECASE)
+
+    # 2. Redact explicit credential assignments (password, passwd, secret, api_key, access_token)
+    sanitized = re.sub(
+        r"(?i)\b(password|passwd|secret|api_key|access_token)\s*[:=]\s*([^\s,;]+)",
+        r"\1=[REDACTED_SECRET]",
+        sanitized,
+    )
+
+    return sanitized
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +171,9 @@ class IBrowserWindowBackend(Protocol):
     def is_window_foreground(self, hwnd: int) -> bool:
         ...
 
+    def ensure_on_primary_monitor(self, hwnd: int) -> bool:
+        ...
+
 
 class Win32BrowserWindowBackend:
     """Production Win32 window manager for visible browser windows."""
@@ -165,6 +200,9 @@ class Win32BrowserWindowBackend:
                     if type_lower == "chrome" and "google chrome" in title:
                         matched_hwnd = hwnd
                         return False
+                    elif "edge" in type_lower and ("microsoft edge" in title or "edge" in title):
+                        matched_hwnd = hwnd
+                        return False
                     elif "opera" in type_lower and "opera" in title:
                         matched_hwnd = hwnd
                         return False
@@ -182,6 +220,8 @@ class Win32BrowserWindowBackend:
         try:
             import ctypes
             user32 = ctypes.windll.user32
+            if os.environ.get("PYTEST_CURRENT_TEST") and type(getattr(user32, "SetWindowPos", None)).__name__ not in ("MagicMock", "Mock", "NonCallableMagicMock"):
+                return False
             kernel32 = ctypes.windll.kernel32
 
             if user32.IsIconic(hwnd):
@@ -254,6 +294,57 @@ class Win32BrowserWindowBackend:
         except Exception:
             return False
 
+    def ensure_on_primary_monitor(self, hwnd: int) -> bool:
+        """
+        Guarantees browser window is placed on Primary Monitor (Monitor 1).
+        If window center is located on Monitor 2 or beyond, restores and moves it to Monitor 1.
+        """
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            if os.environ.get("PYTEST_CURRENT_TEST") and type(getattr(user32, "SetWindowPos", None)).__name__ not in ("MagicMock", "Mock", "NonCallableMagicMock"):
+                return False
+
+            ml, mt, mw, mh = (0, 0, 1920, 1080)
+            try:
+                from parasite_ai.vision.capture import get_monitor_bounds
+                ml, mt, mw, mh = get_monitor_bounds(1)
+                if mw <= 0 or mh <= 0:
+                    ml, mt, mw, mh = 0, 0, 1920, 1080
+            except Exception:
+                pass
+
+            rect = self.get_window_rect(hwnd)
+            cur_l, cur_t, cur_r, cur_b = rect
+            cur_w = max(100, cur_r - cur_l)
+            cur_h = max(100, cur_b - cur_t)
+            cx = (cur_l + cur_r) // 2
+
+            # If center falls outside Monitor 1 bounds
+            if cx < ml or cx >= ml + mw:
+                logger.info(
+                    "[MONITOR RELOCATION] Browser window (HWND %s) centered at x=%d is outside Monitor 1 [%d..%d]. "
+                    "Snapping onto Monitor 1.",
+                    hwnd, cx, ml, ml + mw
+                )
+                if user32.IsZoomed(hwnd):
+                    user32.ShowWindow(hwnd, 9)  # SW_RESTORE to un-maximize before moving
+                    time.sleep(0.05)
+
+                target_w = min(cur_w, mw - 100)
+                target_h = min(cur_h, mh - 100)
+                target_x = ml + 50
+                target_y = mt + 40
+
+                # SWP_NOZORDER (0x0004) | SWP_SHOWWINDOW (0x0040)
+                user32.SetWindowPos(hwnd, 0, target_x, target_y, target_w, target_h, 0x0004 | 0x0040)
+                return True
+
+            return False
+        except Exception as exc:
+            logger.debug("Win32 ensure_on_primary_monitor error: %s", exc)
+            return False
+
 
 class MockBrowserWindowBackend:
     """Mock window manager for unit tests."""
@@ -264,6 +355,7 @@ class MockBrowserWindowBackend:
         self.launched_calls: List[Tuple[str, str]] = []
         self.rect: Tuple[int, int, int, int] = (100, 100, 1500, 900)
         self.current_foreground: Optional[int] = existing_hwnd
+        self.relocated: bool = False
 
     def find_browser_window(self, browser_type: str) -> Optional[int]:
         return self.existing_hwnd
@@ -284,6 +376,14 @@ class MockBrowserWindowBackend:
 
     def is_window_foreground(self, hwnd: int) -> bool:
         return self.current_foreground == hwnd
+
+    def ensure_on_primary_monitor(self, hwnd: int) -> bool:
+        cx = (self.rect[0] + self.rect[2]) // 2
+        if cx < 0 or cx >= 1920:
+            self.rect = (100, 60, 1500, 910)
+            self.relocated = True
+            return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -587,11 +687,15 @@ class BrowserOffloader:
                 if hwnd is None:
                     raise BrowserNotFoundError(f"Failed to launch or acquire window for browser: '{b_type}'")
 
-            # 2. Focus Window
+            # 2. Focus Window & Ensure On Primary Monitor
             self._update_state(OffloaderState.FOCUSING_WINDOW)
             focused = self.window_backend.focus_window(hwnd)
             if not focused:
                 logger.debug("Could not confirm foreground focus on HWND %s", hwnd)
+
+            # Ensure browser window is located on Primary Monitor (Monitor 1)
+            if hasattr(self.window_backend, "ensure_on_primary_monitor"):
+                self.window_backend.ensure_on_primary_monitor(hwnd)
 
             if cancellation_token and cancellation_token.is_set():
                 raise OffloadHarvestError("Offload cancelled before navigation")
@@ -642,8 +746,9 @@ class BrowserOffloader:
             except Exception as exc:
                 logger.debug("Failed reading user clipboard before prompt paste: %s", exc)
 
+            clean_prompt = sanitize_consultation_prompt(prompt)
             try:
-                self.clipboard_backend.set_text(prompt)
+                self.clipboard_backend.set_text(clean_prompt)
                 time.sleep(0.05)
                 if self.keyboard_driver:
                     pasted = self.keyboard_driver.hotkey("ctrl", "v", cancellation_token=cancellation_token)

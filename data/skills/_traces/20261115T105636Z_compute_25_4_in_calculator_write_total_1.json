@@ -1,0 +1,144 @@
+{
+  "goal": "Compute 25 * 4 in Calculator, write 'Total: 100' in Notepad, and save to C:\\ParasiteAI\\benchmarks\\workspace\\total.txt",
+  "captured_at": "2026-11-15T10:56:36.322311+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04277922453703704,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "calc",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.04143663194444445,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I just typed 'calc' into the Run dialog and pressed Enter, which successfully opened the Calculator app. Now, I need to perform the calculation 25 * 4. To do this, I'll click on the Calculator app window to activate it, then enter the calculation in the input field. Let's go ahead and complete this step.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        150,
+        1071
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Search (SearchApp.exe)",
+      "success": true,
+      "screen_diff": 0.20517241379310344,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator is ready, and the first step is to input the number 25. I notice that the calculator's display is currently showing 0, so I need to enter 25 first. I will click on the number keys in sequence to complete this input.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1412,
+        758
+      ],
+      "pre_window": "Search (SearchApp.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.001472800925925926,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator is ready, and the first step is to input the number 25. I notice that the calculator interface is clean, with the display showing \"1,\" which is the result of a previous calculation. To start a new calculation, I need to clear the display first. The most straightforward way to do this is by pressing the \"CE\" button, which will reset the calculator to its initial state, allowing me to input the new calculation.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1487,
+        506
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0009283371913580247,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "BURST",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator is ready, and the first step is to input the number 25. I notice that the calculator's input field is empty, so I need to type \"25\" into it. This will allow me to proceed with the multiplication operation.",
+      "target_label": "Calculator Input Field",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0019573436780749966,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator is ready, and the first step is to input the number 25. I notice that the input field is empty, so I need to click on it to activate it before I can start typing.",
+      "target_label": "Calculator Input Field",
+      "coordinates": [
+        1644,
+        336
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator is ready, and the first step is to input the number 25. I notice that the calculator's input field is empty, so I need to click on it to activate it before I can start typing. [Upgraded to double-click]",
+      "target_label": "Calculator Input Field",
+      "coordinates": [
+        1644,
+        336
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

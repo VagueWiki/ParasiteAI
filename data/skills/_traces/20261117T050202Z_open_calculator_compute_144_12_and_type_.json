@@ -1,0 +1,117 @@
+{
+  "goal": "Open Calculator, compute 144 / 12, and type the result into the open Notepad window",
+  "captured_at": "2026-11-17T05:02:02.950743+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02498360339506173,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "calc",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run dialog input text field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.02189525462962963,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "144/12=",
+      "reasoning": "Directive fast-path TYPE (step 3)",
+      "target_label": "Calculator application",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.3737995286637736,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Target window (CalculatorApp.exe) already focused; skipping alt+tab (step 4)",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Calculator (ApplicationFrameHost.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The calculator shows the result of 144 divided by 12, which is 12. The Notepad window is also open. I need to click on the Notepad window to activate it so I can enter the result.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        380,
+        473
+      ],
+      "pre_window": "Calculator (ApplicationFrameHost.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.00574315200617284,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "12",
+      "reasoning": "The calculator shows the result of 144 divided by 12, which is 12. The Notepad window is ready for input. The next step is to type the result '12' into the Notepad window.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The task is complete. The calculator shows the result of 144 divided by 12, which is 12. The Notepad window is open and ready to receive the input. The Notepad Buffer is already set to \"12\". There is no need for any further action.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

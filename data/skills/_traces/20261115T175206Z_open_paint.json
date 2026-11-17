@@ -1,0 +1,54 @@
+{
+  "goal": "Open Paint",
+  "captured_at": "2026-11-15T17:52:06.581827+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04130545910493827,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "mspaint",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "mspaint",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.9750963050314465,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint application is now open, and the task of launching it has been successfully completed. There are no further actions required to fulfill the task objective.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Paint (mspaint.exe)",
+      "post_window": "Untitled - Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "goal": "Open File Explorer",
+  "captured_at": "2026-11-15T23:40:20.619953+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05615788966049383,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "explorer",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "explorer",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.7187695758534681,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The File Explorer window is now open, displaying the Quick access interface with a list of recent files and folders. This is exactly the result we were aiming for, so there's no need for any further actions. The task of opening File Explorer has been successfully completed.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "File Explorer (explorer.exe)",
+      "post_window": "File Explorer (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

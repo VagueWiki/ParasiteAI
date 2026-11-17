@@ -1,0 +1,181 @@
+{
+  "goal": "open paint and save as C:\\Users\\Suici\\AppData\\Local\\Temp\\parasite_p4_5_6gq032c8\\p4_5_smoke_canvas.png",
+  "captured_at": "2026-11-14T10:47:04.030479+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win (step 1)",
+      "target_label": "Open Windows Start Menu",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4.5 Farmed Execution, AppMemory & Playbook Smoke Probe (cmd.exe)",
+      "post_window": "Start menu (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.15851948302469135,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "mspaint",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "mspaint",
+      "coordinates": null,
+      "pre_window": "Start menu (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.08699363425925925,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint application is now open, and the next step is to save the file. I need to click on the File menu in the top left corner to access the save options.",
+      "target_label": "mspaint",
+      "coordinates": [
+        23,
+        37
+      ],
+      "pre_window": "Paint (mspaint.exe)",
+      "post_window": "mspaint.exe",
+      "success": true,
+      "screen_diff": 0.63875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+s (step 3)",
+      "target_label": "Paint Save dialog",
+      "coordinates": null,
+      "pre_window": "mspaint.exe",
+      "post_window": "mspaint.exe",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the File menu is already open, and the next step is to select the \"Save as\" option. This will allow me to specify the exact location and file name where I want to save the image. Let me click on the \"Save as\" option in the menu to proceed with the saving process.",
+      "target_label": "File name box",
+      "coordinates": [
+        57,
+        203
+      ],
+      "pre_window": "mspaint.exe",
+      "post_window": "Untitled - Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.10375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY enter (step 5)",
+      "target_label": "Confirm Save",
+      "coordinates": null,
+      "pre_window": "Untitled - Paint (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.23191792052469135,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+s (step 1)",
+      "target_label": "Paint Save dialog",
+      "coordinates": null,
+      "pre_window": "Confirm Save As (mspaint.exe)",
+      "post_window": "Confirm Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.02331838348765432,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the file save dialog box, and the file name is still the default \"Untitled.png.\" To save the file with the correct name, I need to click on the file name input box to activate it, so I can enter the new file name.",
+      "target_label": "File name box",
+      "coordinates": [
+        813,
+        709
+      ],
+      "pre_window": "Confirm Save As (mspaint.exe)",
+      "post_window": "Confirm Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0007619598765432099,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the file save dialog box is open, and the file name is still the default \"Untitled.png.\" The file save dialog box is blocking the screen, so I need to click on the file name box to activate it and then type in the file name \"p4_5_smoke_canvas.png.\" [Upgraded to double-click]",
+      "target_label": "File name box",
+      "coordinates": [
+        803,
+        707
+      ],
+      "pre_window": "Confirm Save As (mspaint.exe)",
+      "post_window": "Confirm Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the file save dialog box is open, and the file name is still the default \"Untitled.png.\" I need to click on the file name input box to change the file name to the required one.",
+      "target_label": "File name box",
+      "coordinates": [
+        797,
+        709
+      ],
+      "pre_window": "Confirm Save As (mspaint.exe)",
+      "post_window": "Confirm Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 2.36304012345679e-05,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

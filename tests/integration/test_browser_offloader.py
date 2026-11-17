@@ -431,3 +431,106 @@ def test_browser_offloader_no_blind_center_screen_clicking_loop() -> None:
     assert (960, 988) in clicked_coords
 
 
+def test_browser_offloader_relocates_monitor_2_window_to_monitor_1() -> None:
+    """Verifies that an offloaded browser window located on Monitor 2 is snapped onto Monitor 1."""
+    clip = MockClipboardBackend()
+    win = MockBrowserWindowBackend(existing_hwnd=12345)
+    # Window centered on Monitor 2 (x=2020..3420 -> cx=2720)
+    win.rect = (2020, 100, 3420, 950)
+
+    mock_mouse = MagicMock()
+    mock_mouse.click.return_value = True
+    mock_kbd = MagicMock()
+    mock_kbd.hotkey.return_value = True
+
+    offloader = BrowserOffloader(
+        clipboard_backend=clip,
+        window_backend=win,
+        mouse_driver=mock_mouse,
+        keyboard_driver=mock_kbd,
+    )
+    offloader.verifier.execute_harvest = MagicMock(return_value="Answer from relocated window")
+
+    resp = offloader.query_web_ai("Provide strategy")
+    assert resp == "Answer from relocated window"
+    assert win.relocated is True
+    # Window should now be on Monitor 1
+    assert win.rect[0] >= 0 and win.rect[2] <= 1920
+    # Coordinates of mouse click should fall on Monitor 1
+    click_x, click_y = mock_mouse.click.call_args_list[0].args[:2]
+    assert 0 <= click_x < 1920
+    assert 0 <= click_y < 1080
+
+
+def test_sanitize_consultation_prompt_redacts_secrets_and_api_keys() -> None:
+    """Verifies that sensitive tokens, keys, and credentials are scrubbed before browser transmission."""
+    from parasite_ai.mind.offloader import sanitize_consultation_prompt
+
+    raw_prompt = (
+        "Active Window: Chrome\n"
+        "Config token: sk-proj-1234567890abcdefghij1234567890\n"
+        "Google API key: AIzaSyD-1234567890abcdefghijklmnopqrstuvw\n"
+        "GitHub token: ghp_1234567890abcdefghijklmnopqrstuvwx\n"
+        "Auth header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-ID\n"
+        "Database: password = my_super_secret_db_pass; user = admin;\n"
+        "User Goal: Fix connection error"
+    )
+
+    clean = sanitize_consultation_prompt(raw_prompt)
+
+    assert "sk-proj-1234567890abcdefghij1234567890" not in clean
+    assert "AIzaSyD-1234567890abcdefghijklmnopqrstuvw" not in clean
+    assert "ghp_1234567890abcdefghijklmnopqrstuvwx" not in clean
+    assert "my_super_secret_db_pass" not in clean
+    assert "[REDACTED_API_KEY]" in clean
+    assert "password=[REDACTED_SECRET]" in clean
+    assert "User Goal: Fix connection error" in clean
+
+
+def test_cua_single_pass_injects_advisor_blueprint_into_working_memory() -> None:
+    """Verifies that an active strategic advisor plan is surfaced to UI-TARS via working_memory_context."""
+    from parasite_ai.mind.dual_mind import DualMindPipeline
+    from parasite_ai.mind.memory import ActionPlan, ActionType, EpisodicMemory
+    from parasite_ai.mind.plan import LivingPlan, PlanStep, StepIntent
+
+    mock_brain = MagicMock()
+    mock_brain.supports_vision.return_value = True
+    mock_brain.generate_cua_step.return_value = (
+        "Executing advised step",
+        ActionPlan(action=ActionType.CLICK, coordinates=(500, 500), reasoning="Click target"),
+    )
+
+    mem = EpisodicMemory()
+    pipeline = DualMindPipeline(
+        brain_manager=mock_brain,
+        memory=mem,
+        config=None,
+    )
+
+    # Inject an advisor-formulated plan
+    advisor_plan = LivingPlan(
+        user_goal="Dismiss modal error dialog",
+        overall_strategy="Strategic Advisor: Click Close on blocking system error dialog",
+        steps=[
+            PlanStep(
+                step_id=1,
+                intent=StepIntent.DISMISS_DIALOG,
+                description="Click Close button on modal error dialog",
+                target_description="Close button",
+                success_criteria="Dialog closes",
+            ),
+        ],
+        current_step_id=1,
+    )
+    pipeline.active_plan = advisor_plan
+
+    pipeline.step(user_goal="Dismiss modal error dialog")
+
+    mock_brain.generate_cua_step.assert_called_once()
+    kwargs = mock_brain.generate_cua_step.call_args.kwargs
+    wm_ctx = kwargs.get("working_memory_context", "")
+
+    assert "- Strategic Advisor Guidance: Step 1 (DISMISS_DIALOG) — Click Close button on modal error dialog (Target: Close button)" in wm_ctx
+
+
+

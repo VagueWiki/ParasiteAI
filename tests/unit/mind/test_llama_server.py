@@ -143,8 +143,81 @@ def test_llama_server_generate_text_and_vision_payload() -> None:
     assert messages[0]["content"] == "You are UI-TARS."
     assert messages[1]["role"] == "user"
     assert isinstance(messages[1]["content"], list)
-    assert messages[1]["content"][0]["type"] == "image_url"
-    assert messages[1]["content"][0]["image_url"]["url"].startswith("data:image/jpeg;base64,AAAA")
+    # Prefix-stable ordering: text before image_url
+    assert messages[1]["content"][0]["type"] == "text"
+    assert messages[1]["content"][0]["text"] == "Click on target"
+    assert messages[1]["content"][1]["type"] == "image_url"
+    assert messages[1]["content"][1]["image_url"]["url"].startswith("data:image/jpeg;base64,AAAA")
+
+
+def test_llama_server_quantized_kv_cache_and_reuse_args(tmp_path: Path) -> None:
+    """Verifies that LlamaServerBackend passes -ctk, -ctv, and --cache-reuse to llama-server.exe."""
+    fake_exe = tmp_path / "llama-server.exe"
+    fake_exe.write_bytes(b"MZ" + b"\x00" * 100)
+    fake_model = tmp_path / "model.gguf"
+    fake_model.write_bytes(b"GGUF" + b"\x03\x00\x00\x00" + b"\x00" * 1024)
+    # Write at least 10 MB to satisfy min size guard
+    fake_model.write_bytes(b"GGUF" + b"\x03\x00\x00\x00" + b"\x00" * (10 * 1024 * 1024 + 100))
+
+    backend = LlamaServerBackend(
+        server_binary=fake_exe,
+        model_path=fake_model,
+        auto_start=False,
+        n_ctx=8192,
+        kv_cache_type_k="q8_0",
+        kv_cache_type_v="q8_0",
+        cache_reuse_tokens=256,
+    )
+    assert backend.n_ctx == 8192
+    assert backend.kv_cache_type_k == "q8_0"
+    assert backend.kv_cache_type_v == "q8_0"
+    assert backend.cache_reuse_tokens == 256
+
+    with patch("subprocess.Popen") as mock_popen:
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        mock_popen.return_value = mock_proc
+
+        with patch.object(backend, "check_health", return_value={"status": "ok"}), \
+             patch.dict("os.environ", {"PARASITE_TEST_REAL_LLM": "1"}):
+            success = backend.start_server_daemon()
+            assert success is True
+
+        assert mock_popen.called
+        cmd = mock_popen.call_args[0][0]
+        assert "-c" in cmd
+        assert cmd[cmd.index("-c") + 1] == "8192"
+        assert "-ctk" in cmd
+        assert cmd[cmd.index("-ctk") + 1] == "q8_0"
+        assert "-ctv" in cmd
+        assert cmd[cmd.index("-ctv") + 1] == "q8_0"
+        assert "--cache-reuse" in cmd
+        assert cmd[cmd.index("--cache-reuse") + 1] == "256"
+
+    # Multimodal vision daemon: --cache-reuse must be omitted to prevent llama.cpp warnings
+    mmproj_fake = tmp_path / "test.mmproj"
+    mmproj_fake.write_bytes(b"GGUF_TEST_MMPROJ")
+    backend_mm = LlamaServerBackend(
+        server_binary=str(fake_exe),
+        model_path=str(fake_model),
+        mmproj_path=str(mmproj_fake),
+        auto_start=False,
+        cache_reuse_tokens=256,
+    )
+    with patch("subprocess.Popen") as mock_popen_mm:
+        mock_proc_mm = MagicMock()
+        mock_proc_mm.poll.return_value = None
+        mock_popen_mm.return_value = mock_proc_mm
+
+        with patch.object(backend_mm, "check_health", return_value={"status": "ok"}), \
+             patch.dict("os.environ", {"PARASITE_TEST_REAL_LLM": "1"}):
+            success = backend_mm.start_server_daemon()
+            assert success is True
+
+        assert mock_popen_mm.called
+        cmd_mm = mock_popen_mm.call_args[0][0]
+        assert "--mmproj" in cmd_mm
+        assert "--cache-reuse" not in cmd_mm
 
 
 def test_llama_server_unload_lifecycle() -> None:

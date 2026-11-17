@@ -1,0 +1,81 @@
+{
+  "goal": "Close the open Notepad window and choose Don't Save on the prompt",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 3,
+  "max_steps": 18,
+  "duration_sec": 26.794,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    12.904,
+    8.541,
+    5.138
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine ",
+    "process_name": "cmd.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        734,
+        65
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.75,
+      "error_message": null,
+      "duration_sec": 12.904,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        993,
+        538
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.898125,
+      "error_message": null,
+      "duration_sec": 8.541,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 5.138,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794892084.319105,
+  "plan_source": "local",
+  "skill_id": null,
+  "farmed_plan_id": null,
+  "fast_path_steps": 0,
+  "parasite_invocations": 1,
+  "parasite_status": "FOCUS_TIMEOUT",
+  "veto_count": 0,
+  "fast_path_abort_reason": null
+}

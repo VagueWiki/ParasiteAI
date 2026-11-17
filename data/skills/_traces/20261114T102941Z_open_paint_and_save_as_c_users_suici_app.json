@@ -1,0 +1,182 @@
+{
+  "goal": "open paint and save as C:\\Users\\Suici\\AppData\\Local\\Temp\\parasite_p4_5_omvu9s40\\p4_5_smoke_canvas.png",
+  "captured_at": "2026-11-14T10:29:41.331007+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win (step 1)",
+      "target_label": "Open Windows Start Menu",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4.5 Farmed Execution, AppMemory & Playbook Smoke Probe (cmd.exe)",
+      "post_window": "Start menu (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.19501736111111112,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "mspaint",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "mspaint",
+      "coordinates": null,
+      "pre_window": "Start menu (explorer.exe)",
+      "post_window": "Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.15207596305031446,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint application is open, and the next step is to save the file. I need to click on the File menu in the top left corner to access the save options.",
+      "target_label": "paint",
+      "coordinates": [
+        30,
+        37
+      ],
+      "pre_window": "Untitled - Paint (mspaint.exe)",
+      "post_window": "mspaint.exe",
+      "success": true,
+      "screen_diff": 0.5475,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint application is open, and the next step is to save the file. I need to click on the \"Save as\" option in the File menu to specify the save location and file name.",
+      "target_label": "paint",
+      "coordinates": [
+        59,
+        203
+      ],
+      "pre_window": "mspaint.exe",
+      "post_window": "Untitled - Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.109375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint application is open, and the next step is to save the file. I need to click on the File menu in the top left corner to access the save options.",
+      "target_label": null,
+      "coordinates": [
+        30,
+        37
+      ],
+      "pre_window": "Untitled - Paint (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.24930362654320987,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "SCROLL",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but the current directory isn't the one I want. I need to scroll down in the left navigation pane to find the correct path. Let me use the mouse wheel to scroll down and see if I can locate the C:\\Users\\Suici\\AppData\\Local\\Temp\\parasite_p4_5_omvu9s40 directory.",
+      "target_label": null,
+      "coordinates": [
+        736,
+        539
+      ],
+      "pre_window": "Save As (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.016353202160493827,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "SCROLL",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but the current directory isn't the one I want. I need to scroll down to find the correct path. Let me use the mouse wheel to scroll down and see if I can locate the Temp folder.",
+      "target_label": null,
+      "coordinates": [
+        761,
+        508
+      ],
+      "pre_window": "Save As (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "SCROLL",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but the current directory isn't the one I want. I need to scroll down to find the correct path. Let me use the mouse wheel to scroll down and see if I can locate the Temp folder.",
+      "target_label": null,
+      "coordinates": [
+        853,
+        455
+      ],
+      "pre_window": "Save As (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "SCROLL",
+      "keys": null,
+      "text": null,
+      "reasoning": "I've been scrolling through the File Explorer for a while now, but I still can't find the target folder. It seems like I need to try a different approach. I'll scroll down a bit more to see if there's anything else I might have missed.",
+      "target_label": null,
+      "coordinates": [
+        739,
+        503
+      ],
+      "pre_window": "Save As (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "SCROLL",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but the current directory isn't the one I want. I need to scroll down the left navigation pane to find the correct path. Let me scroll down a bit to see if I can locate the Temp folder.",
+      "target_label": null,
+      "coordinates": [
+        739,
+        503
+      ],
+      "pre_window": "Save As (mspaint.exe)",
+      "post_window": "Save As (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

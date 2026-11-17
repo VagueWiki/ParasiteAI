@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import math
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 from parasite_ai.config import VisionConfig
@@ -173,12 +174,13 @@ class ScreenGrounder:
         image_override: Optional[np.ndarray] = None,
         goal_keywords: Optional[List[str]] = None,
         offset: int = 0,
+        lazy: bool = False,
     ) -> List[UIElement]:
         """
         Executes hybrid grounding pipeline:
-        1. Enumerates UIA controls from active window or window_filter HWND.
+        1. Enumerates UIA controls from active window or window_filter HWND (lazy mode scopes to active window only).
         2. Evaluates if OCR fallback is needed (< 6 UIA controls, or force_ocr=True, or ocr_only).
-        3. Invokes scoped RapidOCR on active window bounds if needed.
+        3. Invokes scoped RapidOCR on active window bounds if needed (bypassed in lazy mode unless force_ocr=True).
         4. Performs spatial IoU and containment deduplication and label merging.
         5. Normalizes, filters degenerate elements, prioritizes goal matches, caps to max_som_elements, and assigns 1-based IDs.
         """
@@ -191,21 +193,20 @@ class ScreenGrounder:
                 uia_raw_elements, active_window_rect = self._walk_uia_tree(
                     window_filter=window_filter,
                     goal_keywords=goal_keywords,
+                    lazy=lazy,
                 )
 
             # 2. Check if Tier 2: OCR fallback is needed
-            # Evaluate foreground/active window UIA control count separately from background desktop icons
-            # and exclude standard OS window chrome / scrollbar buttons so console (conhost.exe),
-            # Steam launch modals, and custom-rendered game windows always trigger scoped OCR.
             active_uia_count = sum(
                 1 for e in uia_raw_elements
                 if e.is_active_window and (e.label or "").strip().lower() not in self.WINDOW_CHROME_LABELS
             )
             run_ocr = False
-            if self.config.grounding_mode == "ocr_only" or force_ocr:
-                run_ocr = True
-            elif self.config.grounding_mode == "hybrid" and active_uia_count < self._min_uia_threshold:
-                run_ocr = True
+            if not lazy or force_ocr:
+                if self.config.grounding_mode == "ocr_only" or force_ocr:
+                    run_ocr = True
+                elif self.config.grounding_mode == "hybrid" and active_uia_count < self._min_uia_threshold:
+                    run_ocr = True
 
             ocr_raw_elements: List[RawElement] = []
             if run_ocr:
@@ -232,6 +233,7 @@ class ScreenGrounder:
         self,
         window_filter: Optional[int] = None,
         goal_keywords: Optional[List[str]] = None,
+        lazy: bool = False,
     ) -> Tuple[List[RawElement], Optional[Tuple[int, int, int, int]]]:
         """Traverses Win32 UI Automation accessibility tree."""
         try:
@@ -248,9 +250,9 @@ class ScreenGrounder:
         )
         try:
             with com_ctx:
-                return self._walk_uia_tree_inner(auto, window_filter, goal_keywords)
+                return self._walk_uia_tree_inner(auto, window_filter, goal_keywords, lazy=lazy)
         except Exception:
-            return self._walk_uia_tree_inner(auto, window_filter, goal_keywords)
+            return self._walk_uia_tree_inner(auto, window_filter, goal_keywords, lazy=lazy)
 
     @staticmethod
     def _is_hwnd_visible_and_uncloaked(hwnd: int) -> bool:
@@ -318,8 +320,10 @@ class ScreenGrounder:
         auto: Any,
         window_filter: Optional[int] = None,
         goal_keywords: Optional[List[str]] = None,
+        lazy: bool = False,
     ) -> Tuple[List[RawElement], Optional[Tuple[int, int, int, int]]]:
         root_control = None
+        children: Optional[Any] = None
         excluded_rect: Optional[Tuple[int, int, int, int]] = None
         roots_to_walk: List[Tuple[Any, bool]] = []  # (control, is_active_window)
         mon_rect = self._get_target_monitor_rect()
@@ -334,12 +338,16 @@ class ScreenGrounder:
                 fg_control = auto.GetForegroundControl()
                 fg_hwnd = getattr(fg_control, "NativeWindowHandle", 0) if fg_control is not None else 0
 
-                desktop_root = auto.GetRootControl()
-                children = (
-                    desktop_root.GetChildren()
-                    if desktop_root is not None and hasattr(desktop_root, "GetChildren") and callable(desktop_root.GetChildren)
-                    else None
-                )
+                if lazy and fg_control is not None and getattr(fg_control, "ProcessId", 0) != os.getpid():
+                    root_control = fg_control
+                    roots_to_walk = [(fg_control, True)]
+                else:
+                    desktop_root = auto.GetRootControl()
+                    children = (
+                        desktop_root.GetChildren()
+                        if desktop_root is not None and hasattr(desktop_root, "GetChildren") and callable(desktop_root.GetChildren)
+                        else None
+                    )
 
                 if isinstance(children, (list, tuple)) and len(children) > 0:
                     valid_children: List[Tuple[Any, int]] = []
@@ -491,11 +499,11 @@ class ScreenGrounder:
         if excluded_rect is not None:
             occluder_rects.append(excluded_rect)
 
-        walk_depth = self._depth_limit if len(roots_to_walk) == 1 and type(auto).__name__ == "MagicMock" else max(self._depth_limit, 10)
+        walk_depth = 6 if lazy else (self._depth_limit if len(roots_to_walk) == 1 and type(auto).__name__ == "MagicMock" else max(self._depth_limit, 10))
         current_pid = os.getpid()
 
         for win_ctl, is_active_win in roots_to_walk:
-            if len(raw_elements) >= 400:
+            if len(raw_elements) >= (80 if lazy else 400):
                 break
             win_pid = getattr(win_ctl, "ProcessId", 0)
             if win_pid and win_pid == current_pid:
@@ -511,7 +519,7 @@ class ScreenGrounder:
                 and any(d in win_title_lower for d in ("program manager", "workerw", "desktop", ""))
             )
             # Desktop window holds all desktop shortcuts (e.g. 150+ icons); use higher element cap
-            max_win_elements = 250 if is_desktop_win else 120
+            max_win_elements = 80 if lazy else (250 if is_desktop_win else 120)
             last_listitem_name: Optional[str] = None
             scan_after_cap_steps = 0
             total_nodes_scanned = 0
@@ -519,7 +527,7 @@ class ScreenGrounder:
             try:
                 for control, depth in auto.WalkControl(win_ctl, includeTop=False, maxDepth=walk_depth):
                     total_nodes_scanned += 1
-                    if total_nodes_scanned >= 2000:
+                    if (lazy and total_nodes_scanned >= 250) or total_nodes_scanned >= 2000:
                         break
                     ctl_pid = getattr(control, "ProcessId", 0)
                     if ctl_pid and ctl_pid == current_pid:
@@ -980,3 +988,459 @@ class ScreenGrounder:
             lines.append(f"Background/Desktop Targets: {len(bg_elements)} other items detected (total: {len(elements)}){preview_str}")
 
         return "\n".join(lines)
+
+
+@dataclass
+class SnapResult:
+    """Outcome metadata of CentroidSnapper coordinate refinement."""
+    x: int
+    y: int
+    snapped: bool = False
+    strategy: str = "none"       # "none" | "uia_bbox" | "uia_point" | "contour_edge"
+    matched_label: str = ""
+    delta_x: int = 0
+    delta_y: int = 0
+    element_size: Optional[Tuple[int, int]] = None
+
+
+class CentroidSnapper:
+    """
+    Sub-millimeter button centroid snapper for dense UI grids (e.g. Calculator keys,
+    toolbar icons, checkboxes).
+
+    Snaps click targets to the geometric center of interactive controls <= max_button_size
+    (default 120x120 px) when coordinates land within edge_margin_px (default 8 px) of an
+    edge or narrowly miss the border. Prioritizes Win32 UIA/SoM bounding boxes and falls
+    back to fast CPU OpenCV Canny/contour edge detection on a local patch.
+    """
+
+    SNAP_ELIGIBLE_ROLES = frozenset({
+        "Button",
+        "CheckBox",
+        "RadioButton",
+        "MenuItem",
+        "TabItem",
+        "ListItem",
+        "Hyperlink",
+        "ComboBox",
+    })
+    EXCLUDED_ROLES = frozenset({"Edit", "Document"})
+
+    def __init__(
+        self,
+        max_button_size: int = 120,
+        edge_margin_px: int = 8,
+        min_button_size: int = 8,
+        patch_radius_px: int = 64,
+        enable_uia_point_probe: bool = False,
+        uia_point_fn: Optional[Callable[[int, int], Optional[UIElement]]] = None,
+    ) -> None:
+        self.max_button_size = int(max_button_size)
+        self.edge_margin_px = int(edge_margin_px)
+        self.min_button_size = int(min_button_size)
+        self.patch_radius_px = int(patch_radius_px)
+        self.enable_uia_point_probe = bool(enable_uia_point_probe)
+        self.uia_point_fn = uia_point_fn
+
+    def _inspect_uia_control_at(self, px: int, py: int) -> Optional[UIElement]:
+        """
+        O(1) Win32 UIA point-probe helper inspecting the control at screen coordinate (px, py).
+        When UWP/XAML hit-testing lands on an inner Text/Image node, walks up to 2 ancestor
+        controls to resolve the enclosing Button/MenuItem/CheckBox control.
+        """
+        if self.uia_point_fn is not None:
+            try:
+                return self.uia_point_fn(int(px), int(py))
+            except Exception:
+                return None
+
+        import sys
+        if sys.platform != "win32":
+            return None
+
+        try:
+            import uiautomation as auto
+
+            def _ctl_to_element(ctl: Any) -> Optional[UIElement]:
+                if ctl is None:
+                    return None
+                raw_role = str(getattr(ctl, "ControlTypeName", "") or "")
+                role = raw_role[:-7] if raw_role.endswith("Control") else raw_role
+                rect = getattr(ctl, "BoundingRectangle", None)
+                if rect is None:
+                    return None
+                left = int(getattr(rect, "left", 0))
+                top = int(getattr(rect, "top", 0))
+                right = int(getattr(rect, "right", 0))
+                bottom = int(getattr(rect, "bottom", 0))
+                w = right - left
+                h = bottom - top
+                if w <= 0 or h <= 0:
+                    return None
+                label = str(getattr(ctl, "Name", "") or "").strip()
+                return UIElement.from_bbox(1, (left, top, w, h), label=label, role=role, source="uia")
+
+            hit_ctl = auto.ControlFromPoint(int(px), int(py))
+            hit_elem = _ctl_to_element(hit_ctl)
+            if hit_elem is None:
+                return None
+            if hit_elem.role in self.EXCLUDED_ROLES or hit_elem.role in self.SNAP_ELIGIBLE_ROLES:
+                return hit_elem
+
+            if hit_elem.role in ("Text", "Image"):
+                cur = hit_ctl
+                for _ in range(2):
+                    parent = cur.GetParentControl() if hasattr(cur, "GetParentControl") else None
+                    if parent is None:
+                        break
+                    p_elem = _ctl_to_element(parent)
+                    if p_elem is not None:
+                        if p_elem.role in self.EXCLUDED_ROLES:
+                            return p_elem
+                        if p_elem.role in self.SNAP_ELIGIBLE_ROLES:
+                            if not p_elem.label and hit_elem.label:
+                                p_elem = UIElement.from_bbox(
+                                    1,
+                                    (p_elem.x, p_elem.y, p_elem.width, p_elem.height),
+                                    label=hit_elem.label,
+                                    role=p_elem.role,
+                                    source="uia",
+                                )
+                            return p_elem
+                    cur = parent
+
+            return hit_elem
+        except Exception:
+            return None
+
+    def _snap_via_uia_point(
+        self,
+        x: int,
+        y: int,
+        max_size: int,
+        edge_margin: int,
+    ) -> Optional[SnapResult]:
+        """
+        Attempts O(1) Win32 UIA point-probe centroid snapping without walking the full UIA tree.
+        First inspects (x, y); if it hits a container or empty border gap, probes up to 4
+        cardinal points spaced by edge_margin to recover narrow border-miss clicks.
+        """
+        direct = self._inspect_uia_control_at(x, y)
+        if direct is not None:
+            if direct.role in self.EXCLUDED_ROLES:
+                return SnapResult(
+                    x=x,
+                    y=y,
+                    snapped=False,
+                    strategy="none",
+                    matched_label=direct.label or "",
+                    delta_x=0,
+                    delta_y=0,
+                    element_size=(direct.width, direct.height),
+                )
+            if self._is_element_eligible(direct, max_size):
+                qualifies, _ = self._is_near_or_border_miss(
+                    x, y, direct.x, direct.y, direct.width, direct.height, edge_margin
+                )
+                if qualifies:
+                    cx = direct.center_x
+                    cy = direct.center_y
+                    return SnapResult(
+                        x=cx,
+                        y=cy,
+                        snapped=(cx != x or cy != y),
+                        strategy="uia_point",
+                        matched_label=direct.label or "",
+                        delta_x=cx - x,
+                        delta_y=cy - y,
+                        element_size=(direct.width, direct.height),
+                    )
+                return SnapResult(
+                    x=x,
+                    y=y,
+                    snapped=False,
+                    strategy="none",
+                    matched_label=direct.label or "",
+                    delta_x=0,
+                    delta_y=0,
+                    element_size=(direct.width, direct.height),
+                )
+
+        if edge_margin >= 1:
+            candidates: List[Tuple[Tuple[float, int], UIElement]] = []
+            for px, py in (
+                (x + edge_margin, y),
+                (x - edge_margin, y),
+                (x, y + edge_margin),
+                (x, y - edge_margin),
+            ):
+                cand = self._inspect_uia_control_at(px, py)
+                if cand is None or not self._is_element_eligible(cand, max_size):
+                    continue
+                qualifies, miss_dist = self._is_near_or_border_miss(
+                    x, y, cand.x, cand.y, cand.width, cand.height, edge_margin
+                )
+                if qualifies:
+                    candidates.append(((miss_dist, cand.width * cand.height), cand))
+
+            if candidates:
+                candidates.sort(key=lambda item: item[0])
+                best = candidates[0][1]
+                cx = best.center_x
+                cy = best.center_y
+                return SnapResult(
+                    x=cx,
+                    y=cy,
+                    snapped=(cx != x or cy != y),
+                    strategy="uia_point",
+                    matched_label=best.label or "",
+                    delta_x=cx - x,
+                    delta_y=cy - y,
+                    element_size=(best.width, best.height),
+                )
+
+        return None
+
+    @staticmethod
+    def _is_near_or_border_miss(
+        px: int,
+        py: int,
+        bx: int,
+        by: int,
+        bw: int,
+        bh: int,
+        edge_margin_px: int,
+    ) -> Tuple[bool, float]:
+        """
+        Checks if (px, py) lies within edge_margin_px of any bounding-box edge
+        (either inside near the border, or outside by <= edge_margin_px).
+        Returns (qualifies, outside_miss_distance).
+        """
+        dx_left = px - bx
+        dx_right = (bx + bw) - px
+        dy_top = py - by
+        dy_bottom = (by + bh) - py
+
+        if (
+            dx_left < -edge_margin_px
+            or dx_right < -edge_margin_px
+            or dy_top < -edge_margin_px
+            or dy_bottom < -edge_margin_px
+        ):
+            return False, float("inf")
+
+        is_inside = dx_left >= 0 and dx_right >= 0 and dy_top >= 0 and dy_bottom >= 0
+        if not is_inside:
+            miss_dist = math.hypot(
+                max(0, -dx_left, -dx_right),
+                max(0, -dy_top, -dy_bottom),
+            )
+            return True, miss_dist
+
+        min_edge = min(dx_left, dx_right, dy_top, dy_bottom)
+        if min_edge <= edge_margin_px:
+            return True, 0.0
+        return False, float("inf")
+
+    def _is_element_eligible(self, elem: UIElement, max_size: int) -> bool:
+        """Filters elements to small interactive controls (never Edit/Document canvases)."""
+        if elem.role in self.EXCLUDED_ROLES:
+            return False
+        if elem.role not in self.SNAP_ELIGIBLE_ROLES and elem.source != "ocr":
+            return False
+        return (
+            self.min_button_size <= elem.width <= max_size
+            and self.min_button_size <= elem.height <= max_size
+        )
+
+    def _snap_via_elements(
+        self,
+        x: int,
+        y: int,
+        elements: List[UIElement],
+        max_size: int,
+        edge_margin: int,
+    ) -> Optional[SnapResult]:
+        """Attempts centroid snapping using grounded UIA/SoM bounding boxes."""
+        best_elem: Optional[UIElement] = None
+        best_rank: Tuple[float, int] = (float("inf"), 10**9)
+
+        for elem in elements:
+            if not self._is_element_eligible(elem, max_size):
+                continue
+            qualifies, miss_dist = self._is_near_or_border_miss(
+                x, y, elem.x, elem.y, elem.width, elem.height, edge_margin
+            )
+            if not qualifies:
+                continue
+            area = elem.width * elem.height
+            rank = (miss_dist, area)
+            if rank < best_rank:
+                best_rank = rank
+                best_elem = elem
+
+        if best_elem is None:
+            return None
+
+        cx = best_elem.center_x
+        cy = best_elem.center_y
+        return SnapResult(
+            x=cx,
+            y=cy,
+            snapped=(cx != x or cy != y),
+            strategy="uia_bbox",
+            matched_label=best_elem.label or "",
+            delta_x=cx - x,
+            delta_y=cy - y,
+            element_size=(best_elem.width, best_elem.height),
+        )
+
+    def _snap_via_contours(
+        self,
+        x: int,
+        y: int,
+        frame: np.ndarray,
+        frame_origin: Tuple[int, int],
+        max_size: int,
+        edge_margin: int,
+    ) -> Optional[SnapResult]:
+        """Fast CPU OpenCV contour/edge fallback on a local patch when UIA misses."""
+        if frame is None or frame.size == 0:
+            return None
+
+        try:
+            import cv2
+        except ImportError:
+            return None
+
+        fh, fw = frame.shape[:2]
+        ox, oy = frame_origin
+        fx = x - ox
+        fy = y - oy
+        if fx < 0 or fy < 0 or fx >= fw or fy >= fh:
+            return None
+
+        r = self.patch_radius_px
+        px1 = max(0, fx - r)
+        py1 = max(0, fy - r)
+        px2 = min(fw, fx + r)
+        py2 = min(fh, fy + r)
+        if (px2 - px1) < 16 or (py2 - py1) < 16:
+            return None
+
+        patch = frame[py1:py2, px1:px2]
+        if patch.ndim == 2:
+            gray = patch
+        elif patch.shape[2] == 4:
+            gray = cv2.cvtColor(patch[:, :, :3], cv2.COLOR_RGB2GRAY)
+        else:
+            gray = cv2.cvtColor(patch[:, :, :3], cv2.COLOR_RGB2GRAY)
+
+        blur = cv2.GaussianBlur(gray, (3, 3), 0)
+        edges = cv2.Canny(blur, 30, 100)
+        edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return None
+
+        lx = fx - px1
+        ly = fy - py1
+        best_box: Optional[Tuple[int, int, int, int]] = None
+        best_rank: Tuple[int, float, int] = (2, float("inf"), 10**9)
+
+        for cnt in contours:
+            bx, by, bw, bh = cv2.boundingRect(cnt)
+            if not (14 <= bw <= max_size and 14 <= bh <= max_size):
+                continue
+            qualifies, miss_dist = self._is_near_or_border_miss(
+                lx, ly, bx, by, bw, bh, edge_margin
+            )
+            if not qualifies:
+                continue
+            # Tier 0 prefers true button-sized contours (>=22x20) over tiny glyph strokes
+            size_tier = 0 if (bw >= 22 and bh >= 20) else 1
+            rank = (size_tier, miss_dist, bw * bh)
+            if rank < best_rank:
+                best_rank = rank
+                best_box = (bx, by, bw, bh)
+
+        if best_box is None:
+            return None
+
+        bx, by, bw, bh = best_box
+        cx = ox + px1 + bx + bw // 2
+        cy = oy + py1 + by + bh // 2
+        return SnapResult(
+            x=cx,
+            y=cy,
+            snapped=(cx != x or cy != y),
+            strategy="contour_edge",
+            matched_label="",
+            delta_x=cx - x,
+            delta_y=cy - y,
+            element_size=(bw, bh),
+        )
+
+    def snap_with_details(
+        self,
+        x: int,
+        y: int,
+        elements: Optional[List[UIElement]] = None,
+        frame: Optional[np.ndarray] = None,
+        frame_origin: Tuple[int, int] = (0, 0),
+        max_button_size: Optional[int] = None,
+        edge_margin_px: Optional[int] = None,
+        use_uia_point: Optional[bool] = None,
+    ) -> SnapResult:
+        """
+        Refines (x, y) to the geometric centroid of a small enclosing/adjacent button
+        if applicable, returning detailed snapping metadata.
+        """
+        max_sz = self.max_button_size if max_button_size is None else int(max_button_size)
+        margin = self.edge_margin_px if edge_margin_px is None else int(edge_margin_px)
+
+        if elements:
+            uia_res = self._snap_via_elements(x, y, elements, max_sz, margin)
+            if uia_res is not None:
+                return uia_res
+
+        uia_point_allowed = (
+            (self.enable_uia_point_probe or self.uia_point_fn is not None)
+            if use_uia_point is None
+            else bool(use_uia_point) and (self.enable_uia_point_probe or self.uia_point_fn is not None)
+        )
+        if uia_point_allowed:
+            point_res = self._snap_via_uia_point(x, y, max_sz, margin)
+            if point_res is not None:
+                return point_res
+
+        if frame is not None:
+            contour_res = self._snap_via_contours(x, y, frame, frame_origin, max_sz, margin)
+            if contour_res is not None:
+                return contour_res
+
+        return SnapResult(x=x, y=y, snapped=False, strategy="none")
+
+    def snap(
+        self,
+        x: int,
+        y: int,
+        elements: Optional[List[UIElement]] = None,
+        frame: Optional[np.ndarray] = None,
+        frame_origin: Tuple[int, int] = (0, 0),
+        max_button_size: Optional[int] = None,
+        edge_margin_px: Optional[int] = None,
+        use_uia_point: Optional[bool] = None,
+    ) -> Tuple[int, int]:
+        """Snaps (x, y) to the centroid of a small control if near an edge; returns (x, y)."""
+        res = self.snap_with_details(
+            x=x,
+            y=y,
+            elements=elements,
+            frame=frame,
+            frame_origin=frame_origin,
+            max_button_size=max_button_size,
+            edge_margin_px=edge_margin_px,
+            use_uia_point=use_uia_point,
+        )
+        return (res.x, res.y)

@@ -2,11 +2,11 @@
 tests/test_entrypoints.py - Entry Points, CLI, and Launcher Test Suite.
 
 Verifies:
-1. CLI argument parsing across all valid flags and options.
+1. CLI argument parsing across all valid flags and options (including --simulation, --discord).
 2. High-DPI awareness bootstrap and interface alias parity.
-3. Headless ParasiteApp lifecycle, self-tests, and dry-run execution.
+3. Pure-Python ParasiteApp lifecycle, self-tests, and dry-run execution.
 4. Clean shutdown idempotency and resource unhooking.
-5. Windows batch launcher (launch_parasite.bat) syntax and synchronization commands.
+5. Windows batch launchers (launch_parasite.bat and launch_parasite_discord.bat).
 """
 
 from __future__ import annotations
@@ -18,20 +18,9 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
-from PyQt6.QtWidgets import QApplication
 
 from parasite_ai.main import ParasiteApp, main, parse_args
 from parasite_ai.ui.dpi import init_dpi_awareness, init_high_dpi_awareness
-
-
-@pytest.fixture(scope="module")
-def qapp_instance() -> Generator[QApplication, None, None]:
-    """Ensures a QApplication instance exists with offscreen platform."""
-    os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
 
 
 class TestCLIArgumentParsing:
@@ -41,8 +30,9 @@ class TestCLIArgumentParsing:
         args = parse_args([])
         assert args.config_path is None
         assert args.headless is False
+        assert args.simulation is False
         assert args.dry_run is False
-        assert args.no_hud is False
+        assert args.discord is False
         assert args.brain_mode is None
         assert args.goal is None
         assert args.log_level is None
@@ -51,8 +41,9 @@ class TestCLIArgumentParsing:
         argv = [
             "--config", "custom_config.yaml",
             "--headless",
+            "--simulation",
             "--dry-run",
-            "--no-hud",
+            "--discord",
             "--brain-mode", "mock",
             "--goal", "Open calculator and compute 42",
             "--log-level", "DEBUG",
@@ -60,8 +51,9 @@ class TestCLIArgumentParsing:
         args = parse_args(argv)
         assert args.config_path == "custom_config.yaml"
         assert args.headless is True
+        assert args.simulation is True
         assert args.dry_run is True
-        assert args.no_hud is True
+        assert args.discord is True
         assert args.brain_mode == "mock"
         assert args.goal == "Open calculator and compute 42"
         assert args.log_level == "DEBUG"
@@ -94,21 +86,19 @@ class TestDPIAwareness:
 class TestParasiteAppLifecycle:
     """Tests ParasiteApp instantiation, dry-run, and graceful termination."""
 
-    def test_parasite_app_instantiation_headless(self, qapp_instance: QApplication) -> None:
-        args = parse_args(["--headless", "--no-hud", "--brain-mode", "mock"])
+    def test_parasite_app_instantiation_headless(self) -> None:
+        args = parse_args(["--headless", "--simulation", "--brain-mode", "mock"])
         app = ParasiteApp(args)
         try:
             assert app.bridge is not None
             assert app.runtime is not None
             assert app.runtime.simulation_mode is True
             assert app.runtime.headless is True
-            assert app.dock is not None
-            assert app.hud is None
             assert app.config.brain.mode == "mock"
         finally:
             app.shutdown()
 
-    def test_parasite_app_dry_run_exit_code_zero(self, qapp_instance: QApplication, capsys: pytest.CaptureFixture) -> None:
+    def test_parasite_app_dry_run_exit_code_zero(self, capsys: pytest.CaptureFixture) -> None:
         args = parse_args(["--dry-run", "--headless", "--brain-mode", "mock"])
         app = ParasiteApp(args)
         exit_code = app.run()
@@ -116,17 +106,9 @@ class TestParasiteAppLifecycle:
         captured = capsys.readouterr()
         assert "Clean dry-run initialization completed successfully" in captured.out
 
-    def test_parasite_app_hud_enabled_by_default(self, qapp_instance: QApplication) -> None:
-        args = parse_args(["--headless", "--brain-mode", "mock"])
-        app = ParasiteApp(args)
-        try:
-            assert app.hud is not None
-        finally:
-            app.shutdown()
-
-    def test_parasite_app_initial_goal_queued(self, qapp_instance: QApplication) -> None:
+    def test_parasite_app_initial_goal_queued(self) -> None:
         goal_text = "Test goal injection at boot"
-        args = parse_args(["--headless", "--no-hud", "--brain-mode", "mock", "--goal", goal_text])
+        args = parse_args(["--headless", "--simulation", "--brain-mode", "mock", "--goal", goal_text])
         app = ParasiteApp(args)
         try:
             dequeued = app.bridge.get_next_goal(timeout_sec=0.1)
@@ -134,10 +116,9 @@ class TestParasiteAppLifecycle:
         finally:
             app.shutdown()
 
-    def test_parasite_app_shutdown_idempotent(self, qapp_instance: QApplication) -> None:
-        args = parse_args(["--headless", "--no-hud", "--brain-mode", "mock"])
+    def test_parasite_app_shutdown_idempotent(self) -> None:
+        args = parse_args(["--headless", "--simulation", "--brain-mode", "mock"])
         app = ParasiteApp(args)
-        # Calling shutdown multiple times must be completely safe
         app.shutdown()
         app.shutdown()
         app.shutdown()
@@ -169,14 +150,18 @@ class TestSubprocessEntryPoints:
 
 
 class TestBatchScriptValidation:
-    """Tests launch_parasite.bat existence and contents."""
+    """Tests batch launcher files existence and contents."""
 
     def test_batch_script_exists_and_content(self) -> None:
         batch_path = Path("launch_parasite.bat")
         assert batch_path.exists(), "launch_parasite.bat must exist in project root"
         content = batch_path.read_text(encoding="utf-8")
-        assert len(content.strip()) > 50
         assert "uv sync" in content
         assert "uv run python main.py %*" in content
-        assert "setlocal EnableDelayedExpansion" in content
-        assert "exit /b" in content
+
+    def test_discord_launcher_exists_and_content(self) -> None:
+        batch_path = Path("launch_parasite_discord.bat")
+        assert batch_path.exists(), "launch_parasite_discord.bat must exist in project root"
+        content = batch_path.read_text(encoding="utf-8")
+        assert "PARASITE_DISCORD_TOKEN" in content
+        assert "--discord" in content

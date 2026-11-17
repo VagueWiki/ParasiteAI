@@ -1,0 +1,113 @@
+{
+  "goal": "Close the error dialog and then open Notepad",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 5,
+  "max_steps": 18,
+  "duration_sec": 22.288,
+  "exit_reason": "DONE",
+  "step_latencies_sec": [
+    8.998,
+    5.643,
+    0.88,
+    1.49,
+    4.859
+  ],
+  "total_strikes": 0,
+  "highest_tier_reached": "TIER_1_LOCAL",
+  "hardware_interrupt_count": 0,
+  "final_active_window": {
+    "title": "Untitled - Notepad",
+    "process_name": "notepad.exe"
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "action_type": "CLICK",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": [
+        1114,
+        607
+      ],
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.875,
+      "error_message": null,
+      "duration_sec": 8.998,
+      "burst_count": null
+    },
+    {
+      "step_id": 2,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "enter"
+      ],
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 5.643,
+      "burst_count": null
+    },
+    {
+      "step_id": 3,
+      "action_type": "HOTKEY",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": [
+        "win",
+        "r"
+      ],
+      "success": true,
+      "screen_diff": 0.056026234567901234,
+      "error_message": null,
+      "duration_sec": 0.88,
+      "burst_count": null
+    },
+    {
+      "step_id": 4,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "notepad",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.7969766818014724,
+      "error_message": null,
+      "duration_sec": 1.49,
+      "burst_count": null
+    },
+    {
+      "step_id": 5,
+      "action_type": "DONE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": null,
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.0,
+      "error_message": null,
+      "duration_sec": 4.859,
+      "burst_count": null
+    }
+  ],
+  "error": null,
+  "timestamp": 1794892018.595315,
+  "plan_source": "farmed",
+  "skill_id": null,
+  "farmed_plan_id": 15,
+  "fast_path_steps": 2,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": "step_1_proc_mismatch:cmd.exe"
+}

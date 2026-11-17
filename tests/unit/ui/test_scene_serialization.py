@@ -58,7 +58,7 @@ class TestGroundedCapabilityContract:
     def test_default_contract_instantiation(self):
         contract = GroundedCapabilityContract()
         assert contract.version == "4.0.0"
-        assert contract.target_environment == "Windows 11 64-bit Desktop"
+        assert contract.target_environment == "Windows 10 64-bit Desktop"
         assert contract.virtual_desktop_bounds == (0, 0, 3840, 1080)
         assert "left_click(x, y)" in contract.actuators_mouse["primitives"]
         assert "Win+R (Run Dialog)" in contract.actuators_keyboard["supported_chords"]
@@ -70,7 +70,7 @@ class TestGroundedCapabilityContract:
         # Core headers
         assert "Parasite_Capability_Contract:" in manifest
         assert 'Version: "4.0.0"' in manifest
-        assert 'Target_Environment: "Windows 11 64-bit Desktop"' in manifest
+        assert 'Target_Environment: "Windows 10 64-bit Desktop"' in manifest
         assert "[0, 0, 3840, 1080]" in manifest
 
         # Physical actuator limits
@@ -301,6 +301,8 @@ class TestGeminiConsultationPrompt:
 
         # 1. Preamble & Contract Constraints
         assert "[SYSTEM: PARASITE STRATEGIC ADVISOR PROTOCOL]" in prompt
+        assert "Windows 10 AI companion" in prompt
+        assert "Windows 11" not in prompt
         assert "# CAPABILITY CONTRACT & CONSTRAINTS" in prompt
         assert "Human-curved cubic Bézier trajectories" in prompt
         assert "ZERO headless scraping" in prompt

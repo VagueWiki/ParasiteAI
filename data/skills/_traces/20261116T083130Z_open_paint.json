@@ -1,0 +1,54 @@
+{
+  "goal": "Open Paint",
+  "captured_at": "2026-11-16T08:31:30.845331+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05637490354938272,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "mspaint",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "mspaint",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.9762052869496856,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Paint application is now open, and the task is complete. There's no need for any further actions.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Paint (mspaint.exe)",
+      "post_window": "Untitled - Paint (mspaint.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

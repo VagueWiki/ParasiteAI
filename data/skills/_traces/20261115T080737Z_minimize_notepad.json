@@ -1,0 +1,69 @@
+{
+  "goal": "Minimize Notepad",
+  "captured_at": "2026-11-15T08:07:37.506467+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "down"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+down (step 1)",
+      "target_label": "Notepad window minimize command",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.5606852816358024,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Waiting for post-launch window process focus readiness (step 2)",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Waiting for post-launch window process focus readiness (step 2)",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 4,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is already minimized, and the task is complete. There's no need for any further action.",
+      "target_label": "Desktop view",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

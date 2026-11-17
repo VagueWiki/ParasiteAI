@@ -1,0 +1,393 @@
+{
+  "goal": "Open Notepad, type 'Saved Note 101', and save it as C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt",
+  "captured_at": "2026-11-15T10:42:34.199770+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04279272762345679,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.7017687051933628,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Saved Note 101",
+      "reasoning": "Notepad is open, and the cursor is blinking, waiting for input. The next step is to type the text \"Saved Note 101\" into this blank space. The cursor is in the right place, so I can start typing right away.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file to the specified location. I need to click on the File menu in the top left corner to access the save options.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        336,
+        107
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.4375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file. I need to click on the File menu in the top left corner of the Notepad window and select the Save As option to specify the save location and file name. [Upgraded to double-click]",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        336,
+        107
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file. I need to click on the \"Save As...\" option in the File menu to specify the save location and file name.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        386,
+        219
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.5775,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file. I need to click on the File menu in the top left corner of the Notepad window to access the save options.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        336,
+        107
+      ],
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.34875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Save As dialog box, and I need to navigate to the correct directory. The workspace folder is right there in the left sidebar, so I'll click on it to enter that directory. This way, I can save the file in the right place.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        401,
+        374
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.585,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see the Save As dialog box, and I need to navigate to the correct directory. The workspace folder is already selected, so I just need to type the file name in the File name input box. Let me click on the input box and enter \"note101.txt\" as the file name.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        457,
+        500
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.2075,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "note101.txt",
+      "reasoning": "The save dialog box is open, and I've navigated to the correct directory. The next step is to type the file name \"note101.txt\" into the file name input field. This will ensure that the file is saved with the correct name in the specified location.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": null,
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The save dialog box is open, and I've navigated to the correct directory. The file name is set to \"note101.txt,\" and all that's left is to click the \"Save\" button to complete the process. I'm going to click the \"Save\" button now to save the file.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        946,
+        567
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.918125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file in the specified directory. I need to click on the File menu in the top left corner to access the save options.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        336,
+        107
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.4375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file to the specified location. I need to click on the \"File\" menu in the top left corner of the Notepad window to access the save options. [Upgraded to double-click]",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        341,
+        107
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file. I need to click on the \"Save As...\" option in the File menu to open the Save As dialog box and specify the save location and file name.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        386,
+        219
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.5775,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The save dialog box is open, and I've navigated to the correct directory. The file name is set to \"note101.txt,\" which matches the task requirements. The next step is to click the \"Save\" button to finalize the saving process.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        954,
+        566
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "Confirm Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The save dialog box is open, and I've navigated to the correct directory. The file name is already set to \"note101.txt.\" The system is prompting me to confirm whether to replace the existing file. I need to click the \"Yes\" button to proceed with saving the file.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1016,
+        533
+      ],
+      "pre_window": "Confirm Save As (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.575,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 17,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file as C:\\ParasiteAI\\benchmarks\\workspace\\note101.txt. I will click on the File menu in the top left corner to access the save options.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        336,
+        107
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.4375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 18,
+      "verb": "DOUBLE_CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file as note101.txt in the specified directory. I need to click on the File menu in the top left corner of the Notepad window to access the save options. [Upgraded to double-click]",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        341,
+        107
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 1.9290123456790123e-05,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 19,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file as note101.txt in the specified directory. I will click on the \"Save As...\" option in the File menu to open the Save As dialog box and proceed with the saving process.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        382,
+        219
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.579375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 20,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The save dialog box is open, and I've navigated to the correct directory. The file name is already set to \"note101.txt,\" which is exactly what I need. Now, all I have to do is click the \"Save\" button to complete the saving process.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        954,
+        566
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "Confirm Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 1.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 21,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The save dialog box is open, and I've navigated to the correct directory. The file name is already filled in as \"note101.txt.\" The system is asking if I want to replace an existing file with the same name. To complete the save process, I need to click the \"Yes\" button in the confirmation dialog to overwrite the existing file.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        1018,
+        533
+      ],
+      "pre_window": "Confirm Save As (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.575,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 22,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Saved Note 101\" is already typed. The next step is to save the file as note101.txt in the specified directory. I will click on the File menu in the top left corner to access the save options.",
+      "target_label": "Run Dialog Open Field",
+      "coordinates": [
+        336,
+        107
+      ],
+      "pre_window": "note101.txt - Notepad (notepad.exe)",
+      "post_window": "note101.txt - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.4375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

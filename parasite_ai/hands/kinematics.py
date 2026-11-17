@@ -31,6 +31,12 @@ class KinematicConfig:
     overshoot_distance_max: float = 5.0 # Maximum overshoot past target in pixels
     corrective_hop_min_s: float = 0.040 # Minimum corrective hop duration (40ms)
     corrective_hop_max_s: float = 0.060 # Maximum corrective hop duration (60ms)
+    use_two_phase_ballistics: bool = True # HumanCurve two-phase velocity (ballistic sprint + homing)
+    ballistic_alpha: float = 1.35         # Asymmetric time-warp exponent (peak vel ~37% duration)
+    motor_hesitation_min_s: float = 0.025 # 25ms minimum pre-click motor hesitation
+    motor_hesitation_max_s: float = 0.060 # 60ms maximum pre-click motor hesitation
+    dwell_mean_s: float = 0.045           # 45ms mean click dwell duration
+    dwell_std_s: float = 0.010            # 10ms click dwell std deviation
 
 
 class KinematicsEngine:
@@ -73,6 +79,31 @@ class KinematicsEngine:
         """Second derivative of minimum jerk polynomial: d2(tau)/ds2 = 60s(1-s)(1-2s)."""
         s_clamped = max(0.0, min(1.0, s))
         return 60.0 * s_clamped * (1.0 - s_clamped) * (1.0 - 2.0 * s_clamped)
+
+    @classmethod
+    def two_phase_progress(cls, s: float, alpha: float = 1.35) -> float:
+        """
+        HumanCurve two-phase Fitts's Law ballistics progress profile:
+        Phase 1 (Ballistic Sprint): Asymmetric acceleration covering ~80-85% of distance early.
+        Phase 2 (Terminal Homing): Smooth logarithmic braking into target bounds.
+        Guarantees zero velocity at s=0 and s=1 with C-infinity continuity.
+        """
+        s_clamped = max(0.0, min(1.0, s))
+        eff_alpha = max(1.0, float(alpha))
+        u = 1.0 - ((1.0 - s_clamped) ** eff_alpha)
+        return cls.minimum_jerk(u)
+
+    @classmethod
+    def two_phase_velocity(cls, s: float, alpha: float = 1.35) -> float:
+        """Analytical derivative d(tau)/ds for two_phase_progress."""
+        s_clamped = max(0.0, min(1.0, s))
+        eff_alpha = max(1.0, float(alpha))
+        one_minus_s = 1.0 - s_clamped
+        if one_minus_s <= 0.0:
+            return 0.0
+        u = 1.0 - (one_minus_s ** eff_alpha)
+        du_ds = eff_alpha * (one_minus_s ** (eff_alpha - 1.0))
+        return cls.minimum_jerk_velocity(u) * du_ds
 
     @staticmethod
     def cubic_bezier_point(
@@ -185,8 +216,11 @@ class KinematicsEngine:
             s = i / (steps - 1)
             t = s * duration
 
-            # Spatial progress via Flash & Hogan Minimum Jerk
-            tau = self.minimum_jerk(s)
+            # Spatial progress via HumanCurve two-phase ballistics or Flash & Hogan Minimum Jerk
+            if self.config.use_two_phase_ballistics:
+                tau = self.two_phase_progress(s, alpha=self.config.ballistic_alpha)
+            else:
+                tau = self.minimum_jerk(s)
 
             # Cubic Bezier spatial coordinates
             bx, by = self.cubic_bezier_point(

@@ -1,6 +1,6 @@
 """
 ParasiteAI - Global Panic Abort Subsystem.
-Monitors emergency panic triggers (Esc, Ctrl+Alt+P, Ctrl+Alt+Backspace, Screen Corner Slam),
+Monitors emergency panic triggers (Esc, Ctrl+Alt+P, Ctrl+Alt+Backspace, Ctrl+Alt+K),
 signals immediate abort, and neutralizes hardware state to release stuck buttons and keys.
 """
 
@@ -58,7 +58,6 @@ class PanicTriggerSource:
     CTRL_ALT_P = "ctrl_alt_p"
     CTRL_ALT_BACKSPACE = "ctrl_alt_backspace"
     CTRL_ALT_K_KILL = "ctrl_alt_k_kill"
-    CORNER_SLAM = "corner_slam"
     MANUAL = "manual"
 
 
@@ -91,11 +90,6 @@ class PanicManager:
         self._is_alt_down = False
         self._is_shift_down = False
         self.allow_process_exit: bool = False
-
-        # Corner slam edge-triggered debouncing state
-        self._last_corner_slam_time: float = 0.0
-        self._in_corner_zone: bool = False
-        self.corner_debounce_sec: float = 1.0
 
     def is_panic(self) -> bool:
         """Returns True if panic abort is currently triggered."""
@@ -168,8 +162,6 @@ class PanicManager:
             self._is_ctrl_down = False
             self._is_alt_down = False
             self._is_shift_down = False
-            self._in_corner_zone = False
-            self._last_corner_slam_time = 0.0
 
     def emergency_hardware_release(self) -> None:
         """
@@ -185,39 +177,79 @@ class PanicManager:
 
         if self.backend is not None and hasattr(self.backend, "send_inputs"):
             # Import INPUT structures lazily if needed
-            from parasite_ai.hands.keyboard import INPUT, INPUT_MOUSE, INPUT_KEYBOARD
+            from parasite_ai.hands.keyboard import (
+                ALL_MODIFIER_AND_LOCK_VKS,
+                EXTENDED_VKS,
+                INPUT,
+                INPUT_KEYBOARD,
+                INPUT_MOUSE,
+                KEYEVENTF_EXTENDEDKEY,
+                Win32InputBackend,
+            )
+
+            is_live_win32 = isinstance(self.backend, Win32InputBackend)
 
             # 1. Mouse Button Release
-            mouse_inp = INPUT(type=INPUT_MOUSE)
-            mouse_inp.u.mi.dwFlags = MOUSEEVENTF_LEFTUP | MOUSEEVENTF_RIGHTUP | MOUSEEVENTF_MIDDLEUP
-            self.backend.send_inputs([mouse_inp])
+            mouse_flags = MOUSEEVENTF_LEFTUP | MOUSEEVENTF_RIGHTUP | MOUSEEVENTF_MIDDLEUP
+            if is_live_win32:
+                mouse_flags = 0
+                if self.backend.is_key_down(0x01):  # VK_LBUTTON
+                    mouse_flags |= MOUSEEVENTF_LEFTUP
+                if self.backend.is_key_down(0x02):  # VK_RBUTTON
+                    mouse_flags |= MOUSEEVENTF_RIGHTUP
+                if self.backend.is_key_down(0x04):  # VK_MBUTTON
+                    mouse_flags |= MOUSEEVENTF_MIDDLEUP
+            if mouse_flags:
+                mouse_inp = INPUT(type=INPUT_MOUSE)
+                mouse_inp.u.mi.dwFlags = mouse_flags
+                self.backend.send_inputs([mouse_inp])
 
-            # 2. Modifier Key Release
-            vks = [
-                VK_SHIFT, VK_LSHIFT, VK_RSHIFT,
-                VK_CONTROL, VK_LCONTROL, VK_RCONTROL,
-                VK_MENU, VK_LMENU, VK_RMENU
-            ]
+            # 2. Modifier & Lock Key Release (including VK_LWIN, VK_RWIN, VK_TAB)
             key_inputs = []
-            for vk in vks:
+            for vk in ALL_MODIFIER_AND_LOCK_VKS:
+                if is_live_win32 and not self.backend.is_key_down(vk):
+                    continue
                 inp = INPUT(type=INPUT_KEYBOARD)
                 inp.u.ki.wVk = vk
-                inp.u.ki.wScan = 0
-                inp.u.ki.dwFlags = KEYEVENTF_KEYUP
+                inp.u.ki.wScan = self.backend.map_vk_to_scan(vk) if hasattr(self.backend, "map_vk_to_scan") else 0
+                flags = KEYEVENTF_KEYUP
+                if vk in EXTENDED_VKS:
+                    flags |= KEYEVENTF_EXTENDEDKEY
+                inp.u.ki.dwFlags = flags
                 key_inputs.append(inp)
-            self.backend.send_inputs(key_inputs)
+            if key_inputs:
+                self.backend.send_inputs(key_inputs)
         else:
-            # Fall back to user32 direct calls
-            try:
-                user32 = ctypes.windll.user32
-                user32.mouse_event(
-                    MOUSEEVENTF_LEFTUP | MOUSEEVENTF_RIGHTUP | MOUSEEVENTF_MIDDLEUP,
-                    0, 0, 0, 0
-                )
-                for vk in [VK_SHIFT, VK_CONTROL, VK_MENU]:
-                    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
-            except Exception:
-                pass
+            # Fall back to user32 direct calls (never emit live OS inputs during pytest)
+            if not os.environ.get("PYTEST_CURRENT_TEST"):
+                try:
+                    user32 = ctypes.windll.user32
+                    mouse_flags = 0
+                    for btn_vk, up_flag in (
+                        (0x01, MOUSEEVENTF_LEFTUP),
+                        (0x02, MOUSEEVENTF_RIGHTUP),
+                        (0x04, MOUSEEVENTF_MIDDLEUP),
+                    ):
+                        if bool(user32.GetAsyncKeyState(btn_vk) & 0x8000):
+                            mouse_flags |= up_flag
+                    if mouse_flags:
+                        user32.mouse_event(mouse_flags, 0, 0, 0, 0)
+
+                    KEYEVENTF_EXTENDEDKEY = 0x0001
+                    extended_vks = {0x5B, 0x5C, 0xA3, 0xA5}
+                    vks = (
+                        VK_SHIFT, VK_LSHIFT, VK_RSHIFT,
+                        VK_CONTROL, VK_LCONTROL, VK_RCONTROL,
+                        VK_MENU, VK_LMENU, VK_RMENU,
+                        0x5B, 0x5C, 0x09,
+                    )
+                    for vk in vks:
+                        if bool(user32.GetAsyncKeyState(vk) & 0x8000):
+                            flags = KEYEVENTF_KEYUP | (KEYEVENTF_EXTENDEDKEY if vk in extended_vks else 0)
+                            scan = int(user32.MapVirtualKeyW(vk, 0) or 0) & 0xFFFF
+                            user32.keybd_event(vk, scan, flags, 0)
+                except Exception:
+                    pass
 
         self._is_ctrl_down = False
         self._is_alt_down = False
@@ -276,79 +308,3 @@ class PanicManager:
             return True
 
         return False
-
-    def check_mouse_position(
-        self,
-        x: int,
-        y: int,
-        flags: int = 0,
-    ) -> bool:
-        """
-        Inspects mouse cursor position for screen corner slam.
-        Synthetic (injected) cursor movements are strictly ignored.
-
-        Returns True if corner slam panic fired.
-        """
-        is_injected = bool(flags & LLMHF_INJECTED)
-        if is_injected or not self.config.corner_panic_enabled:
-            return False
-
-        delta = self.config.corner_distance_px
-        cx, cy, vx, vy, vcx, vcy = self._get_screen_metrics()
-
-        # Primary monitor corners
-        primary_corners = [
-            (0, 0),
-            (cx - 1, 0),
-            (0, cy - 1),
-            (cx - 1, cy - 1),
-        ]
-
-        # Virtual desktop corners
-        virtual_corners = [
-            (vx, vy),
-            (vx + vcx - 1, vy),
-            (vx, vy + vcy - 1),
-            (vx + vcx - 1, vy + vcy - 1),
-        ]
-
-        all_corners = primary_corners + virtual_corners
-        in_corner = any(
-            abs(x - cx_k) <= delta and abs(y - cy_k) <= delta
-            for cx_k, cy_k in all_corners
-        )
-
-        if not in_corner:
-            self._in_corner_zone = False
-            return False
-
-        now = time.monotonic()
-        # Edge-triggered & 1.0-second debounced
-        if not self._in_corner_zone and (now - self._last_corner_slam_time >= self.corner_debounce_sec):
-            self._in_corner_zone = True
-            self._last_corner_slam_time = now
-            self.trigger_panic(PanicTriggerSource.CORNER_SLAM)
-            return True
-
-        self._in_corner_zone = True
-        return False
-
-    def _get_screen_metrics(self) -> Tuple[int, int, int, int, int, int]:
-        """Returns (cx, cy, vx, vy, vcx, vcy)."""
-        if self.backend is not None and hasattr(self.backend, "get_screen_metrics"):
-            try:
-                return self.backend.get_screen_metrics()
-            except Exception:
-                pass
-
-        try:
-            user32 = ctypes.windll.user32
-            cx = user32.GetSystemMetrics(SM_CXSCREEN)
-            cy = user32.GetSystemMetrics(SM_CYSCREEN)
-            vx = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
-            vy = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
-            vcx = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
-            vcy = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
-            return (cx, cy, vx, vy, vcx, vcy)
-        except Exception:
-            return (1920, 1080, 0, 0, 1920, 1080)

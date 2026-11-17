@@ -1,0 +1,458 @@
+{
+  "goal": "Open Chrome, go to https://example.com, and write the main heading text into Notepad",
+  "captured_at": "2026-11-16T08:50:58.529301+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "chrome.exe",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04129340277777778,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "chrome https://example.com",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "Run input field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.8095951257861635,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+c (step 3)",
+      "target_label": "Chrome webpage heading",
+      "coordinates": null,
+      "pre_window": "Untitled - Google Chrome (chrome.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 4)",
+      "target_label": "Windows Run dialog",
+      "coordinates": null,
+      "pre_window": "Untitled - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.7613585069444444,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Waiting for post-launch window process focus readiness (step 5)",
+      "target_label": "Run input field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "HOTKEY",
+      "keys": [
+        "enter"
+      ],
+      "text": null,
+      "reasoning": "The Run dialog is open, and the text \"chrome https://example.com\" is entered in the input field. The next step is to press the Enter key to confirm the launch of the Chrome browser and navigate to the specified URL.",
+      "target_label": "Run input field",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.04828944830246914,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 5)",
+      "target_label": "Run input field",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 8,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "v"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY ctrl+v (step 6)",
+      "target_label": "Notepad text area",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "WAIT",
+      "keys": null,
+      "text": null,
+      "reasoning": "Premature DONE rejected: Notepad window is not open. Launch Notepad before finishing.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "I have successfully navigated to the example.com website, and the main heading text is clearly displayed on the page. To proceed with the task, I need to copy this heading text. The most efficient way to do this is by using the keyboard shortcut \"ctrl a,\" which allows me to select all the text on the page at once.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.06329571759259259,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 11,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "c"
+      ],
+      "text": null,
+      "reasoning": "I have successfully navigated to the example.com website, and the main heading text is now visible on the screen. The next step is to copy this text and paste it into Notepad. To do this, I will use the keyboard shortcut \"ctrl c\" to copy the selected text.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "I have successfully copied the main heading text from the example.com website. Now, I need to open Notepad to record this text. The next step is to press the Windows key and R key to open the Run dialog, where I can type \"notepad\" to launch the Notepad application.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.10983748070987655,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 13,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Run dialog is open, and the text \"chrome https://example.com\" is already entered in the input box. The next step is to click the \"OK\" button to launch the browser and access the example.com website. This is a crucial step in completing the task, as it allows us to proceed with the subsequent actions of copying the heading text and writing it into Notepad.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        171,
+        1009
+      ],
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 14,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "I have successfully copied the main heading text from the example.com website. Now, I need to launch Notepad to record this heading text. I will use the Windows+R shortcut to open the Run dialog and then type \"notepad\" to launch Notepad.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04077835648148148,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 15,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I notice that the Run dialog is open, and the text \"chrome https://example.com\" is already entered. To proceed with the task, I need to click the \"OK\" button in the Run dialog to launch the browser. This will allow me to access the example.com website and continue with the subsequent steps.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        175,
+        1009
+      ],
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 16,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully navigated to the example.com website, and the main heading text is displayed on the screen. Now, I need to copy this text and paste it into Notepad. Let me use the mouse to select the heading text so that I can copy it.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        757,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.49625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 17,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "I have successfully copied the main heading text from the example.com website. Now, I need to launch Notepad to record this heading text. I will use the Windows+R shortcut to open the Run dialog and type \"notepad\" to launch Notepad.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05429783950617284,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 18,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Run dialog is open, and the text \"chrome https://example.com\" is already present. The next step is to click the OK button to launch the browser. This will allow me to access the example.com website and proceed with the subsequent tasks.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        168,
+        1009
+      ],
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 19,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "I have successfully navigated to the example.com website, and the main heading text is now visible on the screen. The next step is to launch Notepad to record this heading text. I will use the Windows+R shortcut to open the Run dialog and then type \"notepad\" to launch Notepad.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.040715181327160496,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 20,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Run dialog is open, and the text \"chrome https://example.com\" is already entered. The next step is to click the \"OK\" button in the Run dialog to launch the browser and navigate to the example.com website. This is a crucial step in completing the task, as it allows us to access the website and proceed with the subsequent actions.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        175,
+        1009
+      ],
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 21,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully navigated to the example.com website, and the main heading text is displayed on the screen. Now, I need to copy this text and paste it into Notepad. Let me select the heading text and copy it.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        757,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.49625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 22,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "I have successfully copied the main heading text from the example.com website. Now, I need to launch Notepad to record this text. I will use the Run dialog to open Notepad, which is the most straightforward way to do this.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05429783950617284,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 23,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Run dialog is open, and the text \"chrome https://example.com\" is already present. To proceed with the task, I need to click the \"OK\" button in the Run dialog to confirm the command and open the Google Chrome browser. This is a necessary step to access the example.com website and complete the subsequent tasks.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        168,
+        1009
+      ],
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.975,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 24,
+      "verb": "DRAG",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully navigated to the example.com website, and the main heading text is displayed on the screen. Now, I need to copy this text and paste it into Notepad. Let me use the mouse to select the heading text so that I can copy it.",
+      "target_label": "Notepad window",
+      "coordinates": [
+        757,
+        359
+      ],
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.49625,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 25,
+      "verb": "BURST",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully copied the main heading text from the example.com website. Now, I need to launch Notepad to record this heading text. I will use the Run dialog to open Notepad. I will type \"notepad\" into the Run dialog and press Enter to open Notepad.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Example Domain - Google Chrome (chrome.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 26,
+      "verb": "HOTKEY",
+      "keys": [
+        "meta",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "I have successfully copied the main heading text from the example.com website. Now, I need to launch Notepad to record this heading text. I will use the Run dialog to open Notepad. First, I will press the Windows key and R key to open the Run dialog, then type \"notepad\" and press Enter to launch Notepad.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Example Domain - Google Chrome (chrome.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.05429783950617284,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

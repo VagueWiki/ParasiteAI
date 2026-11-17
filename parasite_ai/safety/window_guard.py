@@ -50,6 +50,28 @@ DEFAULT_SENSITIVE_TITLES: List[str] = [
 ]
 
 
+def ensure_interactive_desktop() -> bool:
+    """
+    Attaches the calling thread to the interactive input desktop ('default')
+    in WinSta0 if currently running in an isolated or background desktop.
+    Returns True if successfully attached or if running on non-Windows.
+    """
+    if os.name != "nt":
+        return True
+    try:
+        user32 = ctypes.windll.user32
+        hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
+        if not hdesk:
+            hdesk = user32.OpenDesktopW("default", 0, False, 0x01FF)
+        if hdesk:
+            ok = bool(user32.SetThreadDesktop(hdesk))
+            user32.CloseDesktop(hdesk)
+            return ok
+    except Exception:
+        pass
+    return False
+
+
 @dataclass(frozen=True)
 class WindowInfo:
     """Snapshot of active window state and privacy classification."""

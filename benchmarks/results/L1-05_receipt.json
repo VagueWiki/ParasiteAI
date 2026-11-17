@@ -1,81 +1,118 @@
 {
   "goal": "Open Notepad and write a short two-sentence greeting",
-  "success": false,
-  "claimed_done": false,
-  "total_steps": 5,
-  "max_steps": 5,
-  "duration_sec": 24.348,
-  "exit_reason": "MAX_STEPS",
+  "success": true,
+  "claimed_done": true,
+  "total_steps": 7,
+  "max_steps": 16,
+  "duration_sec": 44.916,
+  "exit_reason": "DONE",
   "step_latencies_sec": [
-    5.192,
-    4.665,
-    4.645,
-    4.669,
-    4.669
+    0.979,
+    1.475,
+    6.981,
+    11.001,
+    9.016,
+    9.026,
+    5.812
   ],
   "total_strikes": 0,
   "highest_tier_reached": "TIER_1_LOCAL",
   "hardware_interrupt_count": 0,
   "final_active_window": {
-    "title": "",
-    "process_name": "explorer.exe"
+    "title": "*Untitled - Notepad",
+    "process_name": "notepad.exe"
   },
   "steps": [
     {
       "step_id": 1,
-      "action_type": "WAIT",
+      "action_type": "HOTKEY",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
-      "keys": null,
+      "keys": [
+        "win",
+        "r"
+      ],
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.05600694444444444,
       "error_message": null,
-      "duration_sec": 5.192
+      "duration_sec": 0.979,
+      "burst_count": null
     },
     {
       "step_id": 2,
-      "action_type": "WAIT",
+      "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": null,
+      "text": "notepad",
       "keys": null,
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.79423453318894,
       "error_message": null,
-      "duration_sec": 4.665
+      "duration_sec": 1.475,
+      "burst_count": null
     },
     {
       "step_id": 3,
-      "action_type": "WAIT",
+      "action_type": "TYPE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
-      "text": null,
+      "text": "Hello, how are you?",
       "keys": null,
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.02,
       "error_message": null,
-      "duration_sec": 4.645
+      "duration_sec": 6.981,
+      "burst_count": null
     },
     {
       "step_id": 4,
-      "action_type": "WAIT",
+      "action_type": "BURST",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
       "text": null,
       "keys": null,
       "success": true,
-      "screen_diff": 0.0,
+      "screen_diff": 0.0009140495375108046,
       "error_message": null,
-      "duration_sec": 4.669
+      "duration_sec": 11.001,
+      "burst_count": 3
     },
     {
       "step_id": 5,
-      "action_type": "WAIT",
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Hello, how are you?Hello, how are you?",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 9.016,
+      "burst_count": null
+    },
+    {
+      "step_id": 6,
+      "action_type": "TYPE",
+      "target_id": null,
+      "target_label": null,
+      "coordinates": null,
+      "text": "Hello, how are you?Hello, how are you?.",
+      "keys": null,
+      "success": true,
+      "screen_diff": 0.02,
+      "error_message": null,
+      "duration_sec": 9.026,
+      "burst_count": null
+    },
+    {
+      "step_id": 7,
+      "action_type": "DONE",
       "target_id": null,
       "target_label": null,
       "coordinates": null,
@@ -84,9 +121,18 @@
       "success": true,
       "screen_diff": 0.0,
       "error_message": null,
-      "duration_sec": 4.669
+      "duration_sec": 5.812,
+      "burst_count": null
     }
   ],
   "error": null,
-  "timestamp": 1794175488.3377934
+  "timestamp": 1794891586.43123,
+  "plan_source": "local",
+  "skill_id": null,
+  "farmed_plan_id": null,
+  "fast_path_steps": 2,
+  "parasite_invocations": 0,
+  "parasite_status": null,
+  "veto_count": 0,
+  "fast_path_abort_reason": null
 }

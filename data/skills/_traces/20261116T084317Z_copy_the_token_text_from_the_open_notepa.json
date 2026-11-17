@@ -1,0 +1,96 @@
+{
+  "goal": "Copy the token text from the open Notepad window to the clipboard",
+  "captured_at": "2026-11-16T08:43:17.017408+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I first need to select it. The most efficient way to do this is by using the keyboard shortcut \"Ctrl A,\" which allows me to select all the text at once.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. The most efficient way to do this is by using the keyboard shortcut \"Ctrl A,\" which allows me to select all the text at once.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_2_CONSULT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "alt",
+        "tab"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY alt+tab (step 1)",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_3_GUIDED",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I first need to select it. The most efficient way to do this is by using the keyboard shortcut \"Ctrl A,\" which allows me to select all the text at once. This method is much faster than manually dragging to select the text.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 6,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "a"
+      ],
+      "text": null,
+      "reasoning": "The Notepad window is open, displaying the text \"TOKEN_9941.\" To copy this text to the clipboard, I need to select it first. The easiest way to do this is by using the keyboard shortcut \"Ctrl A,\" which will select all the text in the Notepad window.",
+      "target_label": "Notepad window",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": false,
+      "screen_diff": 0.0,
+      "tier": "TIER_4_CO_PILOT",
+      "risk_level": "GREEN"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "goal": "Minimize Notepad",
+  "captured_at": "2026-11-16T08:34:15.623173+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is currently open on the screen, and I need to minimize it. The minimize button is located at the top right corner of the window, represented by a horizontal line icon. I will click this button to minimize the Notepad window.",
+      "target_label": null,
+      "coordinates": [
+        1485,
+        81
+      ],
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "success": true,
+      "screen_diff": 0.881875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 2,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is currently open on the screen, and I need to minimize it. The minimize button is located at the top left corner of the window. I will click on it to minimize the Notepad window.",
+      "target_label": null,
+      "coordinates": [
+        1056,
+        199
+      ],
+      "pre_window": "ParasiteAI Stage P4 Benchmark Runner (UI-TARS-1.5-7B + Precision, Reflex, Skill Engine (cmd.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.925,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 3,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is currently minimized, and the task is complete. There are no further actions needed.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

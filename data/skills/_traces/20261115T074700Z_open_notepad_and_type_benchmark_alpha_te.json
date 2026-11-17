@@ -1,0 +1,210 @@
+{
+  "goal": "Open Notepad and type 'Benchmark Alpha Test 42'",
+  "captured_at": "2026-11-15T07:47:00.278394+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Desktop (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "spaint (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.09173614371004106,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The error message indicates that the system cannot find 'spaint', which suggests that the application name is incorrect. I need to close this error message and then type 'notepad' into the search bar to launch the correct application.",
+      "target_label": "notepad",
+      "coordinates": [
+        1190,
+        532
+      ],
+      "pre_window": "spaint (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.96125,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 4,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The current screen shows the Run dialog box, which is not what I need. I need to close it first. I'll click the \"Cancel\" button to close the dialog box, and then I can type \"notepad\" into the search bar to launch Notepad.",
+      "target_label": "notepad",
+      "coordinates": [
+        251,
+        1009
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.936875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The current screen shows the Windows Start menu, which is not what I need. I need to close it to proceed with the task. I will click on the Start menu to close it.",
+      "target_label": "notepad",
+      "coordinates": [
+        280,
+        1075
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Search (SearchApp.exe)",
+      "success": true,
+      "screen_diff": 0.9620871913580247,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, and I can see the Notepad icon. To proceed with the task, I need to click on the Notepad icon in the Start menu to launch the Notepad application.",
+      "target_label": "notepad",
+      "coordinates": [
+        144,
+        745
+      ],
+      "pre_window": "Search (SearchApp.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 1.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 7,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The current screen shows the Windows Start menu, which is not what I need. I need to close it and then type \"notepad\" into the search box to launch Notepad. I will click on the search box in the Start menu and type \"notepad\" to launch Notepad.",
+      "target_label": "notepad",
+      "coordinates": [
+        170,
+        1073
+      ],
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Search (SearchApp.exe)",
+      "success": true,
+      "screen_diff": 1.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 8,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Start menu is open, and I can see the Notepad icon. To proceed with the task, I need to click on the Notepad icon to launch the Notepad application.",
+      "target_label": "notepad",
+      "coordinates": [
+        154,
+        749
+      ],
+      "pre_window": "Search (SearchApp.exe)",
+      "post_window": "Program Manager (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.996875,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 9,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Benchmark Alpha Test 42",
+      "reasoning": "The Notepad window is open, and the cursor is blinking, waiting for input. I can now type the text \"Benchmark Alpha Test 42\" directly into the Notepad window.",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Program Manager (explorer.exe)",
+      "post_window": "Error (Greenshot.exe)",
+      "success": true,
+      "screen_diff": 0.02102961714957104,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 10,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "The current screen shows the Windows Start menu, which is not what I need. I need to close the error dialog box first, and then click on the Notepad window to continue with the task.",
+      "target_label": "notepad",
+      "coordinates": [
+        1089,
+        610
+      ],
+      "pre_window": "Error (Greenshot.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.30375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 11,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Benchmark Alpha Test 42",
+      "reasoning": "Directive fast-path TYPE (step 3)",
+      "target_label": "Notepad editor",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 12,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "The Notepad window is open, and the text \"Benchmark Alpha Test 42\" is already typed in. The task is complete, and no further action is needed.",
+      "target_label": "Notepad editor",
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}

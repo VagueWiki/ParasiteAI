@@ -63,6 +63,7 @@ def main() -> int:
             "safety",
             "ui",
             "core",
+            "archive",
             "challenger",
             "live",
         ],
@@ -113,8 +114,8 @@ def main() -> int:
         cmd.append("tests/integration")
     elif args.suite in ("mind", "hands", "vision", "safety", "ui", "core"):
         cmd.append(f"tests/unit/{args.suite}")
-    elif args.suite == "challenger":
-        cmd.append("tests/archive/challenger")
+    elif args.suite in ("archive", "challenger"):
+        cmd.append("tests/archive")
     elif args.suite == "live":
         if not args.yes:
             print("============================================================")

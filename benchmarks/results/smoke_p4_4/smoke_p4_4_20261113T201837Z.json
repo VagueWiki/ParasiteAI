@@ -1,0 +1,60 @@
+{
+  "timestamp": "20261113T201837Z",
+  "results": {
+    "P-A": {
+      "passed": false,
+      "detail": "Gemini window did not match identity (last proc='explorer.exe', title='Program Manager')."
+    },
+    "P-B": {
+      "passed": false,
+      "detail": "Unhandled exception: 'Win32ImageClipboard' object has no attribute 'set_dib'"
+    },
+    "P-C": {
+      "passed": false,
+      "failure": "FOCUS_TIMEOUT",
+      "selected_program": null,
+      "steps_count": 0,
+      "duration_sec": 4.34,
+      "detail": "Timed out waiting for Gemini window foreground transition.",
+      "diagnostics_path": "data\\logs\\parasite_skill\\20261113T201833_091805Z_PROACTIVE_PLAN_FOCUS_TIMEOUT.json"
+    },
+    "P-D": {
+      "passed": false,
+      "failure": "WINDOW_IDENTITY_MISMATCH",
+      "action_verb": null,
+      "action_target": null,
+      "duration_sec": 4.35,
+      "detail": "Foreground window mismatch after Alt+G: proc='chrome.exe', title=''.",
+      "diagnostics_path": "data\\logs\\parasite_skill\\20261113T201837_448765Z_REACTIVE_RECOVERY_WINDOW_IDENTITY_MISMATCH.json"
+    },
+    "P-E": {
+      "passed": true,
+      "sensitive_window_match": true,
+      "preflight_failure": "PREFLIGHT_SENSITIVE_WINDOW",
+      "detail": "Sensitive window preflight hard block verified cleanly."
+    },
+    "P-F": {
+      "passed": false,
+      "detail": "Unhandled exception: type object 'StepIntent' has no attribute 'WAIT'"
+    },
+    "P-G": {
+      "passed": false,
+      "open_windows_count": 9,
+      "discovered_programs_count": 25,
+      "sample_programs": [
+        "2XKO",
+        "7-Zip File Manager",
+        "7-Zip Help",
+        "7zFM",
+        "About iTunes",
+        "Access",
+        "Access Manager",
+        "Acrobat"
+      ],
+      "vram_used_mb": 6575,
+      "vram_within_budget": false,
+      "detail": "Discovered 25 OS programs; VRAM=6575 MB (ceiling 6500 MB)."
+    }
+  },
+  "all_passed": false
+}

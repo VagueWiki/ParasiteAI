@@ -1,0 +1,105 @@
+{
+  "goal": "Open Notepad and type 'Benchmark Alpha Test 42'",
+  "captured_at": "2026-11-16T06:17:27.029463+00:00",
+  "entries": [
+    {
+      "step_index": 1,
+      "verb": "HOTKEY",
+      "keys": [
+        "win",
+        "r"
+      ],
+      "text": null,
+      "reasoning": "Directive fast-path HOTKEY win+r (step 1)",
+      "target_label": "Open Windows Run Dialog",
+      "coordinates": null,
+      "pre_window": "Desktop (explorer.exe)",
+      "post_window": "Run (explorer.exe)",
+      "success": true,
+      "screen_diff": 0.04130594135802469,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 2,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "notepad",
+      "reasoning": "Directive fast-path TYPE (step 2)",
+      "target_label": "notepad",
+      "coordinates": null,
+      "pre_window": "Run (explorer.exe)",
+      "post_window": "Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.6984870923227088,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 3,
+      "verb": "TYPE",
+      "keys": null,
+      "text": "Benchmark Alpha Test 42",
+      "reasoning": "The Notepad window is ready, and the cursor is blinking, waiting for input. Let me type in the text \"Benchmark Alpha Test 42\" to complete this task.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.02,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 4,
+      "verb": "HOTKEY",
+      "keys": [
+        "ctrl",
+        "s"
+      ],
+      "text": null,
+      "reasoning": "I have successfully completed the task of opening Notepad and typing \"Benchmark Alpha Test 42.\" The Notepad window is open, and the text is correctly displayed. Now, I need to save this content to ensure that my work is not lost. Let me press the Ctrl+S key combination to save the document.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "Save As (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.18671537422839507,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    },
+    {
+      "step_index": 5,
+      "verb": "CLICK",
+      "keys": null,
+      "text": null,
+      "reasoning": "I see that the Save As dialog is open, but it's not the right time to save yet. Let me close this dialog first by clicking the Cancel button, so I can return to the Notepad window and continue typing the text.",
+      "target_label": null,
+      "coordinates": [
+        1060,
+        567
+      ],
+      "pre_window": "Save As (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.939375,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "YELLOW"
+    },
+    {
+      "step_index": 6,
+      "verb": "DONE",
+      "keys": null,
+      "text": null,
+      "reasoning": "I have successfully completed the task of opening Notepad and typing \"Benchmark Alpha Test 42.\" The Notepad window is open, and the text is correctly displayed in the buffer. There are no further actions required to fulfill the task.",
+      "target_label": null,
+      "coordinates": null,
+      "pre_window": "*Untitled - Notepad (notepad.exe)",
+      "post_window": "*Untitled - Notepad (notepad.exe)",
+      "success": true,
+      "screen_diff": 0.0,
+      "tier": "TIER_1_LOCAL",
+      "risk_level": "GREEN"
+    }
+  ]
+}
